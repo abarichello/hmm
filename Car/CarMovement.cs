@@ -198,11 +198,9 @@ namespace HeavyMetalMachines.Car
 			if (Mathf.Abs(num) < num4 * Time.deltaTime)
 			{
 				this._body.AddRelativeForce(num * -1f * Vector3.right, ForceMode.VelocityChange);
+				return;
 			}
-			else
-			{
-				this._body.AddRelativeForce(Mathf.Sign(num) * num4 * -1f * Vector3.right, ForceMode.Acceleration);
-			}
+			this._body.AddRelativeForce(Mathf.Sign(num) * num4 * -1f * Vector3.right, ForceMode.Acceleration);
 		}
 
 		protected override void ApplyDrag(AnimationCurve dragCurve, float dragMod, float dragModPct)

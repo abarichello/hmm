@@ -116,15 +116,6 @@ namespace HeavyMetalMachines.BotAI
 
 		private void Update()
 		{
-			if (this._currentTransf != null)
-			{
-				this.GoToTarget();
-			}
-			else if (this.Directives.IsPathFixed())
-			{
-				this.GoToFixedPath();
-			}
-			this.ActivateUpdateInput();
 		}
 
 		private IEnumerator StuckWorkAround()

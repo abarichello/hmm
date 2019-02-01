@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using HeavyMetalMachines.Bank;
 using HeavyMetalMachines.BotAI;
 using HeavyMetalMachines.Car;
@@ -178,12 +177,7 @@ namespace HeavyMetalMachines.Combat
 		{
 			get
 			{
-				IPlayerController result;
-				if ((result = this._playerController) == null)
-				{
-					result = (this._playerController = (base.GetComponent<PlayerController>() ?? base.GetComponent<BotAIController>()));
-				}
-				return result;
+				return this._playerController;
 			}
 		}
 
@@ -191,7 +185,11 @@ namespace HeavyMetalMachines.Combat
 		{
 			get
 			{
-				return (!this.IsPlayer) ? this.CreepTeam : this.Player.Team;
+				if (this.IsPlayer)
+				{
+					return this.Player.Team;
+				}
+				return this.CreepTeam;
 			}
 		}
 
@@ -312,12 +310,15 @@ namespace HeavyMetalMachines.Combat
 
 		private void Start()
 		{
-			if (GameHubBehaviour.Hub.Net.IsServer() && (this.IsPlayer || this.IsBot))
+			checked
 			{
-				TeamBlockController[] array = UnityEngine.Object.FindObjectsOfType<TeamBlockController>();
-				for (int i = 0; i < array.Length; i++)
+				if (GameHubBehaviour.Hub.Net.IsServer() && (this.IsPlayer || this.IsBot))
 				{
-					array[i].Add(this);
+					TeamBlockController[] array = UnityEngine.Object.FindObjectsOfType<TeamBlockController>();
+					for (int i = 0; i < array.Length; i++)
+					{
+						array[i].Add(this);
+					}
 				}
 			}
 		}
@@ -401,40 +402,50 @@ namespace HeavyMetalMachines.Combat
 			{
 			case GadgetSlot.CustomGadget0:
 				this.CustomGadget0 = beh;
-				break;
+				return;
 			case GadgetSlot.CustomGadget1:
 				this.CustomGadget1 = beh;
-				break;
+				return;
 			case GadgetSlot.CustomGadget2:
 				this.CustomGadget2 = beh;
-				break;
+				return;
 			case GadgetSlot.BoostGadget:
 				this.BoostGadget = beh;
-				break;
+				return;
 			case GadgetSlot.PassiveGadget:
 				this.PassiveGadget = beh;
-				break;
+				return;
 			case GadgetSlot.GenericGadget:
 				this.GenericGadget = beh;
-				break;
+				return;
 			case GadgetSlot.HPUpgrade:
 				this.HPUpgrade = beh;
-				break;
+				return;
 			case GadgetSlot.EPUpgrade:
 				this.EPUpgrade = beh;
+				return;
+			case GadgetSlot.RespawnGadget:
+			case GadgetSlot.LiftSceneryGadget:
+			case GadgetSlot.OBSOLETE_PingMinimapGadget:
+			case (GadgetSlot)14:
+			case (GadgetSlot)15:
+			case (GadgetSlot)16:
+			case (GadgetSlot)17:
 				break;
 			case GadgetSlot.BombGadget:
 				this.BombGadget = (beh as BombGadget);
-				break;
+				return;
 			case GadgetSlot.DmgUpgrade:
 				this.DmgUpgrade = beh;
-				break;
+				return;
 			case GadgetSlot.OutOfCombatGadget:
 				this.OutOfCombatGadget = beh;
-				break;
+				return;
 			case GadgetSlot.TrailGadget:
 				this.TrailGadget = beh;
 				break;
+			default:
+				return;
 			}
 		}
 
@@ -506,91 +517,62 @@ namespace HeavyMetalMachines.Combat
 			return component;
 		}
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.ObjectUnspawnListener ListenToObjectUnspawn;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.ObjectSpawnListener ListenToObjectSpawn;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.AttributeChangedListener ListenToAttributeChanged;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.OnIndestructibleAlmostDied ListenToIndestructibleAlmostDied;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.BarrierHitListener ListenToBarrierHit;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.PreDamageListener ListenToPreDamageCaused;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.PosDamageListener ListenToPosDamageCaused;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.PreDamageListener ListenToPreDamageTaken;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.PosDamageListener ListenToPosDamageTaken;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.PosDamageListener ListenToPosRepairCaused;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.PosDamageListener ListenToPosRepairTaken;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.PreHealingListener ListenToPreHealingCaused;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.PosHealingListener ListenToPosHealingCaused;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.PreHealingListener ListenToPreHealingTaken;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.PosHealingListener ListenToPosHealingTaken;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<float, int> OnDamageDealt;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<float, int> OnDamageReceived;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<float, Vector3, Vector3> OnDamageReceivedFullData;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<float, int> OnRepairDealt;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<float, int> OnRepairReceived;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<float, int> OnImpulseDealt;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<float, int> OnImpulseReceived;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<float, int> OnCooldownRepairDealt;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<float, int> OnCooldownRepairReceived;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<float, int> OnTempHPReceived;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<ModifierEvent> ListenToModifierReceived;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<Collision> ListenToCollisionStay;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<Collision> ListenToCollisionEnter;
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<CombatObject> ListenToEnable;
 
 		private void OnCollisionEnter(Collision col)
@@ -617,24 +599,22 @@ namespace HeavyMetalMachines.Combat
 			{
 			case EffectKind.CooldownRepair:
 				action = this.OnCooldownRepairReceived;
-				goto IL_94;
+				goto IL_75;
 			case EffectKind.HPLightDamage:
 			case EffectKind.HPHeavyDamage:
 				break;
 			case EffectKind.Impulse:
 				action = this.OnImpulseReceived;
-				goto IL_94;
+				goto IL_75;
 			default:
-				switch (effect)
+				if (effect - EffectKind.HPPureDamage > 1)
 				{
-				case EffectKind.HPPureDamage:
-				case EffectKind.HPPureDamageNL:
-					break;
-				case EffectKind.HPRepair:
-					action = this.OnRepairReceived;
-					goto IL_94;
-				default:
-					goto IL_94;
+					if (effect == EffectKind.HPRepair)
+					{
+						action = this.OnRepairReceived;
+						goto IL_75;
+					}
+					goto IL_75;
 				}
 				break;
 			}
@@ -643,7 +623,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				this.OnDamageReceivedFullData(e.Amount, Vector3.zero, Vector3.zero);
 			}
-			IL_94:
+			IL_75:
 			if (action != null)
 			{
 				action(e.Amount, e.OtherId);
@@ -663,34 +643,31 @@ namespace HeavyMetalMachines.Combat
 			{
 			case EffectKind.CooldownRepair:
 				action = this.OnCooldownRepairDealt;
-				goto IL_B4;
+				goto IL_92;
 			case EffectKind.HPLightDamage:
 			case EffectKind.HPHeavyDamage:
 			case EffectKind.HPGodDamage:
-				break;
+				goto IL_8B;
 			case EffectKind.Impulse:
 				action = this.OnImpulseDealt;
-				goto IL_B4;
-			default:
-				switch (effect)
-				{
-				case EffectKind.HPPureDamage:
-				case EffectKind.HPPureDamageNL:
-					break;
-				case EffectKind.HPRepair:
-					action = this.OnRepairDealt;
-					goto IL_B4;
-				default:
-					flag = false;
-					goto IL_B4;
-				}
-				break;
+				goto IL_92;
 			case EffectKind.HPTemp:
 				action = this.OnTempHPReceived;
-				goto IL_B4;
+				goto IL_92;
 			}
+			if (effect - EffectKind.HPPureDamage > 1)
+			{
+				if (effect == EffectKind.HPRepair)
+				{
+					action = this.OnRepairDealt;
+					goto IL_92;
+				}
+				flag = false;
+				goto IL_92;
+			}
+			IL_8B:
 			action = this.OnDamageDealt;
-			IL_B4:
+			IL_92:
 			if (action != null)
 			{
 				action(e.Amount, e.ObjId);
@@ -701,19 +678,21 @@ namespace HeavyMetalMachines.Combat
 				{
 				case GadgetSlot.CustomGadget0:
 					this.GadgetStates.G0StateObject.ClientGadgetHit(e.ObjId);
-					break;
+					return;
 				case GadgetSlot.CustomGadget1:
 					this.GadgetStates.G1StateObject.ClientGadgetHit(e.ObjId);
-					break;
+					return;
 				case GadgetSlot.CustomGadget2:
 					this.GadgetStates.G2StateObject.ClientGadgetHit(e.ObjId);
-					break;
+					return;
 				case GadgetSlot.BoostGadget:
 					this.GadgetStates.GBoostStateObject.ClientGadgetHit(e.ObjId);
-					break;
+					return;
 				case GadgetSlot.PassiveGadget:
 					this.GadgetStates.GPStateObject.ClientGadgetHit(e.ObjId);
 					break;
+				default:
+					return;
 				}
 			}
 		}
@@ -759,12 +738,15 @@ namespace HeavyMetalMachines.Combat
 			this.ListenToEnable = null;
 			this.ListenToIndestructibleAlmostDied = null;
 			this.CreepTeam = TeamKind.Zero;
-			if (GameHubBehaviour.Hub.Net.IsServer() && (this.IsPlayer || this.IsBot))
+			checked
 			{
-				TeamBlockController[] array = UnityEngine.Object.FindObjectsOfType<TeamBlockController>();
-				for (int i = 0; i < array.Length; i++)
+				if (GameHubBehaviour.Hub.Net.IsServer() && (this.IsPlayer || this.IsBot))
 				{
-					array[i].Remove(this);
+					TeamBlockController[] array = UnityEngine.Object.FindObjectsOfType<TeamBlockController>();
+					for (int i = 0; i < array.Length; i++)
+					{
+						array[i].Remove(this);
+					}
 				}
 			}
 		}
@@ -922,6 +904,10 @@ namespace HeavyMetalMachines.Combat
 			{
 				this.BombGadget.Disable(BombGadget.DisableReason.LinkBroke);
 			}
+		}
+
+		public void Update()
+		{
 		}
 
 		public static readonly BitLogger Log = new BitLogger(typeof(CombatObject));

@@ -44,7 +44,11 @@ namespace HeavyMetalMachines
 		{
 			get
 			{
-				return (!this._followTarget) ? this._targetInitialPosition : this.CameraTargetTransform.position;
+				if (this._followTarget)
+				{
+					return this.CameraTargetTransform.position;
+				}
+				return this._targetInitialPosition;
 			}
 		}
 
@@ -95,13 +99,11 @@ namespace HeavyMetalMachines
 				this.CameraInstanceId = this.Camera.GetInstanceID();
 				this._targetStack = new CarCameraStack<CarCamera.CameraTargetData>(16);
 				this._raceStartCursorLockController = new PlayerRaceStartCursorLockController();
+				return;
 			}
-			else
-			{
-				CarCamera.Log.Error("Singleton is already initialized");
-				base.enabled = false;
-				UnityEngine.Object.DestroyImmediate(this);
-			}
+			CarCamera.Log.Error("Singleton is already initialized");
+			base.enabled = false;
+			UnityEngine.Object.DestroyImmediate(this);
 		}
 
 		private void OnDestroy()
@@ -135,7 +137,7 @@ namespace HeavyMetalMachines
 					BombManager bombManager = GameHubBehaviour.Hub.BombManager;
 					return bombManager.ScoreBoard.CurrentState == BombScoreBoard.State.BombDelivery && !this.MyPlayerCombatData.IsAlive() && bombManager.BombMovement.gameObject.activeSelf;
 				}, GameHubBehaviour.Hub.BombManager.BombMovement.Combat.transform, false, true, false);
-				int delayTime = data.EventTime + (int)(1000f * GameHubBehaviour.Hub.ArenaConfig.Arenas[GameHubBehaviour.Hub.Match.ArenaIndex].KillCamWaitTimeSeconds);
+				int delayTime = checked(data.EventTime + (int)(unchecked(1000f * GameHubBehaviour.Hub.ArenaConfig.Arenas[GameHubBehaviour.Hub.Match.ArenaIndex].KillCamWaitTimeSeconds)));
 				this.SetTarget("RespawnDelay", delegate()
 				{
 					BombManager bombManager = GameHubBehaviour.Hub.BombManager;
@@ -149,11 +151,7 @@ namespace HeavyMetalMachines
 			PlayerData currentPlayerData = GameHubBehaviour.Hub.Players.CurrentPlayerData;
 			if (currentPlayerData != null && currentPlayerData.GetPlayerCarObjectId() == data.TargetId)
 			{
-				this.SetTarget("Respawning", delegate()
-				{
-					BombManager bombManager = GameHubBehaviour.Hub.BombManager;
-					return bombManager.ScoreBoard.CurrentState == BombScoreBoard.State.BombDelivery && !this.MyPlayerCombatData.IsAlive();
-				}, this.MyPlayerTransform, false, true, false);
+				this.SetTarget("Respawning", () => GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreBoard.State.BombDelivery && !this.MyPlayerCombatData.IsAlive(), this.MyPlayerTransform, false, true, false);
 			}
 		}
 
@@ -166,6 +164,7 @@ namespace HeavyMetalMachines
 					this._cameraMode = CarCamera.CarCameraMode.ScreenShot;
 					PlayerController.LockedInputs = true;
 					this._screenShotTargetMouseRotationAngle = new Vector3(180f, 0f, 0f);
+					return;
 				}
 			}
 			else
@@ -310,6 +309,7 @@ namespace HeavyMetalMachines
 				this._cameraTransform.rotation = this._descriptorTarget.rotation;
 			}
 			this.EffectsLateUpdate();
+			this.CheatCamera();
 		}
 
 		public bool CameraInversionIsInverted
@@ -332,8 +332,9 @@ namespace HeavyMetalMachines
 				this._cameraTransform.position += UnityEngine.Random.onUnitSphere * Mathf.Pow(this._effectsShakeValue, 2f) * Time.smoothDeltaTime * 60f;
 				this._effectsShakeValue -= Time.smoothDeltaTime * 2f;
 			}
-			if (!GameHubBehaviour.Hub.GuiScripts || GameHubBehaviour.Hub.GuiScripts.AfkControllerGui.IsWindowVisible())
+			if (GameHubBehaviour.Hub.GuiScripts)
 			{
+				GameHubBehaviour.Hub.GuiScripts.AfkControllerGui.IsWindowVisible();
 			}
 		}
 
@@ -370,11 +371,9 @@ namespace HeavyMetalMachines
 				if (value)
 				{
 					this._skyViewFocusTarget = value;
+					return;
 				}
-				else
-				{
-					this.SkyViewLoosingFocus = true;
-				}
+				this.SkyViewLoosingFocus = true;
 			}
 		}
 
@@ -548,17 +547,17 @@ namespace HeavyMetalMachines
 				}
 				else
 				{
-					Vector3 a5 = this.CameraTargetTransform.forward;
+					Vector3 vector3 = this.CameraTargetTransform.forward;
 					if (this.cameraMode == CarCamera.CameraTestMode.FollowBomb)
 					{
 						BombVisualController instance = BombVisualController.GetInstance(false);
 						if (instance)
 						{
-							a5 = (instance.transform.position - this.CurrentTargetPosition).normalized;
+							vector3 = (instance.transform.position - this.CurrentTargetPosition).normalized;
 						}
 					}
-					a5 *= this.CurrentCameraPanDistance;
-					vector2 = Quaternion.Euler(0f, 0f, -45f) * new Vector2(a5.x, -a5.z);
+					vector3 *= this.CurrentCameraPanDistance;
+					vector2 = Quaternion.Euler(0f, 0f, -45f) * new Vector2(vector3.x, -vector3.z);
 				}
 			}
 			if (SpectatorController.IsSpectating && Input.GetKey(KeyCode.Mouse1))
@@ -570,32 +569,35 @@ namespace HeavyMetalMachines
 			this.currentCameraPosition.y = position.y;
 			this.currentCameraPosition = Vector3.MoveTowards(this.currentCameraPosition, position, this.followSpeed * Mathf.Clamp01(num / 10f));
 			Quaternion rotation2 = Quaternion.Euler(0f, this.CameraInversionAngleY, this.CameraInversionAngle);
-			Vector3 vector3 = ((!this._followTarget) ? this._targetInitialPosition : this._lastCameraTargetPosition) + rotation2 * (Vector3.up * this._skyViewCameraDistance * this.SkyViewCurrentZoom);
-			this._descriptorTarget.position = vector3 + this.currentCameraPositionOffset;
-			this._descriptorTarget.rotation.SetLookRotation((position - vector3).normalized, Vector3.up);
+			Vector3 vector4 = ((!this._followTarget) ? this._targetInitialPosition : this._lastCameraTargetPosition) + rotation2 * (Vector3.up * this._skyViewCameraDistance * this.SkyViewCurrentZoom);
+			this._descriptorTarget.position = vector4 + this.currentCameraPositionOffset;
+			this._descriptorTarget.rotation.SetLookRotation((position - vector4).normalized, Vector3.up);
 		}
 
 		private void ScreenShotSetTarget(Transform transf)
 		{
 			this._screenShotRenderers = transf.GetComponentsInChildren<Renderer>(true);
 			bool flag = true;
-			for (int i = 0; i < this._screenShotRenderers.Length; i++)
+			checked
 			{
-				Renderer renderer = this._screenShotRenderers[i];
-				if (renderer is SkinnedMeshRenderer || renderer is MeshRenderer)
+				for (int i = 0; i < this._screenShotRenderers.Length; i++)
 				{
-					if (flag)
+					Renderer renderer = this._screenShotRenderers[i];
+					if (renderer is SkinnedMeshRenderer || renderer is MeshRenderer)
 					{
-						flag = false;
-						this._screenShotTargetObjectBounds = renderer.bounds;
-					}
-					else
-					{
-						this._screenShotTargetObjectBounds.Encapsulate(renderer.bounds);
+						if (flag)
+						{
+							flag = false;
+							this._screenShotTargetObjectBounds = renderer.bounds;
+						}
+						else
+						{
+							this._screenShotTargetObjectBounds.Encapsulate(renderer.bounds);
+						}
 					}
 				}
+				this._screenShotTargetObjectBounds.center = this._screenShotTargetObjectBounds.center - this.CameraTargetTransform.position;
 			}
-			this._screenShotTargetObjectBounds.center = this._screenShotTargetObjectBounds.center - this.CameraTargetTransform.position;
 		}
 
 		private void ScreenShotLateUpdate()
@@ -665,6 +667,22 @@ namespace HeavyMetalMachines
 			Gizmos.color = Color.red;
 			Gizmos.DrawLine(this.deadZoneReference, this.targetCameraPosition);
 			Gizmos.DrawSphere(this.deadZoneReference, 0.5f);
+		}
+
+		private void CheatCamera()
+		{
+			if (Input.GetKey(KeyCode.KeypadPlus))
+			{
+				this.CameraDistance -= 1f;
+			}
+			if (Input.GetKey(KeyCode.KeypadMinus))
+			{
+				this.CameraDistance += 1f;
+			}
+			if (Input.GetKey(KeyCode.KeypadDivide))
+			{
+				this.CameraDistance = 55f;
+			}
 		}
 
 		public static readonly BitLogger Log = new BitLogger(typeof(CarCamera));
