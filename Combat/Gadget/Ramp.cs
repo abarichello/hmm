@@ -18,7 +18,12 @@ namespace HeavyMetalMachines.Combat.Gadget
 
 		protected override int FireGadget()
 		{
-			return base.FireGadget();
+			int num = base.FireGadget();
+			Ramp.Log.DebugFormat("AAA FireGadget {0}", new object[]
+			{
+				num
+			});
+			return num;
 		}
 
 		public override void OnTriggerEnterCallback(TriggerEnterCallback evt)
@@ -46,7 +51,17 @@ namespace HeavyMetalMachines.Combat.Gadget
 			effectEvent.Modifiers = this._damage;
 			effectEvent.ExtraModifiers = ModifierData.CopyData(this.ExtraModifier);
 			base.SetTargetAndDirection(this.Combat.Movement.LastVelocity.normalized, effectEvent);
-			return GameHubBehaviour.Hub.Events.TriggerEvent(effectEvent);
+			int num = GameHubBehaviour.Hub.Events.TriggerEvent(effectEvent);
+			Ramp.Log.DebugFormat("AAA FireExtraGadget:{0} speed:{1} range:{2} lifetime:{3} combatPos{4} dataOrigin:{5}", new object[]
+			{
+				num,
+				effectEvent.MoveSpeed,
+				effectEvent.Range,
+				effectEvent.LifeTime,
+				this.Combat.transform.position,
+				effectEvent.Origin
+			});
+			return num;
 		}
 
 		private bool CanRamp(CombatObject otherCombat)

@@ -2,21 +2,30 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids;
 using FMod;
 using GameScriptAnimation;
+using HeavyMetalMachines.Achievements;
+using HeavyMetalMachines.Bank;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Combat.Gadget;
 using HeavyMetalMachines.Event;
+using HeavyMetalMachines.GameCamera;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Playback;
+using HeavyMetalMachines.PostProcessing;
 using HeavyMetalMachines.Render;
+using Hoplon.Logging;
 using Pocketverse;
+using Pocketverse.MuralContext;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
-	public class HudMegafeedbacksController : GameHubBehaviour
+	public class HudMegafeedbacksController : GameHubBehaviour, ICleanupListener
 	{
 		private GameGui GameGui
 		{
@@ -60,9 +69,9 @@ namespace HeavyMetalMachines.Frontend
 			this.BombLostGameObjectEvent.OnExitEvent += this.BombLostGameObjectEventOnExitEvent;
 			this.TryAddCombatFeedbackEventListeners();
 			GameHubBehaviour.Hub.Events.Players.ListenToPreObjectSpawn += this.OnStartingPlayerSpawnAnimationEvent;
-			this.m_poDeathAnimation = new DeathAnimation(this.m_DeathAnimationStates, false, "DeathAnimation");
-			this.m_poSpawnAnimation = new DeathAnimation(this.m_SpawnAnimationStates, true, "SpawnAnimation");
-			this.m_poCameraAnimation = new CameraAnimation(this.m_DeathCameraAnimationParameters);
+			this.m_poDeathAnimation = new DeathAnimation(this.m_DeathAnimationStates, false, "DeathAnimation", this._postProcessing, this._gameCamera);
+			this.m_poSpawnAnimation = new DeathAnimation(this.m_SpawnAnimationStates, true, "SpawnAnimation", this._postProcessing, this._gameCamera);
+			this.m_poCameraAnimation = new CameraAnimation(this.m_DeathCameraAnimationParameters, this._postProcessing, this._gameCamera, this._gameCameraEngine);
 			this.m_poDeathAnimation.OnDeathAnimationEndedEvent += this.OnDeathAnimationEnded;
 			if (GameHubBehaviour.Hub)
 			{
@@ -158,7 +167,7 @@ namespace HeavyMetalMachines.Frontend
 
 		private void StrongCollisionHpGlassShatterEventOnExitEvent(HudFeedbackExitEvent exitEvent)
 		{
-			if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState != BombScoreBoard.State.BombDelivery)
+			if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState != BombScoreboardState.BombDelivery)
 			{
 				return;
 			}
@@ -208,6 +217,10 @@ namespace HeavyMetalMachines.Frontend
 
 		private void OnGridGamePlayersCreated()
 		{
+			HudMegafeedbacksController.Log.DebugFormat("OnGridGamePlayersCreated. GO name: {0}", new object[]
+			{
+				base.gameObject.name
+			});
 			if (this._speedometerListenerSetted)
 			{
 				HudMegafeedbacksController.Log.WarnFormat("Trying to set SpeedometerAnimation listener twice? Houston we have a problem.", new object[0]);
@@ -221,16 +234,16 @@ namespace HeavyMetalMachines.Frontend
 			this._speedometerListenerSetted = true;
 		}
 
-		private void OnPhaseChanged(BombScoreBoard.State currentPhase)
+		private void OnPhaseChanged(BombScoreboardState currentPhase)
 		{
 			this.m_poDeathAnimation.Finish();
 			this.m_poCameraAnimation.FinishCameraAnimation();
 			this.m_poSpawnAnimation.Finish();
-			if (currentPhase == BombScoreBoard.State.PreBomb)
+			if (currentPhase == BombScoreboardState.PreBomb)
 			{
 				base.StartCoroutine(this.PlayRaceStartAnimation());
 			}
-			if (currentPhase != BombScoreBoard.State.BombDelivery)
+			if (currentPhase != BombScoreboardState.BombDelivery)
 			{
 				this.DisableCombatFeedbacks();
 			}
@@ -241,6 +254,12 @@ namespace HeavyMetalMachines.Frontend
 			long now = (long)GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
 			long end = GameHubBehaviour.Hub.BombManager.ScoreBoard.Timeout;
 			long start = Math.Max(0L, end - (long)Mathf.CeilToInt(1000f * this.AnimationTimeWhenGreenSeconds));
+			HudMegafeedbacksController.Log.DebugFormat("PlayRaceStartAnimation: now: {0}, start: {1}, end: {2}", new object[]
+			{
+				now,
+				start,
+				end
+			});
 			if (now < end)
 			{
 				while (now < start)
@@ -252,13 +271,27 @@ namespace HeavyMetalMachines.Frontend
 				float animatorTime = (float)(slope * (double)(now - start));
 				if (animatorTime < 1f)
 				{
-					int timelineMillis = (int)(now - start);
+					int num = (int)(now - start);
+					HudMegafeedbacksController.Log.DebugFormat("PlayRaceStartAnimation: animator: {0}, FMOD: {1}", new object[]
+					{
+						animatorTime,
+						num
+					});
 					this.MegafeedbackRaceStartAnimator.gameObject.SetActive(true);
 					this.MegafeedbackRaceStartWidget.UpdateAnchors();
 					this.MegafeedbackRaceStartAnimator.Play("active", 0, animatorTime);
-					FMODAudioManager.PlayOneShotAt(this.raceStartAudio, this.MegafeedbackRaceStartAnimator.transform.position, timelineMillis);
+					FMODAudioManager.PlayOneShotAt(this.raceStartAudio, this.MegafeedbackRaceStartAnimator.transform.position, num);
+				}
+				else
+				{
+					HudMegafeedbacksController.Log.Debug("PlayRaceStartAnimation: fail");
 				}
 			}
+			else
+			{
+				HudMegafeedbacksController.Log.Debug("PlayRaceStartAnimation: skip");
+			}
+			HudMegafeedbacksController.Log.Debug("PlayRaceStartAnimation: done");
 			yield break;
 		}
 
@@ -303,15 +336,9 @@ namespace HeavyMetalMachines.Frontend
 
 		private void OnDeathAnimationEnded()
 		{
-			if (!PlaybackSystem.IsRunningReplay)
+			if (!this._playback.IsRunningReplay)
 			{
-				CameraAnimation poCameraAnimation = this.m_poCameraAnimation;
-				string identifier = "CameraAnimation";
-				if (HudMegafeedbacksController.<>f__mg$cache0 == null)
-				{
-					HudMegafeedbacksController.<>f__mg$cache0 = new Func<bool>(DeathAnimation.PostProcessCondition);
-				}
-				poCameraAnimation.StartCameraAnimation(identifier, HudMegafeedbacksController.<>f__mg$cache0);
+				this.m_poCameraAnimation.StartCameraAnimation("CameraAnimation", () => this.m_poDeathAnimation.IsRunning() || this.m_poSpawnAnimation.IsRunning());
 			}
 		}
 
@@ -321,7 +348,7 @@ namespace HeavyMetalMachines.Frontend
 			{
 				return;
 			}
-			CarCamera.Singleton.Shake(this._CameraShakeStrenghtOnDeath);
+			this._gameCamera.Shake(this._CameraShakeStrenghtOnDeath);
 			this.MegafeedbackStrongCollisionGlassShatterGameObject.SetActive(true);
 			this.DisableCombatFeedbacks();
 		}
@@ -367,9 +394,17 @@ namespace HeavyMetalMachines.Frontend
 				GameHubBehaviour.Hub.Events.Players.ListenToObjectSpawn -= this.OnPlayerSpawn;
 				GameHubBehaviour.Hub.Events.Players.ListenToObjectUnspawn -= this.OnPlayerUnspawn;
 				GameHubBehaviour.Hub.BombManager.ListenToPhaseChange -= this.OnPhaseChanged;
+				HudMegafeedbacksController.Log.DebugFormat("Remove speedometerListener: name {0}", new object[]
+				{
+					base.gameObject.name
+				});
 				GameHubBehaviour.Hub.BombManager.GridController.OnGridGamePlayersCreated -= this.OnGridGamePlayersCreated;
 				if (GameHubBehaviour.Hub.BombManager.GridController.CurrentPlayer != null)
 				{
+					HudMegafeedbacksController.Log.DebugFormat("Remove speedometer animation Listener: name {0}", new object[]
+					{
+						base.gameObject.name
+					});
 					GameHubBehaviour.Hub.BombManager.GridController.CurrentPlayer.OnValueChanged -= this.SetSpeedometerAnimationValue;
 					GameHubBehaviour.Hub.BombManager.GridController.ListenToGridGameFinished -= this.OnGridGameFinished;
 				}
@@ -413,7 +448,7 @@ namespace HeavyMetalMachines.Frontend
 		private void OnBombDelivered(int causerId, TeamKind scoredTeam, Vector3 deliveryPosition)
 		{
 			this.m_boIsCarryingBomb = false;
-			if (GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreBoard.State.BombDelivery && !GameHubBehaviour.Hub.Match.LevelIsTutorial())
+			if (GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreboardState.BombDelivery && !GameHubBehaviour.Hub.Match.LevelIsTutorial())
 			{
 				base.StartCoroutine(this.BombTrigger(scoredTeam));
 			}
@@ -439,8 +474,26 @@ namespace HeavyMetalMachines.Frontend
 			int teamScorerScore = (teamScorer != TeamKind.Red) ? bombScoreBoard.BombScoreBlue : bombScoreBoard.BombScoreRed;
 			if (teamScorerScore == targetScore)
 			{
-				this.MegafeedbackVictoryGameObject.SetActive(isPlayerTeamScore);
-				this.MegafeedbackDefeatGameObject.SetActive(!isPlayerTeamScore);
+				HudMegafeedbacksController.Log.DebugFormat("MegaFeedBack Player{0} PlayerTeam: {1}, ScoreTeam: {2}, IsSpectating: {3}, BombsRed: {4}, BombsBlue: {5} ", new object[]
+				{
+					(!isPlayerTeamScore) ? "LOSE" : "WIN",
+					GameHubBehaviour.Hub.Players.CurrentPlayerData.Team,
+					teamScorer,
+					SpectatorController.IsSpectating,
+					bombScoreBoard.BombScoreRed,
+					bombScoreBoard.BombScoreBlue
+				});
+				if (isPlayerTeamScore)
+				{
+					this.MegafeedbackVictoryGameObject.SetActive(true);
+					FMODAudioManager.PlayOneShotAt(this._matchWinSfx, Vector3.zero, 0);
+				}
+				else
+				{
+					this.MegafeedbackDefeatGameObject.SetActive(true);
+					FMODAudioManager.PlayOneShotAt(this._matchLossSfx, Vector3.zero, 0);
+				}
+				this.TryToGiveLastGoalAchievements(isPlayerTeamScore);
 				yield break;
 			}
 			this.EnableRoundWingAnimation(isPlayerTeamScore, teamScorerScore);
@@ -454,10 +507,12 @@ namespace HeavyMetalMachines.Frontend
 			{
 				this.MegafeedbackRoundWinWingColorAnimator.Color.a = (float)num;
 				this.MegafeedbackRoundWinGameObject.SetActive(true);
+				FMODAudioManager.PlayOneShotAt(this._roundWinSfx, Vector3.zero, 0);
 				return;
 			}
 			this.MegafeedbackRoundLostWingColorAnimator.Color.a = (float)num;
 			this.MegafeedbackRoundLostGameObject.SetActive(true);
+			FMODAudioManager.PlayOneShotAt(this._roundLossSfx, Vector3.zero, 0);
 		}
 
 		private void OnPlayerHpChanged(float val)
@@ -500,7 +555,7 @@ namespace HeavyMetalMachines.Frontend
 			this.m_poDeathAnimation.Update();
 			this.m_poCameraAnimation.UpdateCameraAnimation();
 			this.m_poSpawnAnimation.Update();
-			if (!this.m_oPlayerCombatObject || !this.m_oPlayerCombatObject.IsAlive() || GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState != BombScoreBoard.State.BombDelivery)
+			if (!this.m_oPlayerCombatObject || !this.m_oPlayerCombatObject.IsAlive() || GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState != BombScoreboardState.BombDelivery)
 			{
 				return;
 			}
@@ -517,7 +572,7 @@ namespace HeavyMetalMachines.Frontend
 			}
 			GadgetData.GadgetStateObject gadgetState = this.m_oPlayerCombatObject.GadgetStates.GetGadgetState(this.m_oPlayerOverheatGadget.Slot);
 			float heat = gadgetState.Heat;
-			bool value = gadgetState.GadgetState == GadgetState.CoolingAfterOverheat;
+			bool flag = gadgetState.GadgetState == GadgetState.CoolingAfterOverheat;
 			if (!this.MegafeedbackOverheatGameObject.activeSelf)
 			{
 				if ((double)heat < 0.75)
@@ -526,7 +581,7 @@ namespace HeavyMetalMachines.Frontend
 				}
 				this.MegafeedbackOverheatGameObject.SetActive(true);
 			}
-			this.MegafeedbackOverheatAnimator.SetBool("cooling", value);
+			this.MegafeedbackOverheatAnimator.SetBool("cooling", flag);
 			this.MegafeedbackOverheatAnimator.SetFloat("currentHeat", heat);
 		}
 
@@ -576,7 +631,47 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
+		private void TryToGiveLastGoalAchievements(bool isVictory)
+		{
+			if (SpectatorController.IsSpectating || GameHubBehaviour.Hub.Players.CurrentPlayerData.IsLeaver)
+			{
+				return;
+			}
+			MatchPlayerStatistics matchPlayerStatistics = new MatchPlayerStatistics();
+			matchPlayerStatistics.Convert(this.GetCurrentPlayerStats(), isVictory);
+			HudMegafeedbacksController.Log.Info("TryToGiveLastGoalAchievements: " + matchPlayerStatistics);
+			ObservableExtensions.Subscribe<Unit>(this._incrementLastGoalAchievements.Increment(matchPlayerStatistics));
+		}
+
+		private PlayerStats GetCurrentPlayerStats()
+		{
+			return GameHubBehaviour.Hub.Players.CurrentPlayerData.CharacterInstance.GetComponent<PlayerStats>();
+		}
+
+		public void OnCleanup(CleanupMessage msg)
+		{
+			base.StopAllCoroutines();
+		}
+
 		public static readonly BitLogger Log = new BitLogger(typeof(HudMegafeedbacksController));
+
+		[Inject]
+		private IPlayback _playback;
+
+		[Inject]
+		private IGamePostProcessing _postProcessing;
+
+		[Inject]
+		private IGameCamera _gameCamera;
+
+		[Inject]
+		private IGameCameraEngine _gameCameraEngine;
+
+		[Inject]
+		private IIncrementLastGoalAchievements _incrementLastGoalAchievements;
+
+		[Inject]
+		private ILogger<HudMegafeedbacksController> _logger;
 
 		[Tooltip("The total duration of the animation")]
 		public float RaceStartTotalAnimationTime = 8f;
@@ -667,6 +762,19 @@ namespace HeavyMetalMachines.Frontend
 
 		public RendererMaterialColorAnimator MegafeedbackRoundLostWingColorAnimator;
 
+		[Header("Sound Effects")]
+		[SerializeField]
+		private AudioEventAsset _roundWinSfx;
+
+		[SerializeField]
+		private AudioEventAsset _roundLossSfx;
+
+		[SerializeField]
+		private AudioEventAsset _matchWinSfx;
+
+		[SerializeField]
+		private AudioEventAsset _matchLossSfx;
+
 		private bool m_boIsCarryingBomb;
 
 		private DeathAnimation m_poDeathAnimation;
@@ -677,7 +785,7 @@ namespace HeavyMetalMachines.Frontend
 
 		private GameGui _gameGui;
 
-		public FMODAsset raceStartAudio;
+		public AudioEventAsset raceStartAudio;
 
 		private bool _speedometerListenerSetted;
 
@@ -688,9 +796,6 @@ namespace HeavyMetalMachines.Frontend
 		public CameraAnimation.CCameraAnimationParameters m_DeathCameraAnimationParameters;
 
 		private float _oldValue;
-
-		[CompilerGenerated]
-		private static Func<bool> <>f__mg$cache0;
 
 		public delegate void AnimationPlayingDelegate(bool isAnimationPlaying);
 	}

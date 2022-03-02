@@ -54,8 +54,8 @@ namespace HeavyMetalMachines.Combat.Gadget
 			this._bombHoldWarmupModifiers = ModifierData.CreateData(this.BombGadgetInfo.BombHoldWarmupModifiers, this.BombGadgetInfo);
 			this._bombHolderModifiers = ModifierData.CreateData(this.BombGadgetInfo.BombHolderModifiers, this.BombGadgetInfo);
 			this._linkBrokenModifiers = ModifierData.CreateData(this.BombGadgetInfo.LinkBrokenModifiers, this.BombGadgetInfo);
-			this._pushBackCos = -Mathf.Cos(this.BombGadgetInfo.PushBackAngle * 0.0174532924f);
-			this._leewayOffsetCos = -Mathf.Cos(this.BombGadgetInfo.LeewayOffsetAngle * 0.0174532924f);
+			this._pushBackCos = -Mathf.Cos(this.BombGadgetInfo.PushBackAngle * 0.017453292f);
+			this._leewayOffsetCos = -Mathf.Cos(this.BombGadgetInfo.LeewayOffsetAngle * 0.017453292f);
 			this._sqrJammerRange = this.BombGadgetInfo.JammedRange * this.BombGadgetInfo.JammedRange;
 			this._powerStartTime = -1f;
 			this._lastPower = 0f;
@@ -128,20 +128,26 @@ namespace HeavyMetalMachines.Combat.Gadget
 						}
 						GameHubBehaviour.Hub.BombManager.ActiveBomb.State = BombInstance.BombState.Idle;
 					}
-					GameHubBehaviour.Hub.BombManager.OnBombDropped(base.Id.ObjId, reason2);
+					GameHubBehaviour.Hub.BombManager.DropBomb(base.Id.ObjId, reason2);
 				}
 				else
 				{
 					GameHubBehaviour.Hub.BombManager.ActiveBomb.State = BombInstance.BombState.Idle;
-					GameHubBehaviour.Hub.BombManager.OnBombDropped(base.Id.ObjId, SpawnReason.Death);
+					GameHubBehaviour.Hub.BombManager.DropBomb(base.Id.ObjId, SpawnReason.Death);
 				}
 			}
 			if (this._link != null)
 			{
+				this._link.OnLinkBroken -= this.OnLinkBroken;
 				this._link.Break();
 			}
 			if (this._linkEffect != -1)
 			{
+				BombGadget.Log.DebugFormat("Link Reset was={1} Combat={0}", new object[]
+				{
+					this.Combat.Id.ObjId,
+					this._linkEffect
+				});
 			}
 			this._jammedEffect = (this._spinningEffect = (this._linkEffect = (this._grabberEffect = (this._warmupEffect = (this._linkCreatedEffect = -1)))));
 			this._link = null;
@@ -156,10 +162,23 @@ namespace HeavyMetalMachines.Combat.Gadget
 			this.Combat.GadgetStates.SetGadgetState(this._gadgetState, base.Slot, GadgetState.Ready, 0L, 0, 0f, 0, null);
 		}
 
+		private void OnLinkBroken(ICombatLink link)
+		{
+			if (this._powerStartTime > -1f)
+			{
+				this.Disable(BombGadget.DisableReason.LinkBroke);
+			}
+		}
+
 		protected override int FireGadget()
 		{
 			if (this._linkEffect != -1)
 			{
+				return -1;
+			}
+			if (this.Combat.Attributes.IsGadgetDisarmed(base.Slot, base.Nature))
+			{
+				this.Disable(BombGadget.DisableReason.Input);
 				return -1;
 			}
 			this.TargetId = GameHubBehaviour.Hub.BombManager.BombMovement.Combat.Id.ObjId;
@@ -171,6 +190,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 				{
 					if (this.Combat.Movement.Links[i].Point1.Movement == GameHubBehaviour.Hub.BombManager.BombMovement || this.Combat.Movement.Links[i].Point2.Movement == GameHubBehaviour.Hub.BombManager.BombMovement)
 					{
+						this.Combat.Movement.Links[i].OnLinkBroken -= this.OnLinkBroken;
 						this.Combat.Movement.Links[i].Break();
 						this.Combat.GadgetStates.SetGadgetState(this._gadgetState, base.Slot, GadgetState.Ready, 0L, 0, 0f, 0, null);
 					}
@@ -182,6 +202,10 @@ namespace HeavyMetalMachines.Combat.Gadget
 		protected override int FireWarmup()
 		{
 			if (this._powerStartTime > 0f || this._lastPower > 0f)
+			{
+				return -1;
+			}
+			if (this.Combat.Attributes.IsGadgetDisarmed(base.Slot, base.Nature))
 			{
 				return -1;
 			}
@@ -223,6 +247,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			this._timeLinked = 0f;
 			this._link = evt.Link;
 			this._link.Compression = 0f;
+			this._link.OnLinkBroken += this.OnLinkBroken;
 			Vector3 normalized = (this._link.Point2.Position - this._link.Point1.Position).normalized;
 			float bombDirCos = Vector3.Dot(normalized, this.Combat.Transform.forward);
 			this.ProcessLinkLengthOffset(bombDirCos);
@@ -260,6 +285,11 @@ namespace HeavyMetalMachines.Combat.Gadget
 			if (this._jammedEffect == -1 && !GameHubBehaviour.Hub.BombManager.IsPickDisabled(this.Combat))
 			{
 				this._linkEffect = base.FireExtraGadget(bombMovement.Id.ObjId);
+				BombGadget.Log.DebugFormat("Created link1={0} Id={1}", new object[]
+				{
+					this._linkEffect,
+					this.Combat.Id.ObjId
+				});
 				base.ExistingFiredEffectsAdd(this._linkEffect);
 				this._powerStartTime = 0f;
 				this._holdingStarted = false;
@@ -280,12 +310,12 @@ namespace HeavyMetalMachines.Combat.Gadget
 		private bool GrabbingThroughWall(CombatObject bomb)
 		{
 			Vector3 position = this.Combat.transform.position;
-			Vector3 direction = bomb.transform.position - position;
+			Vector3 vector = bomb.transform.position - position;
 			RaycastHit raycastHit;
-			return Physics.Raycast(position, direction, out raycastHit, direction.magnitude, 512);
+			return Physics.Raycast(position, vector, ref raycastHit, vector.magnitude, 512);
 		}
 
-		protected override void OnMyEffectDestroyed(DestroyEffect evt)
+		protected override void OnMyEffectDestroyed(DestroyEffectMessage evt)
 		{
 			if (evt.RemoveData.TargetEventId == this._linkCreatedEffect && this._link != null)
 			{
@@ -305,6 +335,11 @@ namespace HeavyMetalMachines.Combat.Gadget
 					int effectID = this.FireMeteor(direction, power, this._lastPowerMax);
 					base.ExistingFiredEffectsRemove(effectID);
 				}
+				BombGadget.Log.DebugFormat("Target destroyed link={0} combat={1}", new object[]
+				{
+					this._linkEffect,
+					this.Combat.Id.ObjId
+				});
 				this.Disable(BombGadget.DisableReason.Input);
 			}
 		}
@@ -393,6 +428,10 @@ namespace HeavyMetalMachines.Combat.Gadget
 			}
 			if (!flag5 && (!flag || !flag6))
 			{
+				BombGadget.Log.DebugFormat("Reseting BombGrabber of {0}, dispute finished?", new object[]
+				{
+					this.Combat
+				});
 				this.Disable(BombGadget.DisableReason.Input);
 				if (base.Pressed)
 				{
@@ -401,6 +440,10 @@ namespace HeavyMetalMachines.Combat.Gadget
 			}
 			else if (flag4 && flag5 && flag && flag6 && !flag3)
 			{
+				BombGadget.Log.DebugFormat("Jamming BombGrabber of {0}, dispute started?", new object[]
+				{
+					this.Combat
+				});
 				this._jammedEffect = this.FireExtraGadget(this.BombGadgetInfo.JammedEffect, this._jammedModifiers, this._jammedModifiers, delegate(EffectEvent data)
 				{
 					data.Origin = GameHubBehaviour.Hub.BombManager.BombMovement.Combat.transform.position;
@@ -477,11 +520,17 @@ namespace HeavyMetalMachines.Combat.Gadget
 			{
 				if (num >= info.DropTime)
 				{
+					this._link.OnLinkBroken -= this.OnLinkBroken;
 					base.DestroyExistingFiredEffects();
 					this._holdingStarted = true;
 					this._linkEffect = this.FireExtraGadget(info.BombHolderEffect, this._bombHolderModifiers, null, delegate(EffectEvent data)
 					{
 						data.TargetId = GameHubBehaviour.Hub.BombManager.BombMovement.Id.ObjId;
+					});
+					BombGadget.Log.DebugFormat("Created holder link={0} Id={1}", new object[]
+					{
+						this._linkEffect,
+						this.Combat.Id.ObjId
 					});
 					base.ExistingFiredEffectsAdd(this._linkEffect);
 					return;
@@ -507,6 +556,11 @@ namespace HeavyMetalMachines.Combat.Gadget
 						data.TargetId = GameHubBehaviour.Hub.BombManager.BombMovement.Id.ObjId;
 						data.LifeTime = info.GrabberCancelWarmupLifetime;
 					});
+					BombGadget.Log.DebugFormat("Created cancel={0} Id={1}", new object[]
+					{
+						this._linkEffect,
+						this.Combat.Id.ObjId
+					});
 					base.DestroyExistingFiredEffects();
 				}
 				return;
@@ -527,6 +581,11 @@ namespace HeavyMetalMachines.Combat.Gadget
 					{
 						data.TargetId = GameHubBehaviour.Hub.BombManager.BombMovement.Id.ObjId;
 						data.LifeTime = info.GrabberCancelWarmupLifetime;
+					});
+					BombGadget.Log.DebugFormat("Created link2={0} Id={1}", new object[]
+					{
+						this._linkEffect,
+						this.Combat.Id.ObjId
 					});
 					this._powerStartTime = -1f;
 					GameHubBehaviour.Hub.BombManager.LastDropData.Populated = true;
@@ -595,6 +654,11 @@ namespace HeavyMetalMachines.Combat.Gadget
 			}
 			if (this._linkEffect != -1)
 			{
+				BombGadget.Log.DebugFormat("Link Reset2 was={1} Combat={0}", new object[]
+				{
+					this.Combat.Id.ObjId,
+					this._linkEffect
+				});
 			}
 			this._jammedEffect = (this._spinningEffect = (this._linkEffect = (this._grabberEffect = (this._warmupEffect = (this._linkCreatedEffect = -1)))));
 			this.Combat.GadgetStates.SetGadgetState(this._gadgetState, base.Slot, GadgetState.Ready, 0L, 0, 0f, 0, null);

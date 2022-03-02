@@ -1,4 +1,6 @@
 ﻿using System;
+using HeavyMetalMachines.Localization;
+using Standard_Assets.Scripts.HMM.Util;
 
 namespace HeavyMetalMachines.Options
 {
@@ -7,7 +9,7 @@ namespace HeavyMetalMachines.Options
 	{
 		public TranslationSheets TranslationSheet;
 
-		public string TranslationDraft;
+		public MultiPlatformLocalizationDraft TranslationDraft;
 
 		public string BackgroundSpriteName;
 	}

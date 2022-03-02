@@ -9,14 +9,14 @@ namespace HeavyMetalMachines.Frontend
 	{
 		protected override void OnStateEnabled()
 		{
-			GameHubBehaviour.Hub.Swordfish.Log.BILogClientMatch(ClientBITags.RecapStart, false);
+			GameHubBehaviour.Hub.Swordfish.Log.BILogClientMatch(18, false);
 		}
 
 		protected override void OnStateDisabled()
 		{
 			if (GameHubBehaviour.Hub.State.Last == this)
 			{
-				GameHubBehaviour.Hub.Swordfish.Log.BILogClientMatch(ClientBITags.RecapEnd, false);
+				GameHubBehaviour.Hub.Swordfish.Log.BILogClientMatch(19, false);
 			}
 		}
 

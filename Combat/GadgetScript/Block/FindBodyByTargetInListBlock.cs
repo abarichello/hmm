@@ -10,27 +10,7 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 	[CreateAssetMenu(menuName = "GadgetScript/Block/List/FindBodyByTargetInListBlock")]
 	public class FindBodyByTargetInListBlock : BaseBlock
 	{
-		protected override bool CheckSanity(IGadgetContext gadgetContext, IEventContext eventContext)
-		{
-			if (this._list == null)
-			{
-				base.LogSanitycheckError("'List' parameter cannot be null.");
-				return false;
-			}
-			if (this._combat == null)
-			{
-				base.LogSanitycheckError("'Combat' parameter cannot be null.");
-				return false;
-			}
-			if (this._body == null)
-			{
-				base.LogSanitycheckError("'Body' parameter cannot be null.");
-				return false;
-			}
-			return true;
-		}
-
-		protected override IBlock InnerExecute(IGadgetContext gadgetContext, IEventContext eventContext)
+		public override IBlock Execute(IGadgetContext gadgetContext, IEventContext eventContext)
 		{
 			IHMMGadgetContext ihmmgadgetContext = (IHMMGadgetContext)gadgetContext;
 			IHMMEventContext ihmmeventContext = (IHMMEventContext)eventContext;
@@ -45,27 +25,22 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 				GadgetBody gadgetBody = value[i];
 				if (!(gadgetBody == null))
 				{
-					GadgetBodyLinkedMovement component = gadgetBody.GetComponent<GadgetBodyLinkedMovement>();
+					AttachToDummyBodyMovement component = gadgetBody.GetComponent<AttachToDummyBodyMovement>();
 					if (!(component == null))
 					{
 						ICombatObject target = component.GetTarget();
 						if (target.Identifiable.ObjId == this._combat.GetValue(gadgetContext).Identifiable.ObjId)
 						{
-							this._body.SetValue(gadgetContext, gadgetBody);
+							this._body.SetValue<GadgetBody>(gadgetContext, gadgetBody);
 							ihmmeventContext.SaveParameter(this._body);
 							return this._nextBlock;
 						}
 					}
 				}
 			}
-			this._body.SetValue(gadgetContext, null);
+			this._body.SetValue<GadgetBody>(gadgetContext, null);
 			ihmmeventContext.SaveParameter(this._body);
 			return this._nextBlock;
-		}
-
-		public override bool UsesParameterWithId(int parameterId)
-		{
-			return base.CheckIsParameterWithId(this._body, parameterId) || base.CheckIsParameterWithId(this._list, parameterId) || base.CheckIsParameterWithId(this._combat, parameterId);
 		}
 
 		[Header("Read")]
@@ -76,7 +51,11 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 		private CombatObjectParameter _combat;
 
 		[Header("Write")]
+		[Restrict(true, new Type[]
+		{
+			typeof(GadgetBody)
+		})]
 		[SerializeField]
-		private GadgetBodyParameter _body;
+		private BaseParameter _body;
 	}
 }

@@ -28,10 +28,11 @@ namespace HeavyMetalMachines
 			string text = Path.Combine(folder, filename);
 			try
 			{
-				using (FileStream fileStream = File.Create(text, 2048, FileOptions.None))
+				using (FileStream fileStream = File.Create(text, 2048))
 				{
 					using (BinaryWriter binaryWriter = new BinaryWriter(fileStream))
 					{
+						binaryWriter.Write(1);
 						binaryWriter.Write(match.MatchId.ToByteArray());
 						char[] array = match.Version.ToCharArray();
 						binaryWriter.Write(array.Length);
@@ -43,6 +44,10 @@ namespace HeavyMetalMachines
 						bitStream.ResetBitsWritten();
 						match.States.SaveTo(binaryWriter);
 						match.KeyFrames.SaveTo(binaryWriter);
+						MatchFile.Log.InfoFormat("Match file saved to={0}", new object[]
+						{
+							text
+						});
 					}
 				}
 			}
@@ -68,6 +73,10 @@ namespace HeavyMetalMachines
 				{
 					using (BinaryReader binaryReader = new BinaryReader(fileStream))
 					{
+						int num = binaryReader.ReadInt32();
+						if (num != 1)
+						{
+						}
 						matchInformation.MatchId = new Guid(binaryReader.ReadBytes(16));
 						int count = binaryReader.ReadInt32();
 						matchInformation.Version = new string(binaryReader.ReadChars(count));
@@ -88,6 +97,8 @@ namespace HeavyMetalMachines
 				throw;
 			}
 		}
+
+		private const int MatchFileVersion = 1;
 
 		private static readonly BitLogger Log = new BitLogger(typeof(MatchFile));
 

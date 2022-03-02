@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.Infra.Context;
 using Pocketverse;
 using UnityEngine;
 
@@ -70,9 +71,9 @@ namespace HeavyMetalMachines.Combat
 			this.SetDropperEnabled(true);
 		}
 
-		private void OnPhaseChanged(BombScoreBoard.State state)
+		private void OnPhaseChanged(BombScoreboardState state)
 		{
-			if (state == BombScoreBoard.State.BombDelivery || state == BombScoreBoard.State.PreBomb || state == BombScoreBoard.State.Shop)
+			if (state == BombScoreboardState.BombDelivery || state == BombScoreboardState.PreBomb || state == BombScoreboardState.Shop)
 			{
 				this.SetDropperEnabled(false);
 			}

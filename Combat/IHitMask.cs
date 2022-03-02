@@ -18,8 +18,6 @@ namespace HeavyMetalMachines.Combat
 
 		bool Buildings { get; }
 
-		bool Creeps { get; }
-
 		bool Players { get; }
 
 		bool Boss { get; }

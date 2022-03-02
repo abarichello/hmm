@@ -1,21 +1,43 @@
 ﻿using System;
 using System.Collections;
 using System.Diagnostics;
+using System.Linq;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids;
 using ClientAPI.Objects;
 using FMod;
-using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Infra.Context;
+using HeavyMetalMachines.Localization;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.ParentalControl.Restrictions;
+using HeavyMetalMachines.Publishing.Presenting;
 using HeavyMetalMachines.Utils;
 using HeavyMetalMachines.VFX;
 using Pocketverse;
-using SharedUtils.Loading;
+using Standard_Assets.Scripts.HMM.Util;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
 	public class LoadingVersusController : GameHubBehaviour
 	{
+		public IObservable<Unit> OnLoadingStarted
+		{
+			get
+			{
+				return this._onLoadingStarted;
+			}
+		}
+
+		public IObservable<Unit> OnLoadingFinished
+		{
+			get
+			{
+				return this._onLoadingFinished;
+			}
+		}
+
 		public bool IsLoading
 		{
 			get
@@ -33,6 +55,7 @@ namespace HeavyMetalMachines.Frontend
 		public void Awake()
 		{
 			this._timedUpdater = new TimedUpdater(300, true, true);
+			this._diContainer = this._diContainer.ParentContainers.First<DiContainer>();
 			this.WindowGameObject.SetActive(false);
 			this.HintGroupGameObject.SetActive(false);
 			this._isLoading = false;
@@ -40,8 +63,8 @@ namespace HeavyMetalMachines.Frontend
 			component.CarSprite.sprite2D = null;
 			LoadingVersusPlayer component2 = this.EnemyTeamGrid.GetChild(0).GetComponent<LoadingVersusPlayer>();
 			component2.CarSprite.sprite2D = null;
-			ObjectPoolUtils.CreateObjectPool<LoadingVersusPlayer>(component, out this._allyObjects, 4);
-			ObjectPoolUtils.CreateObjectPool<LoadingVersusPlayer>(component2, out this._enemyObjects, 4);
+			ObjectPoolUtils.CreateObjectPool<LoadingVersusPlayer>(component, out this._allyObjects, 4, this._diContainer);
+			ObjectPoolUtils.CreateObjectPool<LoadingVersusPlayer>(component2, out this._enemyObjects, 4, this._diContainer);
 			component.gameObject.SetActive(false);
 			component2.gameObject.SetActive(false);
 			this.AllyTeamGrid.Reposition();
@@ -51,29 +74,37 @@ namespace HeavyMetalMachines.Frontend
 
 		public void ShowWindow(int arenaIndex)
 		{
+			this._onLoadingStarted.OnNext(Unit.Default);
 			GameArenaConfig arenaConfig = GameHubBehaviour.Hub.ArenaConfig;
 			TeamKind currentPlayerTeam = GameHubBehaviour.Hub.Players.CurrentPlayerTeam;
 			string loadingImageName = arenaConfig.GetLoadingImageName(arenaIndex, (int)currentPlayerTeam);
 			string arenaDraftName = arenaConfig.GetArenaDraftName(arenaIndex);
-			string gameModeDraft = arenaConfig.Arenas[arenaIndex].GameModeDraft;
-			for (int i = 0; i < this._arenaGuiList.Length; i++)
+			string gameModeDraft = arenaConfig.GetCurrentArena().GameModeDraft;
+			LoadingVersusController.ArenaGui arenaGui = this.FindArenaGui(arenaIndex);
+			if (currentPlayerTeam == TeamKind.Blue)
 			{
-				LoadingVersusController.ArenaGui arenaGui = this._arenaGuiList[i];
-				arenaGui.GroupGameObject.SetActive(false);
-				arenaGui.FlippedGroupGameObject.SetActive(false);
-				if (arenaGui.ArenaIndex == arenaIndex)
-				{
-					if (currentPlayerTeam == TeamKind.Blue)
-					{
-						arenaGui.GroupGameObject.SetActive(true);
-					}
-					else
-					{
-						arenaGui.FlippedGroupGameObject.SetActive(true);
-					}
-				}
+				arenaGui.GroupGameObject.SetActive(true);
+			}
+			else
+			{
+				arenaGui.FlippedGroupGameObject.SetActive(true);
 			}
 			this.InternalShowWindow(loadingImageName, arenaDraftName, gameModeDraft);
+		}
+
+		private LoadingVersusController.ArenaGui FindArenaGui(int arenaIndex)
+		{
+			LoadingVersusController.ArenaGui? arenaGui = null;
+			foreach (LoadingVersusController.ArenaGui value in this._arenaGuiList)
+			{
+				value.GroupGameObject.SetActive(false);
+				value.FlippedGroupGameObject.SetActive(false);
+				if (value.ArenaIndex == arenaIndex)
+				{
+					arenaGui = new LoadingVersusController.ArenaGui?(value);
+				}
+			}
+			return arenaGui.Value;
 		}
 
 		private void InternalShowWindow(string backgroundSpriteName, string arenaDraftName, string gameModeDraft)
@@ -83,14 +114,19 @@ namespace HeavyMetalMachines.Frontend
 				GameHubBehaviour.Hub.Characters.Async().ClientSendCounselorActivation(GameHubBehaviour.Hub.Options.Game.CounselorActive);
 			}
 			this.BackgroundSprite.SpriteName = backgroundSpriteName;
-			this.ArenaTitleLabel.text = Language.Get(arenaDraftName, TranslationSheets.MainMenuGui);
-			this.GameModeLabel.text = Language.Get(gameModeDraft, TranslationSheets.Loading);
+			this.ArenaTitleLabel.text = Language.Get(arenaDraftName, TranslationContext.MainMenuGui);
+			this.GameModeLabel.text = Language.Get(gameModeDraft, TranslationContext.Loading);
 			this.WindowGameObject.SetActive(true);
 			this.WindowPanel.alpha = 1f;
 			this._isLoading = true;
+			LoadingVersusController.Log.DebugFormat("Show Loading Window players:{0} Current matchData:{1}", new object[]
+			{
+				GameHubBehaviour.Hub.Players.PlayersAndBots.Count,
+				GameHubBehaviour.Hub.Match
+			});
 			this.AllyTeamGrid.hideInactive = false;
 			this.EnemyTeamGrid.hideInactive = false;
-			bool flag = this._enableTeamFlip && GameHubBehaviour.Hub.ArenaConfig.Arenas[GameHubBehaviour.Hub.Match.ArenaIndex].TugOfWarFlipTeam == GameHubBehaviour.Hub.Players.CurrentPlayerTeam;
+			bool flag = this._enableTeamFlip && GameHubBehaviour.Hub.ArenaConfig.GetCurrentArena().TugOfWarFlipTeam == GameHubBehaviour.Hub.Players.CurrentPlayerTeam;
 			for (int i = 0; i < GameHubBehaviour.Hub.Players.PlayersAndBots.Count; i++)
 			{
 				PlayerData playerData = GameHubBehaviour.Hub.Players.PlayersAndBots[i];
@@ -108,7 +144,7 @@ namespace HeavyMetalMachines.Frontend
 				{
 					loadingVersusPlayer.gameObject.name = ((!playerData.IsCurrentPlayer) ? (playerData.PlayerCarId + 20).ToString("0000") : "0000");
 					loadingVersusPlayer.gameObject.SetActive(true);
-					loadingVersusPlayer.UpdatePlayerInfo(this, playerData, flag);
+					loadingVersusPlayer.UpdatePlayerInfo(this, playerData, flag, this._teams);
 					loadingVersusPlayer.transform.localScale = Vector3.one;
 				}
 			}
@@ -116,10 +152,10 @@ namespace HeavyMetalMachines.Frontend
 			this.EnemyTeamGrid.hideInactive = true;
 			this.AllyTeamGrid.Reposition();
 			this.EnemyTeamGrid.Reposition();
-			int num = Language.GetSheetCount(TranslationSheets.LoadingHint) - 1;
-			int num2 = UnityEngine.Random.Range(1, num + 1);
-			string titleText = Language.Get("LOADING_HINT_TITLE", TranslationSheets.LoadingHint);
-			string descriptionText = Language.Get("LOADING_HINT_" + num2, TranslationSheets.LoadingHint);
+			int num = Random.Range(0, this._hintDrafts.Length);
+			MultiPlatformLocalizationDraft multiPlatformLocalizationDraft = this._hintDrafts[num];
+			string titleText = Language.Get("LOADING_HINT_TITLE", TranslationContext.LoadingHint);
+			string descriptionText = Language.Get(multiPlatformLocalizationDraft.CurrentPlatformDraft, TranslationContext.LoadingHint);
 			this.ShowHint(titleText, descriptionText);
 			if (this.audioSnapshotPlayback != null)
 			{
@@ -131,10 +167,12 @@ namespace HeavyMetalMachines.Frontend
 				this.audioSnapshotPlayback = FMODAudioManager.PlayAt(GameHubBehaviour.Hub.AudioSettings.loadingSnapshot, base.transform);
 			}
 			this.SetupTeamInfo();
+			this._keyBindingsView.UpdateBindings();
 		}
 
 		public void HideWindow()
 		{
+			this._onLoadingFinished.OnNext(Unit.Default);
 			base.StartCoroutine(this.HideWindowDelayCoroutine());
 		}
 
@@ -156,7 +194,7 @@ namespace HeavyMetalMachines.Frontend
 
 		private IEnumerator HideWindowDelayCoroutine()
 		{
-			while (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreBoard.State.PreReplay || GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreBoard.State.Replay)
+			while (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreboardState.PreReplay || GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreboardState.Replay)
 			{
 				yield return UnityUtils.WaitForEndOfFrame;
 			}
@@ -170,6 +208,7 @@ namespace HeavyMetalMachines.Frontend
 			}
 			this.WindowGameObject.SetActive(false);
 			this._isLoading = false;
+			LoadingVersusController.Log.Debug("Hide Loading Window");
 			for (int i = 0; i < this._allyObjects.Length; i++)
 			{
 				this._allyObjects[i].gameObject.SetActive(false);
@@ -219,7 +258,6 @@ namespace HeavyMetalMachines.Frontend
 				this.WindowGameObject.SetActive(false);
 				return;
 			}
-			GameHubBehaviour.Hub.Server.ClientSendPlayerLoadingInfo(SingletonMonoBehaviour<LoadingManager>.Instance.LoadingProgress);
 		}
 
 		public void OnDisable()
@@ -235,51 +273,64 @@ namespace HeavyMetalMachines.Frontend
 		{
 			this.AllyTeamGameObject.SetActive(false);
 			this.EnemyTeamGameObject.SetActive(false);
-			TeamUtils.GetGroupTeamAsync(GameHubBehaviour.Hub, TeamKind.Blue, delegate(Team team)
-			{
-				this.SetGroupTeamInfo(TeamKind.Blue, team);
-			}, delegate(Exception exception)
-			{
-				LoadingVersusController.Log.Error(string.Format("Error on GetGroupTeamAsync [{0}]. Exception:{1}", TeamKind.Blue, exception));
-			});
-			TeamUtils.GetGroupTeamAsync(GameHubBehaviour.Hub, TeamKind.Red, delegate(Team team)
-			{
-				this.SetGroupTeamInfo(TeamKind.Red, team);
-			}, delegate(Exception exception)
-			{
-				LoadingVersusController.Log.Error(string.Format("Error on GetGroupTeamAsync [{0}]. Exception:{1}", TeamKind.Red, exception));
-			});
-			bool flag = this._enableTeamFlip && GameHubBehaviour.Hub.ArenaConfig.Arenas[GameHubBehaviour.Hub.Match.ArenaIndex].TugOfWarFlipTeam == GameHubBehaviour.Hub.Players.CurrentPlayerTeam;
+			this.SetGroupTeamInfo(TeamKind.Blue);
+			this.SetGroupTeamInfo(TeamKind.Red);
+			bool flag = this._enableTeamFlip && GameHubBehaviour.Hub.ArenaConfig.GetCurrentArena().TugOfWarFlipTeam == GameHubBehaviour.Hub.Players.CurrentPlayerTeam;
 			this.AllyTeamGameObject.transform.parent = ((!flag) ? this.LeftFlagTeamPivot.transform : this.RightFlagTeamPivot.transform);
 			this.AllyTeamGameObject.transform.localPosition = Vector3.zero;
 			this.EnemyTeamGameObject.transform.parent = ((!flag) ? this.RightFlagTeamPivot.transform : this.LeftFlagTeamPivot.transform);
 			this.EnemyTeamGameObject.transform.localPosition = Vector3.zero;
 		}
 
-		private void SetGroupTeamInfo(TeamKind teamKind, Team team)
+		private void SetGroupTeamInfo(TeamKind teamKind)
 		{
-			if (team == null)
+			Team groupTeam = this._teams.GetGroupTeam(teamKind);
+			if (groupTeam == null)
 			{
 				return;
 			}
+			ITeamNameRestriction teamNameRestriction = this._diContainer.Resolve<ITeamNameRestriction>();
+			string anyTeamTagRestriction = teamNameRestriction.GetAnyTeamTagRestriction(groupTeam.CurrentUgmUserPlayerId, groupTeam.Tag);
 			bool flag = GameHubBehaviour.Hub.Players.CurrentPlayerData.Team == teamKind;
 			if (flag)
 			{
-				this.AllyTeamIconSprite.SpriteName = team.ImageUrl;
-				this.AllyTeamNameLabel.text = string.Format("[{0}]", team.Tag);
+				this.AllyTeamIconSprite.SpriteName = groupTeam.ImageUrl;
+				this.AllyTeamNameLabel.text = NGUIText.EscapeSymbols(string.Format("[{0}]", anyTeamTagRestriction));
 				this.AllyTeamGameObject.SetActive(true);
+				this.FetchAndFillTeamUserGeneratedContentPublisherUserName(groupTeam, this.AllyTeamUserGeneratedContentCurrentOwnerPublisherUserNameLabel);
 			}
 			else
 			{
-				this.EnemyTeamIconSprite.SpriteName = team.ImageUrl;
-				this.EnemyTeamNameLabel.text = string.Format("[{0}]", team.Tag);
+				this.EnemyTeamIconSprite.SpriteName = groupTeam.ImageUrl;
+				this.EnemyTeamNameLabel.text = NGUIText.EscapeSymbols(string.Format("[{0}]", anyTeamTagRestriction));
 				this.EnemyTeamGameObject.SetActive(true);
+				this.FetchAndFillTeamUserGeneratedContentPublisherUserName(groupTeam, this.EnemyTeamUserGeneratedContentCurrentOwnerPublisherUserNameLabel);
 			}
+		}
+
+		private void FetchAndFillTeamUserGeneratedContentPublisherUserName(Team team, UILabel label)
+		{
+			label.text = string.Empty;
+			IGetDisplayablePublisherUserName getDisplayablePublisherUserName = this._diContainer.Resolve<IGetDisplayablePublisherUserName>();
+			ObservableExtensions.Subscribe<string>(Observable.Do<string>(getDisplayablePublisherUserName.GetAsTeamUgcOwner(team.CurrentUgmUserUniversalId), delegate(string displayablePublisherUserName)
+			{
+				label.text = displayablePublisherUserName;
+			}));
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(LoadingVersusController));
 
+		[Inject]
+		private IMatchTeams _teams;
+
+		[Inject]
+		private DiContainer _diContainer;
+
 		private const float HideWindowDelayInSec = 0.5f;
+
+		private readonly Subject<Unit> _onLoadingStarted = new Subject<Unit>();
+
+		private readonly Subject<Unit> _onLoadingFinished = new Subject<Unit>();
 
 		public Color AllyTeamColor;
 
@@ -319,6 +370,9 @@ namespace HeavyMetalMachines.Frontend
 
 		public UIGrid EnemyTeamGrid;
 
+		[SerializeField]
+		private LoadingVersusKeyBindingsView _keyBindingsView;
+
 		[Header("[Border sprites]")]
 		public Sprite AllyBorderSprite;
 
@@ -354,11 +408,15 @@ namespace HeavyMetalMachines.Frontend
 
 		public UILabel AllyTeamNameLabel;
 
+		public UILabel AllyTeamUserGeneratedContentCurrentOwnerPublisherUserNameLabel;
+
 		public GameObject EnemyTeamGameObject;
 
 		public HMMUI2DDynamicSprite EnemyTeamIconSprite;
 
 		public UILabel EnemyTeamNameLabel;
+
+		public UILabel EnemyTeamUserGeneratedContentCurrentOwnerPublisherUserNameLabel;
 
 		[SerializeField]
 		private bool _enableTeamFlip;
@@ -372,6 +430,9 @@ namespace HeavyMetalMachines.Frontend
 		private LoadingVersusPlayer[] _allyObjects;
 
 		private LoadingVersusPlayer[] _enemyObjects;
+
+		[SerializeField]
+		private MultiPlatformLocalizationDraft[] _hintDrafts;
 
 		[Serializable]
 		private struct ArenaGui

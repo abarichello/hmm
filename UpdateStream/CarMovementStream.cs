@@ -1,6 +1,6 @@
 ﻿using System;
 using HeavyMetalMachines.Car;
-using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Infra.Context;
 using Hoplon.Timeline;
 using Pocketverse;
 using UnityEngine;
@@ -13,13 +13,14 @@ namespace HeavyMetalMachines.UpdateStream
 	{
 		protected override Timeline<CarMovementPose> InstantiateTimeline()
 		{
-			return new CarMovementTimeline(this.configuration.SmoothClockInstance, 1024u);
+			return new CarMovementTimeline(this.configuration.SmoothClockInstance, 1024U);
 		}
 
 		protected override void Awake()
 		{
 			base.Awake();
 			this._carInput = base.GetComponent<CarInput>();
+			this._turretMovement = base.GetComponent<ITurretMovement>();
 			this._carMovement = base.GetComponent<CarMovement>();
 			if (base.enabled)
 			{
@@ -27,23 +28,18 @@ namespace HeavyMetalMachines.UpdateStream
 				if (component != null)
 				{
 					component.isKinematic = true;
-					component.constraints = RigidbodyConstraints.None;
-					component.collisionDetectionMode = CollisionDetectionMode.Discrete;
+					component.constraints = 0;
+					component.collisionDetectionMode = 0;
 				}
-				this._shaderPositionProperty = Shader.PropertyToID("_LocalPlayerPosition");
 			}
 		}
 
 		protected override void Update()
 		{
 			base.Update();
-			BombScoreBoard.State currentState = this.ScoreBoard.CurrentState;
-			bool freezeState = this.Timeline.CurrentState == State.OverExtrapolating && (currentState == BombScoreBoard.State.BombDelivery || currentState == BombScoreBoard.State.PreReplay);
+			BombScoreboardState currentState = this.ScoreBoard.CurrentState;
+			bool freezeState = this.Timeline.CurrentState == 3 && (currentState == BombScoreboardState.BombDelivery || currentState == BombScoreboardState.PreReplay);
 			GameHubBehaviour.Hub.PlayerExperienceBI.SetFreezeState(freezeState);
-			if (base.Id.IsOwner)
-			{
-				Shader.SetGlobalVector(this._shaderPositionProperty, base.transform.position + base.transform.forward * 30f);
-			}
 		}
 
 		protected override void SetCurrentPose(ref CarMovementPose pose)
@@ -53,6 +49,7 @@ namespace HeavyMetalMachines.UpdateStream
 			this._carMovement.LastAngularVelocity = pose.AngularVelocity;
 			this._carInput.TargetH = pose.TargetH;
 			this._carInput.TargetV = pose.TargetV;
+			this._turretMovement.TurretAngle = pose.TurretAngle;
 			this._carMovement.HAxis = pose.HAxis;
 			this._carMovement.VAxis = pose.VAxis;
 			this._carMovement.SpeedZ = pose.SpeedZ;
@@ -67,13 +64,14 @@ namespace HeavyMetalMachines.UpdateStream
 			pose.AngularVelocity = this._carMovement.LastAngularVelocity;
 			pose.TargetH = this._carInput.TargetH;
 			pose.TargetV = this._carInput.TargetV;
+			pose.TurretAngle = this._turretMovement.TurretAngle;
 			pose.HAxis = this._carMovement.HAxis;
 			pose.VAxis = this._carMovement.VAxis;
 			pose.SpeedZ = this._carMovement.SpeedZ;
 			pose.IsDrifting = this._carMovement.IsDrifting;
 		}
 
-		public override void Read(Pocketverse.BitStream stream, double offset)
+		public override void Read(BitStream stream, double offset)
 		{
 			double num = stream.ReadDouble();
 			CarMovementPose carMovementPose = new CarMovementPose
@@ -84,6 +82,7 @@ namespace HeavyMetalMachines.UpdateStream
 				AngularVelocity = stream.ReadCompressedFloat(),
 				TargetH = stream.ReadCompressedFloat(),
 				TargetV = stream.ReadCompressedFloat(),
+				TurretAngle = stream.ReadCompressedFloat(),
 				HAxis = stream.ReadCompressedFloat(),
 				VAxis = stream.ReadCompressedFloat(),
 				SpeedZ = stream.ReadCompressedFloat(),
@@ -92,7 +91,7 @@ namespace HeavyMetalMachines.UpdateStream
 			this.Timeline.AddPose(num + offset, ref carMovementPose);
 		}
 
-		public override void Write(Pocketverse.BitStream stream)
+		public override void Write(BitStream stream)
 		{
 			stream.WriteDouble((double)GameHubBehaviour.Hub.GameTime.GetPlaybackTime() / 1000.0);
 			stream.WriteVector3(base.transform.position);
@@ -101,6 +100,7 @@ namespace HeavyMetalMachines.UpdateStream
 			stream.WriteCompressedFloat(this._carMovement.LastAngularVelocity);
 			stream.WriteCompressedFloat(this._carInput.TargetH);
 			stream.WriteCompressedFloat(this._carInput.TargetV);
+			stream.WriteCompressedFloat(this._turretMovement.TurretAngle);
 			stream.WriteCompressedFloat(this._carMovement.HAxis);
 			stream.WriteCompressedFloat(this._carMovement.VAxis);
 			stream.WriteCompressedFloat(this._carMovement.SpeedZ);
@@ -109,8 +109,8 @@ namespace HeavyMetalMachines.UpdateStream
 
 		private CarInput _carInput;
 
-		private CarMovement _carMovement;
+		private ITurretMovement _turretMovement;
 
-		private int _shaderPositionProperty;
+		private CarMovement _carMovement;
 	}
 }

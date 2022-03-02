@@ -5,100 +5,100 @@ namespace HeavyMetalMachines.Audio
 {
 	public class AnnouncerVoiceOver : GameHubScriptableObject
 	{
-		public FMODVoiceOverAsset BombPickedAlmostDeliveryEnemy;
+		public AudioEventAsset BombPickedAlmostDeliveryEnemy;
 
-		public FMODVoiceOverAsset BombPickedEnemy;
+		public AudioEventAsset BombPickedEnemy;
 
-		public FMODVoiceOverAsset BombEntersTrackAlly;
+		public AudioEventAsset BombEntersTrackAlly;
 
-		public FMODVoiceOverAsset BombFirstCurveAlly;
+		public AudioEventAsset BombFirstCurveAlly;
 
-		public FMODVoiceOverAsset BombLastCurveAlly;
+		public AudioEventAsset BombLastCurveAlly;
 
-		public FMODVoiceOverAsset BombAlmostDeliveryAlly;
+		public AudioEventAsset BombAlmostDeliveryAlly;
 
-		public FMODVoiceOverAsset BombEntersTrackEnemy;
+		public AudioEventAsset BombEntersTrackEnemy;
 
-		public FMODVoiceOverAsset BombFirstCurveEnemy;
+		public AudioEventAsset BombFirstCurveEnemy;
 
-		public FMODVoiceOverAsset BombLastCurveEnemy;
+		public AudioEventAsset BombLastCurveEnemy;
 
-		public FMODVoiceOverAsset BombAlmostDeliveryEnemy;
+		public AudioEventAsset BombAlmostDeliveryEnemy;
 
-		public FMODVoiceOverAsset FirstBlood;
+		public AudioEventAsset FirstBlood;
 
-		public FMODVoiceOverAsset DoubleKill;
+		public AudioEventAsset DoubleKill;
 
-		public FMODVoiceOverAsset TripleKill;
+		public AudioEventAsset TripleKill;
 
-		public FMODVoiceOverAsset QuadKill;
+		public AudioEventAsset QuadKill;
 
-		public FMODVoiceOverAsset NormalKill;
+		public AudioEventAsset NormalKill;
 
-		public FMODVoiceOverAsset TeamWipe;
+		public AudioEventAsset TeamWipe;
 
-		public FMODVoiceOverAsset BombDeliveryEnemyOwnGoal1;
+		public AudioEventAsset BombDeliveryEnemyOwnGoal1;
 
-		public FMODVoiceOverAsset BombDeliveryEnemyOwnGoal2;
+		public AudioEventAsset BombDeliveryEnemyOwnGoal2;
 
-		public FMODVoiceOverAsset StartRound;
+		public AudioEventAsset StartRound;
 
-		public FMODVoiceOverAsset BombDeliverAlly;
+		public AudioEventAsset BombDeliverAlly;
 
-		public FMODVoiceOverAsset BombDeliverEnemy;
+		public AudioEventAsset BombDeliverEnemy;
 
-		public FMODVoiceOverAsset ReplayAttack;
+		public AudioEventAsset ReplayAttack;
 
-		public FMODVoiceOverAsset ReplayProtect;
+		public AudioEventAsset ReplayProtect;
 
-		public FMODVoiceOverAsset BombShootingAlliedTeam;
+		public AudioEventAsset BombShootingAlliedTeam;
 
-		public FMODVoiceOverAsset BombShootingEnemyTeam;
+		public AudioEventAsset BombShootingEnemyTeam;
 
-		public FMODVoiceOverAsset BombRespawn10;
+		public AudioEventAsset BombRespawn10;
 
-		public FMODVoiceOverAsset BombRespawn20;
+		public AudioEventAsset BombRespawn20;
 
-		public FMODVoiceOverAsset BombRespawn01;
+		public AudioEventAsset BombRespawn01;
 
-		public FMODVoiceOverAsset BombRespawn02;
+		public AudioEventAsset BombRespawn02;
 
-		public FMODVoiceOverAsset BombRespawn11;
+		public AudioEventAsset BombRespawn11;
 
-		public FMODVoiceOverAsset BombRespawn21;
+		public AudioEventAsset BombRespawn21;
 
-		public FMODVoiceOverAsset BombRespawn12;
+		public AudioEventAsset BombRespawn12;
 
-		public FMODVoiceOverAsset BombRespawn22;
+		public AudioEventAsset BombRespawn22;
 
-		public FMODVoiceOverAsset Victory30;
+		public AudioEventAsset Victory30;
 
-		public FMODVoiceOverAsset Victory31;
+		public AudioEventAsset Victory31;
 
-		public FMODVoiceOverAsset Victory32;
+		public AudioEventAsset Victory32;
 
-		public FMODVoiceOverAsset Defeat30;
+		public AudioEventAsset Defeat30;
 
-		public FMODVoiceOverAsset Defeat31;
+		public AudioEventAsset Defeat31;
 
-		public FMODVoiceOverAsset Defeat32;
+		public AudioEventAsset Defeat32;
 
-		public FMODVoiceOverAsset BombDropped;
+		public AudioEventAsset BombDropped;
 
-		public FMODVoiceOverAsset Pause;
+		public AudioEventAsset Pause;
 
-		public FMODVoiceOverAsset Unpause;
+		public AudioEventAsset Unpause;
 
-		public FMODVoiceOverAsset Overtime;
+		public AudioEventAsset Overtime;
 
-		public FMODVoiceOverAsset IntroArena;
+		public AudioEventAsset IntroArena;
 
-		public FMODVoiceOverAsset MatchFound;
+		public AudioEventAsset MatchFound;
 
-		public FMODVoiceOverAsset PickStart;
+		public AudioEventAsset PickStart;
 
-		public FMODVoiceOverAsset PickCountdown;
+		public AudioEventAsset PickCountdown;
 
-		public FMODVoiceOverAsset PickEnd;
+		public AudioEventAsset PickEnd;
 	}
 }

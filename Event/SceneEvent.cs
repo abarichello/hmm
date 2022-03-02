@@ -30,7 +30,7 @@ namespace HeavyMetalMachines.Event
 			return true;
 		}
 
-		public void WriteToBitStream(Pocketverse.BitStream bs)
+		public void WriteToBitStream(BitStream bs)
 		{
 			bs.WriteCompressedInt(this.SceneObjectId);
 			bs.WriteCompressedInt((int)this.State);
@@ -46,7 +46,7 @@ namespace HeavyMetalMachines.Event
 			}
 		}
 
-		public void ReadFromBitStream(Pocketverse.BitStream bs)
+		public void ReadFromBitStream(BitStream bs)
 		{
 			this.SceneObjectId = bs.ReadCompressedInt();
 			this.State = (SceneEvent.StateKind)bs.ReadCompressedInt();

@@ -1,10 +1,11 @@
 ﻿using System;
 using System.Collections;
-using Assets.Standard_Assets.Scripts.HMM.PlotKids;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids.Infra;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids.Social;
 using ClientAPI.Objects;
 using HeavyMetalMachines.Frontend;
+using HeavyMetalMachines.Localization;
+using HeavyMetalMachines.Social.Teams.Models;
 using HeavyMetalMachines.VFX.PlotKids;
 using Pocketverse;
 using UnityEngine;
@@ -22,7 +23,6 @@ namespace HeavyMetalMachines.VFX
 			set
 			{
 				this._userFriend = value;
-				this.SetInvitePartyOptionButton();
 			}
 		}
 
@@ -58,31 +58,36 @@ namespace HeavyMetalMachines.VFX
 			yield break;
 		}
 
-		private void SetInvitePartyOptionButton()
+		public void SetInvitePartyOptionButton(Team localUserTeam)
 		{
-			if (SpectatorController.IsSpectating)
+			if (this._userFriend == null)
 			{
+				FriendContextMenuModalGUI.Log.Error("Unexpected behaviour: null userFriend");
 				return;
 			}
-			if (GameHubBehaviour.Hub.State.Current.StateKind != GameState.GameStateKind.Pick)
+			HMMHub hub = GameHubBehaviour.Hub;
+			bool flag = this._userFriend.IsUserPlayingHMM(localUserTeam);
+			string text;
+			bool flag2 = this._userFriend.IsUserEligibleToBeInvited(localUserTeam, hub, out text);
+			FriendContextMenuModalGUI.Log.DebugFormat("[SocialDebug] User={0} created with reason={1}. Bag={2}", new object[]
 			{
-				return;
-			}
-			bool flag = this._userFriend.IsUserPlayingHMM();
-			bool flag2 = this._userFriend.IsUserEligibleToBeInvited(null);
+				this._userFriend.UniversalId,
+				text,
+				this._userFriend.Bag
+			});
 			if (this._inviteToPartyUIButton.gameObject.activeSelf != flag2)
 			{
 				this._inviteToPartyUIButton.gameObject.SetActive(flag2);
 			}
+			this._inviteToPartyUIButton.isEnabled = flag2;
 			if (!flag)
 			{
 				return;
 			}
-			this._inviteToPartyUIButton.isEnabled = flag2;
 			GroupStatus selfGroupStatus = ManagerController.Get<GroupManager>().GetSelfGroupStatus();
 			bool flag3 = selfGroupStatus == GroupStatus.Owner || selfGroupStatus == GroupStatus.None;
 			string key = (!flag3) ? "Sugerir para o grupo" : "Convidar para o grupo";
-			this._inviteParty_Label.text = Language.Get(key, TranslationSheets.MainMenuGui);
+			this._inviteParty_Label.text = Language.Get(key, TranslationContext.MainMenuGui);
 		}
 
 		protected override void Update()
@@ -106,8 +111,9 @@ namespace HeavyMetalMachines.VFX
 			{
 				return;
 			}
-			ManagerController.Get<GroupManager>().TryInviteToGroup(this.UserFriend);
+			ManagerController.Get<GroupManager>().TryInviteToGroup(this.UserFriend, string.Empty);
 			base.ResolveModalWindow();
+			GameHubBehaviour.Hub.Swordfish.Log.BILogClient(78, true);
 		}
 
 		public void onButtonClick_SendMessageToUser()
@@ -135,6 +141,8 @@ namespace HeavyMetalMachines.VFX
 			SingletonMonoBehaviour<SocialController>.Instance.OpenSteamPlayerProfile(this.UserFriend.UniversalID);
 			base.ResolveModalWindow();
 		}
+
+		private static readonly BitLogger Log = new BitLogger(typeof(FriendContextMenuModalGUI));
 
 		[SerializeField]
 		private Transform _contextMenuTransform;

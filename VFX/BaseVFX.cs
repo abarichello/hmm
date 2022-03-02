@@ -28,6 +28,30 @@ namespace HeavyMetalMachines.VFX
 			}
 		}
 
+		public virtual bool PrevizMode
+		{
+			get
+			{
+				return this.previzMode;
+			}
+			set
+			{
+				this.previzMode = value;
+			}
+		}
+
+		public virtual VFXTeam CurrentTeam
+		{
+			get
+			{
+				return this.currentTeam;
+			}
+			set
+			{
+				this.currentTeam = value;
+			}
+		}
+
 		public void SetTargetFXInfo(MasterVFX.TargetFXInfo targetFXInfo)
 		{
 			this._targetFXInfo = targetFXInfo;
@@ -128,6 +152,10 @@ namespace HeavyMetalMachines.VFX
 		public BaseVFX.CheckReasonMode checkReasonMode;
 
 		public BaseFX.EDestroyReason destroyReason;
+
+		private bool previzMode;
+
+		private VFXTeam currentTeam;
 
 		protected MasterVFX.TargetFXInfo _targetFXInfo;
 

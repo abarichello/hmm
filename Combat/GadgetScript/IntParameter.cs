@@ -1,31 +1,20 @@
 ﻿using System;
-using Hoplon.GadgetScript;
 using Pocketverse;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Combat.GadgetScript
 {
 	[CreateAssetMenu(menuName = "Parameter/Integer")]
-	public class IntParameter : Parameter<int>, INumericParameter
+	public class IntParameter : Parameter<float>
 	{
-		public float GetFloatValue(IParameterContext context)
+		protected override void WriteToBitStream(object context, BitStream bs)
 		{
-			return (float)base.GetValue(context);
+			bs.WriteFloat(base.GetValue(context));
 		}
 
-		public void SetFloatValue(IParameterContext context, float value)
+		protected override void ReadFromBitStream(object context, BitStream bs)
 		{
-			base.SetValue(context, (int)value);
-		}
-
-		protected override void WriteToBitStream(IParameterContext context, Pocketverse.BitStream bs)
-		{
-			bs.WriteInt(base.GetValue(context));
-		}
-
-		protected override void ReadFromBitStream(IParameterContext context, Pocketverse.BitStream bs)
-		{
-			base.SetValue(context, bs.ReadInt());
+			base.SetValue(context, bs.ReadFloat());
 		}
 	}
 }

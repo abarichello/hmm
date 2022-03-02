@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Localization;
+using Hoplon.Localization.TranslationTable;
 using Pocketverse;
 using UnityEngine;
 
@@ -22,11 +24,11 @@ namespace HeavyMetalMachines.VFX
 
 		private void CheckTranslationSheet()
 		{
-			if (this._translationSheet != TranslationSheets.All)
+			if (this._translationContext != TranslationContext.All)
 			{
 				return;
 			}
-			this._translationSheet = ((!this.DraftTooltipTittle.StartsWith("SPONSOR")) ? TranslationSheets.CharactersMatchInfo : TranslationSheets.Sponsors);
+			this._translationContext = ((!this.DraftTooltipTittle.StartsWith("SPONSOR")) ? TranslationContext.CharactersMatchInfo : TranslationContext.Sponsors);
 		}
 
 		public string LocalizedTooltipTittle
@@ -34,7 +36,7 @@ namespace HeavyMetalMachines.VFX
 			get
 			{
 				this.CheckTranslationSheet();
-				return Language.Get(this.DraftTooltipTittle, this._translationSheet);
+				return Language.Get(this.DraftTooltipTittle, this._translationContext);
 			}
 		}
 
@@ -43,7 +45,7 @@ namespace HeavyMetalMachines.VFX
 			get
 			{
 				this.CheckTranslationSheet();
-				return Language.Get(this.DraftTooltipDesciption, this._translationSheet);
+				return Language.Get(this.DraftTooltipDesciption, this._translationContext);
 			}
 		}
 
@@ -78,7 +80,7 @@ namespace HeavyMetalMachines.VFX
 
 		public string DraftTooltipDesciption;
 
-		private TranslationSheets _translationSheet;
+		private ContextTag _translationContext = TranslationContext.All;
 
 		public int EffectPreCacheCount = 1;
 

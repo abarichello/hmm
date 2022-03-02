@@ -3,7 +3,7 @@ using HeavyMetalMachines.VFX;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkBarrierFeedback : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkBarrierFeedback : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		public override void PerkInitialized()
 		{
@@ -15,7 +15,7 @@ namespace HeavyMetalMachines.Combat
 			this._target.ListenToBarrierHit += this.BarrierHitListener;
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (!this._target)
 			{

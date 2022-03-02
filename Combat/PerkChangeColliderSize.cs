@@ -71,7 +71,7 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
-		public override void PerkDestroyed(DestroyEffect destroyEffect)
+		public override void PerkDestroyed(DestroyEffectMessage destroyEffectMessage)
 		{
 			PerkChangeColliderSize.ColliderType colliderShape = this.ColliderShape;
 			if (colliderShape != PerkChangeColliderSize.ColliderType.BoxCollider)

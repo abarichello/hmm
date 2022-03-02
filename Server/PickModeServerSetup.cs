@@ -1,14 +1,20 @@
 ﻿using System;
 using System.Collections.Generic;
 using HeavyMetalMachines.BI;
-using HeavyMetalMachines.Character;
-using HeavyMetalMachines.Character.PickServiceBehavior;
-using HeavyMetalMachines.Character.PickServiceBehavior.Apis;
+using HeavyMetalMachines.Characters;
+using HeavyMetalMachines.Characters.PickServiceBehavior;
+using HeavyMetalMachines.Characters.PickServiceBehavior.Apis;
 using HeavyMetalMachines.Frontend;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Matchmaking.Configuration;
+using HeavyMetalMachines.Pick;
+using HeavyMetalMachines.Regions.Business;
+using HeavyMetalMachines.Server.Apis;
 using HeavyMetalMachines.Server.Pick;
 using HeavyMetalMachines.Server.Pick.Apis;
 using Pocketverse;
+using UniRx;
+using Zenject;
 
 namespace HeavyMetalMachines.Server
 {
@@ -34,7 +40,8 @@ namespace HeavyMetalMachines.Server
 		{
 			this._hub = GameHubBehaviour.Hub;
 			this._pickService = this._hub.Characters;
-			this._botPick = new BotPickController(this._pickService, this._hub.Players, this._hub.Config, this._hub.BotAIMatchRules, this._hub.InventoryColletion, this.PickServerConfig);
+			this._currentPickConfig = this._pickConfigProvider.Get(this._hub.Match.Kind);
+			this._botPick = new BotPickController(this._pickService, this._hub.Players, this._hub.Config, this._hub.BotAIMatchRules, this._hub.InventoryColletion, this._currentPickConfig);
 			this.CreatePickStates();
 			this.LogCurrentPickState();
 			this._pickService.SetPickServiceBehavior(this._currPickServiceBehavior);
@@ -44,7 +51,7 @@ namespace HeavyMetalMachines.Server
 		{
 			this._pickStates = new List<Tuple2<IPickModeState, IPickServiceBehavior>>
 			{
-				PickModeServerSetup.CreatePickStateEntry(new PlayerPickState(this._pickService, this._botPick, this._hub.Players, this.PickServerConfig.BotPickTimeAllowedSeconds), new PlayerPickPickServiceBehavior(this._pickService, this._hub.Players)),
+				PickModeServerSetup.CreatePickStateEntry(new PlayerPickState(this._pickService, this._botPick, this._hub.Players, this._currentPickConfig.BotPickTimeAllowedSeconds), new PlayerPickPickServiceBehavior(this._pickService, this._hub.Players)),
 				PickModeServerSetup.CreatePickStateEntry(new BotPickState(this._botPick), new BotPickPickServiceBehavior(this._pickService, this._hub.Players, this._hub.AddressGroups)),
 				PickModeServerSetup.CreatePickStateEntry(new GridSelectionPickState(this._pickService, this._hub.Players, this._hub.AddressGroups), new GridSelectionPickServiceBehavior(this._pickService, this._hub.Players)),
 				PickModeServerSetup.CreatePickStateEntry(new CustomizationPickState(this._pickService), new CustomizationPickServiceBehavior(this._pickService, this._hub.Players))
@@ -59,15 +66,28 @@ namespace HeavyMetalMachines.Server
 
 		protected override void OnStateEnabled()
 		{
+			PickModeServerSetup.Log.Debug("Pick Mode Server State enabled.");
 			this.SetupPickService();
 			this._botPick.Initialize();
 			this.UpdateMatchState(MatchData.MatchState.CharacterPick);
 		}
 
+		protected override IObservable<Unit> OnStateEnabledAsync()
+		{
+			if (GameHubBehaviour.Hub.Match.Kind != 3)
+			{
+				return Observable.ReturnUnit();
+			}
+			return Observable.AsUnitObservable<QueueConfiguration>(Observable.Do<QueueConfiguration>(this._diContainer.Resolve<IGetCompetitiveQueueConfiguration>().GetForRegion(this._getServerRegion.GetRegionName()), delegate(QueueConfiguration config)
+			{
+				this._pickService.CompetitiveQueueConfiguration = config;
+			}));
+		}
+
 		private void SetupPickService()
 		{
-			this._pickService.PickTime = this.PickServerConfig.PickTime;
-			this._pickService.CustomizationTime = ((GameHubBehaviour.Hub.Config.GetIntValue(ConfigAccess.FastTestChar) == -1) ? this.PickServerConfig.CustomizationTime : 0f);
+			this._pickService.PickTime = this._currentPickConfig.PickTime;
+			this._pickService.CustomizationTime = ((GameHubBehaviour.Hub.Config.GetIntValue(ConfigAccess.FastTestChar) == -1) ? this._currentPickConfig.CustomizationTime : 0f);
 			this._pickService.InitPickMode();
 		}
 
@@ -90,6 +110,7 @@ namespace HeavyMetalMachines.Server
 			this._currPickStateIdx++;
 			if (this._currPickStateIdx >= this._pickStates.Count)
 			{
+				PickModeServerSetup.Log.Debug("Pick Mode has finished executing all its states.");
 				this.FinalizePickMode();
 				return;
 			}
@@ -111,6 +132,7 @@ namespace HeavyMetalMachines.Server
 
 		private void GotoNextState()
 		{
+			PickModeServerSetup.Log.Debug("Pick Mode has finished. Go to Loading state.");
 			this.UpdateMatchState(MatchData.MatchState.PreMatch);
 			this.LogMatchPlayers();
 			base.GoToState(this.loadingState, false);
@@ -120,7 +142,8 @@ namespace HeavyMetalMachines.Server
 		{
 			this._hub.Match.State = newState;
 			this._hub.Server.SpreadInfo();
-			this._hub.Players.UpdatePlayers();
+			this._playersDispatcher.UpdatePlayers();
+			this._teamsDispatcher.UpdateTeams();
 		}
 
 		private void LogMatchPlayers()
@@ -129,12 +152,13 @@ namespace HeavyMetalMachines.Server
 			for (int i = 0; i < playersAndBots.Count; i++)
 			{
 				PlayerData playerData = playersAndBots[i];
-				MatchLogWriter.CharacterSelected(playerData.PlayerCarId, playerData.Character.BIName);
+				string characterBiName = playerData.GetCharacterBiName();
+				MatchLogWriter.CharacterSelected(playerData.UserId, characterBiName);
 				PickModeServerSetup.Log.InfoFormat("Player Name={0} ObjId={1} Character={2} SFId={3} UserId={4}", new object[]
 				{
 					playerData.Name,
 					playerData.PlayerCarId,
-					playerData.Character.BIName,
+					characterBiName,
 					playerData.PlayerId,
 					playerData.UserId
 				});
@@ -146,6 +170,11 @@ namespace HeavyMetalMachines.Server
 			for (int i = 0; i < this._hub.Players.AllDatas.Count; i++)
 			{
 				PlayerData playerData = this._hub.Players.AllDatas[i];
+				PickModeServerSetup.Log.DebugFormat("Player={0} Char={1}", new object[]
+				{
+					playerData.PlayerAddress,
+					playerData.CharacterId
+				});
 			}
 		}
 
@@ -160,18 +189,33 @@ namespace HeavyMetalMachines.Server
 
 		private static readonly BitLogger Log = new BitLogger(typeof(PickModeServerSetup));
 
-		public ScreenConfig PickServerConfig;
+		[Inject]
+		private DiContainer _diContainer;
+
+		[Inject]
+		private IMatchTeamsDispatcher _teamsDispatcher;
+
+		[Inject]
+		private IMatchPlayersDispatcher _playersDispatcher;
+
+		[Inject]
+		private IGetServerRegion _getServerRegion;
+
+		[Inject]
+		private IPickModeConfigProvider _pickConfigProvider;
 
 		public LoadingState loadingState;
 
 		private HMMHub _hub;
 
-		private BotPickController _botPick;
+		private IBotPickController _botPick;
 
 		private CharacterService _pickService;
 
 		private int _currPickStateIdx;
 
 		private List<Tuple2<IPickModeState, IPickServiceBehavior>> _pickStates;
+
+		private MatchPickModeConfig _currentPickConfig;
 	}
 }

@@ -1,12 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
-using HeavyMetalMachines.Platform;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Utils
 {
-	public class CultureUtils
+	public static class CultureUtils
 	{
 		static CultureUtils()
 		{
@@ -50,7 +49,7 @@ namespace HeavyMetalMachines.Utils
 			CultureInfo result;
 			try
 			{
-				result = new CultureInfo(WindowsPlatform.GetSystemDefaultLCID());
+				result = Platform.Current.GetSystemCulture();
 			}
 			catch (Exception ex)
 			{
@@ -63,7 +62,7 @@ namespace HeavyMetalMachines.Utils
 			return result;
 		}
 
-		public static readonly BitLogger Log = new BitLogger(typeof(CultureUtils));
+		private static readonly BitLogger Log = new BitLogger(typeof(CultureUtils));
 
 		private static readonly Dictionary<string, string> CultureInfoNameByIsoCurrency = new Dictionary<string, string>();
 	}

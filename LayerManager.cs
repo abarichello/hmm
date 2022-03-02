@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Match;
 using UnityEngine;
@@ -34,23 +33,9 @@ namespace HeavyMetalMachines
 			{
 				obj.gameObject.layer = layer;
 			}
-			IEnumerator enumerator = obj.transform.GetEnumerator();
-			try
+			for (int i = 0; i < obj.transform.childCount; i++)
 			{
-				while (enumerator.MoveNext())
-				{
-					object obj2 = enumerator.Current;
-					Transform obj3 = (Transform)obj2;
-					LayerManager.SetLayerRecursively(obj3, layer, ignoreLayer);
-				}
-			}
-			finally
-			{
-				IDisposable disposable;
-				if ((disposable = (enumerator as IDisposable)) != null)
-				{
-					disposable.Dispose();
-				}
+				LayerManager.SetLayerRecursively(obj.transform.GetChild(i), layer, ignoreLayer);
 			}
 		}
 
@@ -172,7 +157,7 @@ namespace HeavyMetalMachines
 			PlayerRed,
 			PlayerBlu,
 			PlayerNeutral = 30,
-			Creep = 12,
+			Available = 12,
 			Projectile,
 			PlayerTrigger,
 			RedBlocker = 22,
@@ -204,7 +189,7 @@ namespace HeavyMetalMachines
 			Player = 1073744896,
 			RedBlocker = 4194304,
 			BluBlocker = 16777216,
-			Creep = 4096,
+			Available = 4096,
 			Projectile = 8192,
 			PhysicsProjectileRed = 256,
 			PhysicsProjectileBlue = 262144,
@@ -220,8 +205,8 @@ namespace HeavyMetalMachines
 			ModelViewer = 536870912,
 			UserInterface = -2147483648,
 			CombatLinkCorner = 33554432,
-			CombatLayer = 1077058560,
-			CombatRaycastLayer = 1085471744,
+			CombatLayer = 1077054464,
+			CombatRaycastLayer = 1085467648,
 			OverlapLayer = 1182720
 		}
 	}

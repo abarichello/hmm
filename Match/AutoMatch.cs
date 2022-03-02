@@ -1,80 +1,64 @@
 ﻿using System;
 using HeavyMetalMachines.Frontend;
-using Pocketverse;
+using HeavyMetalMachines.Matchmaking.Queue;
+using Hoplon.Logging;
 
 namespace HeavyMetalMachines.Match
 {
-	public class AutoMatch : GameHubBehaviour
+	public class AutoMatch : IAutoMatch
 	{
-		private void Awake()
+		public AutoMatch(ICheckNoviceQueueCondition noviceChecker, IAutoMatchStorage storage, ILogger<AutoMatch> logger, ICheckConsolesQueueCondition checkConsolesQueueCondition)
 		{
-			GameHubBehaviour.Hub.Server.OnMatchStateChanged += this.OnMatchStateChanged;
-			MainMenuGui.OnMenuDisplayed += this.OnMenuDisplayed;
+			this._noviceChecker = noviceChecker;
+			this._storage = storage;
+			this.Log = logger;
+			this._checkConsolesQueueCondition = checkConsolesQueueCondition;
 		}
 
-		private void Start()
+		public GameModeTabs GetGameModeTab()
 		{
-			GameHubBehaviour.Hub.Swordfish.Msg.Matchmaking.OnMatchCanceledEvent += this.OnMatchCanceledEvent;
-		}
-
-		private void OnDestroy()
-		{
-			MainMenuGui.OnMenuDisplayed -= this.OnMenuDisplayed;
-			if (GameHubBehaviour.Hub == null)
+			this.Log.DebugFormat("AutoMatch _lastMatchKind: {0}", new object[]
 			{
-				return;
-			}
-			if (GameHubBehaviour.Hub.Swordfish.Msg != null && GameHubBehaviour.Hub.Swordfish.Msg.Matchmaking != null)
+				this._storage.LastMatchKind
+			});
+			switch (this._storage.LastMatchKind)
 			{
-				GameHubBehaviour.Hub.Swordfish.Msg.Matchmaking.OnMatchCanceledEvent -= this.OnMatchCanceledEvent;
+			case 1:
+				return GameModeTabs.CoopVsBots;
+			case 3:
+				return this.RankedQueue();
 			}
-			GameHubBehaviour.Hub.Server.OnMatchStateChanged -= this.OnMatchStateChanged;
+			return this.NormalQueue();
 		}
 
-		private void OnMatchStateChanged(MatchData.MatchState newmatchstate)
+		private GameModeTabs NormalQueue()
 		{
-			this._lastMatchKind = GameHubBehaviour.Hub.Match.Kind;
-		}
-
-		private void OnMenuDisplayed()
-		{
-			if (this.MustRejoinQueue)
+			if (this._noviceChecker.ShouldGoToNoviceQueue())
 			{
-				MainMenuGui stateGuiController = GameHubBehaviour.Hub.State.Current.GetStateGuiController<MainMenuGui>();
-				MatchData.MatchKind lastMatchKind = this._lastMatchKind;
-				if (lastMatchKind != MatchData.MatchKind.PvE)
-				{
-					if (lastMatchKind == MatchData.MatchKind.PvP)
-					{
-						stateGuiController.JoinQueue(GameModeTabs.Normal);
-					}
-				}
-				else
-				{
-					stateGuiController.JoinQueue(GameModeTabs.CoopVsBots);
-				}
-				this._automatchStreak++;
-				GameHubBehaviour.Hub.Swordfish.Log.BILogClientMsg(ClientBITags.Automatch, string.Format("MatchKind={0} Streak={1}", this._lastMatchKind, this._automatchStreak), true);
+				return GameModeTabs.Novice;
 			}
-			else
+			if (this._checkConsolesQueueCondition.Check())
 			{
-				this._automatchStreak = 0;
+				return Platform.Current.GetExclusiveCasualQueueName();
 			}
-			this.MustRejoinQueue = false;
+			return GameModeTabs.Normal;
 		}
 
-		private void OnMatchCanceledEvent(string[] obj)
+		private GameModeTabs RankedQueue()
 		{
-			this._automatchStreak = 0;
-			this.MustRejoinQueue = false;
+			if (this._checkConsolesQueueCondition.Check())
+			{
+				return Platform.Current.GetExclusiveRankedQueueName();
+			}
+			return GameModeTabs.Ranked;
 		}
 
-		private static readonly BitLogger Log = new BitLogger(typeof(AutoMatch));
+		private readonly ICheckNoviceQueueCondition _noviceChecker;
 
-		private MatchData.MatchKind _lastMatchKind;
+		private readonly IAutoMatchStorage _storage;
 
-		private int _automatchStreak;
+		private readonly ILogger<AutoMatch> Log;
 
-		public bool MustRejoinQueue;
+		private readonly ICheckConsolesQueueCondition _checkConsolesQueueCondition;
 	}
 }

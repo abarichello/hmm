@@ -24,8 +24,8 @@ namespace HeavyMetalMachines.VFX
 			{
 				return;
 			}
-			Matrix4x4 lhs = Matrix4x4.TRS(this._targetTransform.localPosition, Quaternion.identity, this._targetTransform.localScale);
-			base.transform.localPosition = lhs * this._localPosition;
+			Matrix4x4 matrix4x = Matrix4x4.TRS(this._targetTransform.localPosition, Quaternion.identity, this._targetTransform.localScale);
+			base.transform.localPosition = matrix4x * this._localPosition;
 		}
 
 		protected override void WillDeactivate()

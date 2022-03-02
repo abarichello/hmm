@@ -46,19 +46,19 @@ namespace HeavyMetalMachines.Combat
 			LayerManager.SetLayerRecursively(this._transform, layer, this.ignoreLayer);
 		}
 
-		public void ChangeLayer(LayerManager.Layer layer, PerkChangeLayer perk)
+		public void ChangeLayer(LayerManager.Layer layer, CombatLayer.ILayerChanger changer)
 		{
 			this._layerChanges.Add(new CombatLayer.LayerChange
 			{
-				Perk = perk,
+				Changer = changer,
 				Layer = (int)layer
 			});
 			this.SetLayer(this._layerChanges[this._layerChanges.Count - 1].Layer);
 		}
 
-		public void RevertLayer(PerkChangeLayer perk)
+		public void RevertLayer(CombatLayer.ILayerChanger changer)
 		{
-			this._layerChanges.RemoveAll((CombatLayer.LayerChange l) => l.Perk == perk);
+			this._layerChanges.RemoveAll((CombatLayer.LayerChange l) => l.Changer == changer);
 			this.TryToRevertLayer();
 		}
 
@@ -68,18 +68,19 @@ namespace HeavyMetalMachines.Combat
 			this._shouldRevertLayerLater = (hits > 0);
 			if (hits == 0)
 			{
+				CombatLayer.Log.DebugFormat("{0} changing layer succesfully from {1} to {2} after {3} tries.", new object[]
+				{
+					base.gameObject.name,
+					(LayerManager.Layer)base.gameObject.layer,
+					(LayerManager.Layer)this._layerChanges[this._layerChanges.Count - 1].Layer,
+					this._numOfTries
+				});
+				this._numOfTries = 0;
 				this.SetLayer(this._layerChanges[this._layerChanges.Count - 1].Layer);
 			}
 			else
 			{
-				for (int i = 0; i < this._collidersBeneath.Length; i++)
-				{
-					Collider x = this._collidersBeneath[i];
-					if (x == null)
-					{
-						break;
-					}
-				}
+				this._numOfTries++;
 				if (base.gameObject.layer != this._targetCollidingLayer)
 				{
 					this.SetLayer(this._targetCollidingLayer);
@@ -104,7 +105,31 @@ namespace HeavyMetalMachines.Combat
 				return false;
 			}
 			CombatRef component = targetCollider.gameObject.GetComponent<CombatRef>();
-			return component && component.Combat && component.Combat.Team == this._myCombatObject.Team;
+			if (CombatLayer.IsValidCombatRef(component))
+			{
+				return this.IsSameTeam(component);
+			}
+			if (!CombatLayer.TargetHasAParent(targetCollider))
+			{
+				return false;
+			}
+			component = targetCollider.transform.parent.GetComponent<CombatRef>();
+			return CombatLayer.IsValidCombatRef(component) && this.IsSameTeam(component);
+		}
+
+		private bool IsSameTeam(CombatRef combatRef)
+		{
+			return combatRef.Combat.Team == this._myCombatObject.Team;
+		}
+
+		private static bool TargetHasAParent(Collider targetCollider)
+		{
+			return targetCollider.transform.parent != null;
+		}
+
+		private static bool IsValidCombatRef(CombatRef combatRef)
+		{
+			return combatRef && combatRef.Combat;
 		}
 
 		private void ClearCollidersBeneath()
@@ -160,11 +185,17 @@ namespace HeavyMetalMachines.Combat
 
 		public int ignoreLayer;
 
+		private int _numOfTries;
+
 		private struct LayerChange
 		{
-			public PerkChangeLayer Perk;
+			public CombatLayer.ILayerChanger Changer;
 
 			public int Layer;
+		}
+
+		public interface ILayerChanger
+		{
 		}
 	}
 }

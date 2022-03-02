@@ -3,7 +3,7 @@ using Pocketverse;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkAddPassiveModifier : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkAddPassiveModifier : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		public override void PerkInitialized()
 		{
@@ -31,7 +31,7 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (GameHubBehaviour.Hub.Net.IsClient())
 			{

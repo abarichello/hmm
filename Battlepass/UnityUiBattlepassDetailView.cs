@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections;
+using HeavyMetalMachines.Battlepass.Business;
 using HeavyMetalMachines.Frontend;
 using UnityEngine;
 using UnityEngine.UI;
+using Zenject;
 
 namespace HeavyMetalMachines.Battlepass
 {
@@ -12,7 +14,8 @@ namespace HeavyMetalMachines.Battlepass
 		{
 			this._battlepassDetailComponent = this._battlepassDetailComponentAsset;
 			this._mainWindowCanvasGroup.interactable = false;
-			this.Setup(this._battlepassDetailComponent.RegisterDetailView(this));
+			this._battlepassDetailComponent.RegisterDetailView(this);
+			this.Setup();
 			this.SetVisibility(true);
 		}
 
@@ -21,12 +24,15 @@ namespace HeavyMetalMachines.Battlepass
 			base.StopAllCoroutines();
 		}
 
-		private void Setup(UnityUiBattlepassDetailView.BattlepassDetailViewData battlepassDetailViewData)
+		private void Setup()
 		{
-			this._startDayText.text = battlepassDetailViewData.StartDay.ToString("0");
-			this._startMonthText.text = string.Format("/{0}", Language.Get(battlepassDetailViewData.StartMonth, TranslationSheets.Battlepass));
-			this._endDayText.text = battlepassDetailViewData.EndDay.ToString("0");
-			this._endMonthText.text = string.Format("/{0}", Language.Get(battlepassDetailViewData.EndMonth, TranslationSheets.Battlepass));
+			IGetBattlepassSeason getBattlepassSeason = this._diContainer.Resolve<IGetBattlepassSeason>();
+			BattlepassSeason battlepassSeason = getBattlepassSeason.Get();
+			IGetBattlepassDateTranslation getBattlepassDateTranslation = this._diContainer.Resolve<IGetBattlepassDateTranslation>();
+			this._startDayText.text = battlepassSeason.StartSeasonDateTime.Day.ToString("0");
+			this._startMonthText.text = string.Format("/{0}", getBattlepassDateTranslation.GetMonth(battlepassSeason.StartSeasonDateTime));
+			this._endDayText.text = battlepassSeason.EndSeasonDateTime.Day.ToString("0");
+			this._endMonthText.text = string.Format("/{0}", getBattlepassDateTranslation.GetMonth(battlepassSeason.EndSeasonDateTime));
 		}
 
 		public void SetVisibility(bool isVisible)
@@ -107,6 +113,9 @@ namespace HeavyMetalMachines.Battlepass
 		[Header("[Test Only]")]
 		[SerializeField]
 		private UnityUiBattlepassDetailView.BattlepassDetailViewData _battlepassDetailViewDataTest;
+
+		[Inject]
+		private DiContainer _diContainer;
 
 		private IBattlepassDetailComponent _battlepassDetailComponent;
 

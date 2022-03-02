@@ -1,6 +1,12 @@
 ﻿using System;
-using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Infra.Context;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Input;
+using HeavyMetalMachines.Input.ControllerInput;
 using HeavyMetalMachines.Options;
+using HeavyMetalMachines.Presenting;
+using HeavyMetalMachines.Presenting.Unity;
+using Hoplon.Input;
 using Pocketverse;
 using UnityEngine;
 using UnityEngine.UI;
@@ -12,6 +18,7 @@ namespace HeavyMetalMachines.Frontend
 		public void Setup(Transform lifebarParentTransform)
 		{
 			base.transform.SetParent(lifebarParentTransform);
+			base.transform.localPosition = Vector3.zero;
 			this.Reset();
 		}
 
@@ -34,7 +41,7 @@ namespace HeavyMetalMachines.Frontend
 
 		public void Update()
 		{
-			if (GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreBoard.State.BombDelivery && this.state != HudLifebarCounselor.State.Off)
+			if (GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreboardState.BombDelivery && this.state != HudLifebarCounselor.State.Off)
 			{
 				this.Reset();
 				return;
@@ -58,7 +65,7 @@ namespace HeavyMetalMachines.Frontend
 
 		private void StopCurrentAnim()
 		{
-			if (this._anim.clip.wrapMode != WrapMode.Loop)
+			if (this._anim.clip.wrapMode != 2)
 			{
 				return;
 			}
@@ -73,10 +80,14 @@ namespace HeavyMetalMachines.Frontend
 			{
 				return;
 			}
-			if (GameHubBehaviour.Hub.ClientCounselorController.CurrentAdviceConfig.ControlAction > ControlAction.None)
+			if (this._controlParent.activeSelf)
+			{
+				this._controlParent.SetActive(false);
+			}
+			if (GameHubBehaviour.Hub.ClientCounselorController.CurrentAdviceConfig.InputAction > -1)
 			{
 				this.StopCurrentAnim();
-				this.currentControlAction = GameHubBehaviour.Hub.ClientCounselorController.CurrentAdviceConfig.ControlAction;
+				this.currentInputAction = GameHubBehaviour.Hub.ClientCounselorController.CurrentAdviceConfig.InputAction;
 				this.ConfigureCurrentAdvice();
 				HudLifebarCounselor.SubState subState = this.substate;
 				if (subState != HudLifebarCounselor.SubState.Key)
@@ -91,12 +102,13 @@ namespace HeavyMetalMachines.Frontend
 					this._anim.Play(this.animationKeyInName);
 				}
 				this.state = HudLifebarCounselor.State.In;
+				this._controlParent.SetActive(true);
 			}
 		}
 
 		private void UpdateInState()
 		{
-			if (GameHubBehaviour.Hub.ClientCounselorController.CurrentAdviceConfig.ControlAction == ControlAction.None || !GameHubBehaviour.Hub.ClientCounselorController.IsPlaying)
+			if (GameHubBehaviour.Hub.ClientCounselorController.CurrentAdviceConfig.InputAction == -1 || !GameHubBehaviour.Hub.ClientCounselorController.IsPlaying)
 			{
 				this.StopCurrentAnim();
 				HudLifebarCounselor.SubState subState = this.substate;
@@ -136,35 +148,33 @@ namespace HeavyMetalMachines.Frontend
 
 		private void ConfigureCurrentAdvice()
 		{
-			KeyCode keyCode;
-			if (ControlOptions.IsMouseInput(this.currentControlAction, out keyCode))
+			ISprite sprite;
+			string text;
+			if (this.TryToGetInputActionAssetOrFallbackToTranslation(this.currentInputAction, out sprite, out text))
 			{
 				this.substate = HudLifebarCounselor.SubState.Icon;
-				Sprite sprite = null;
-				switch (keyCode)
-				{
-				case KeyCode.Mouse0:
-					sprite = GameHubBehaviour.Hub.CounselorConfig.ShortcutMouse0Sprite;
-					break;
-				case KeyCode.Mouse1:
-					sprite = GameHubBehaviour.Hub.CounselorConfig.ShortcutMouse1Sprite;
-					break;
-				case KeyCode.Mouse2:
-					sprite = GameHubBehaviour.Hub.CounselorConfig.ShortcutMouse2Sprite;
-					break;
-				}
-				this._iconImage.sprite = sprite;
+				this._iconImage.sprite = (sprite as UnitySprite).GetSprite();
 			}
 			else
 			{
 				this.substate = HudLifebarCounselor.SubState.Key;
-				this._label.text = ControlOptions.GetTextlocalized(this.currentControlAction, ControlOptions.ControlActionInputType.Primary);
+				this._label.text = text;
 			}
+		}
+
+		private bool TryToGetInputActionAssetOrFallbackToTranslation(ControllerInputActions controllerInputActions, out ISprite iconSprite, out string keyTranslation)
+		{
+			if (controllerInputActions == 4 && this._inputGetActiveDevicePoller.GetActiveDevice() == 3 && this._controlSetting.TryToGetJoystickKeyIconSprite(22, this._inputGetActiveDevicePoller.GetLastJoystickHardware(), out iconSprite))
+			{
+				keyTranslation = null;
+				return true;
+			}
+			return this._inputTranslation.TryToGetInputActionActiveDeviceAssetOrFallbackToTranslation(this.currentInputAction, ref iconSprite, ref keyTranslation);
 		}
 
 		private void UpdateShowingState()
 		{
-			if (GameHubBehaviour.Hub.ClientCounselorController.CurrentAdviceConfig.ControlAction == ControlAction.None || !GameHubBehaviour.Hub.ClientCounselorController.IsPlaying)
+			if (GameHubBehaviour.Hub.ClientCounselorController.CurrentAdviceConfig.InputAction == -1 || !GameHubBehaviour.Hub.ClientCounselorController.IsPlaying)
 			{
 				this.StopCurrentAnim();
 				HudLifebarCounselor.SubState subState = this.substate;
@@ -183,9 +193,9 @@ namespace HeavyMetalMachines.Frontend
 				this.substate = HudLifebarCounselor.SubState.None;
 				return;
 			}
-			if (this.currentControlAction != GameHubBehaviour.Hub.ClientCounselorController.CurrentAdviceConfig.ControlAction)
+			if (this.currentInputAction != GameHubBehaviour.Hub.ClientCounselorController.CurrentAdviceConfig.InputAction)
 			{
-				this.currentControlAction = GameHubBehaviour.Hub.ClientCounselorController.CurrentAdviceConfig.ControlAction;
+				this.currentInputAction = GameHubBehaviour.Hub.ClientCounselorController.CurrentAdviceConfig.InputAction;
 				HudLifebarCounselor.SubState subState2 = this.substate;
 				this.ConfigureCurrentAdvice();
 				if (subState2 != this.substate)
@@ -209,7 +219,7 @@ namespace HeavyMetalMachines.Frontend
 
 		private void UpdateShowingTransitionState()
 		{
-			if (GameHubBehaviour.Hub.ClientCounselorController.CurrentAdviceConfig.ControlAction == ControlAction.None)
+			if (GameHubBehaviour.Hub.ClientCounselorController.CurrentAdviceConfig.InputAction == -1)
 			{
 				this.StopCurrentAnim();
 				HudLifebarCounselor.SubState subState = this.substate;
@@ -247,11 +257,22 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
+		private void OnValidate()
+		{
+			if (this._controlParent == null && base.transform.childCount > 0)
+			{
+				this._controlParent = base.transform.GetChild(0).gameObject;
+			}
+		}
+
 		private HudLifebarCounselor.State state = HudLifebarCounselor.State.Off;
 
 		private HudLifebarCounselor.SubState substate;
 
-		private ControlAction currentControlAction;
+		private ControllerInputActions currentInputAction;
+
+		[SerializeField]
+		private GameObject _controlParent;
 
 		[SerializeField]
 		private Text _label;
@@ -288,6 +309,15 @@ namespace HeavyMetalMachines.Frontend
 
 		[SerializeField]
 		private string animationKeyToIconName;
+
+		[InjectOnClient]
+		private IInputTranslation _inputTranslation;
+
+		[InjectOnClient]
+		private IInputGetActiveDevicePoller _inputGetActiveDevicePoller;
+
+		[InjectOnClient]
+		private IControlSetting _controlSetting;
 
 		public enum State
 		{

@@ -13,7 +13,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				return;
 			}
-			BombVisualController.GetInstance(false).Detonate(deliveryScore);
+			BombVisualController.GetInstance().Detonate(deliveryScore);
 			foreach (ParticleSystem particleSystem in base.GetComponentsInChildren<ParticleSystem>())
 			{
 				particleSystem.Play();
@@ -27,7 +27,8 @@ namespace HeavyMetalMachines.Combat
 				Causer = -1,
 				PickupId = base.Id.ObjId,
 				Position = base.transform.position,
-				Reason = SpawnReason.Hide
+				Reason = SpawnReason.Hide,
+				TargetEventId = -1
 			});
 		}
 	}

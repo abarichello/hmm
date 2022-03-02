@@ -6,7 +6,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 	{
 		void RunGadgetUpdate();
 
-		void DestroyEffect(DestroyEffect evt);
+		void DestroyEffect(DestroyEffectMessage evt);
 
 		void ObjectUnspawned(UnspawnEvent evt);
 

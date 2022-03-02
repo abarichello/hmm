@@ -1,17 +1,37 @@
 ﻿using System;
 using System.Diagnostics;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Localization;
+using HeavyMetalMachines.Options.Presenting;
+using HeavyMetalMachines.Publishing;
+using Hoplon.Input.UiNavigation;
 using Pocketverse;
+using Standard_Assets.Scripts.HMM.Util;
+using UniRx;
+using UnityEngine;
 
 namespace HeavyMetalMachines.Frontend
 {
 	public class OptionsWindow : HudWindow
 	{
+		private IUiNavigationGroupHolder UiNavigationGroupHolder
+		{
+			get
+			{
+				return this._uiNavigationGroupHolder;
+			}
+		}
+
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event OptionsWindow.OnCloseDelegate OnCloseCallback;
 
 		protected void Awake()
 		{
 			this.WindowGameObject.SetActive(false);
+			if (Platform.Current.IsConsole())
+			{
+				this.GraphicsToggle.gameObject.SetActive(false);
+			}
 		}
 
 		public void Show(OptionsWindow.OptionScreenKind screen, OptionsWindow.OnCloseDelegate onCloseCallback)
@@ -21,6 +41,7 @@ namespace HeavyMetalMachines.Frontend
 			this._currentScreen = screen;
 			this.OnCloseCallback = onCloseCallback;
 			GameHubBehaviour.Hub.GuiScripts.ScreenResolution.ListenToResolutionChange += this.ScreenResolutionOnListenToResolutionChange;
+			this._togglesGrid.Reposition();
 		}
 
 		private void ScreenResolutionOnListenToResolutionChange()
@@ -30,7 +51,7 @@ namespace HeavyMetalMachines.Frontend
 
 		public override bool CanBeHiddenByEscKey()
 		{
-			return !cInput.scanning && base.CanBeHiddenByEscKey() && !GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.Visible;
+			return !this._optionsControllerTabPresenter.IsBinding() && base.CanBeHiddenByEscKey() && !GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.Visible;
 		}
 
 		public override void ChangeWindowVisibility(bool visible)
@@ -38,23 +59,25 @@ namespace HeavyMetalMachines.Frontend
 			base.ChangeWindowVisibility(visible);
 			if (visible)
 			{
-				this.ChangeTab(OptionsWindow.OptionScreenKind.Graphic);
-				this.GraphicsToggle.value = true;
+				this.ChangeTab(OptionsWindow.OptionScreenKind.Game);
+				this.GraphicsToggle.value = false;
 				this.CommandsToggle.value = false;
-				this.InterfaceToggle.value = false;
+				this.InterfaceToggle.value = true;
 				this.AudioToggle.value = false;
 				GameHubBehaviour.Hub.CursorManager.Push(true, CursorManager.CursorTypes.OptionsCursor);
 				GameHubBehaviour.Hub.Options.Game.GetterInfoForBILog();
+				this.UiNavigationGroupHolder.AddHighPriorityGroup();
 			}
 			else
 			{
 				GameHubBehaviour.Hub.Options.Game.WriteBILogs();
 				GameHubBehaviour.Hub.PlayerPrefs.SaveNow();
 				GameHubBehaviour.Hub.CursorManager.Pop();
-				if (GameHubBehaviour.Hub.State.Loading)
+				if (GameHubBehaviour.Hub.State.IsLoading)
 				{
 					this.CloseWindow();
 				}
+				this.UiNavigationGroupHolder.RemoveHighPriorityGroup();
 			}
 		}
 
@@ -114,28 +137,8 @@ namespace HeavyMetalMachines.Frontend
 				key = "ResetAudioDefaultValues";
 				break;
 			case OptionsWindow.OptionScreenKind.Control:
-			{
-				EscMenuControlGui.InputScreen inputScreenVisible = this.ControlGui.InputScreenVisible;
-				if (inputScreenVisible != EscMenuControlGui.InputScreen.None)
-				{
-					if (inputScreenVisible != EscMenuControlGui.InputScreen.MouseKeyboard)
-					{
-						if (inputScreenVisible == EscMenuControlGui.InputScreen.Joystick)
-						{
-							key = "ResetJoystickControlDefaultValues";
-						}
-					}
-					else
-					{
-						key = "ResetMouseControlDefaultValues";
-					}
-				}
-				else
-				{
-					key = "ResetAllControlDefaultValues";
-				}
+				key = this._resetControlDraft.CurrentPlatformDraft;
 				break;
-			}
 			case OptionsWindow.OptionScreenKind.Game:
 				key = "ResetGameDefaultValues";
 				break;
@@ -153,13 +156,13 @@ namespace HeavyMetalMachines.Frontend
 			ConfirmWindowProperties properties = new ConfirmWindowProperties
 			{
 				Guid = this._confirmWindowGuid,
-				QuestionText = Language.Get(key, "GUI"),
-				ConfirmButtonText = Language.Get("YES", "GUI"),
+				QuestionText = Language.Get(key, TranslationContext.GUI),
+				ConfirmButtonText = Language.Get("YES", TranslationContext.GUI),
 				OnConfirm = delegate()
 				{
 					this.ResetDefaultConfirm();
 				},
-				RefuseButtonText = Language.Get("NO", "GUI"),
+				RefuseButtonText = Language.Get("NO", TranslationContext.GUI),
 				OnRefuse = delegate()
 				{
 					this.ResetDefaultRefuse();
@@ -189,28 +192,8 @@ namespace HeavyMetalMachines.Frontend
 				this.AudioGui.ResetDefault();
 				break;
 			case OptionsWindow.OptionScreenKind.Control:
-			{
-				EscMenuControlGui.InputScreen inputScreenVisible = this.ControlGui.InputScreenVisible;
-				if (inputScreenVisible != EscMenuControlGui.InputScreen.None)
-				{
-					if (inputScreenVisible != EscMenuControlGui.InputScreen.MouseKeyboard)
-					{
-						if (inputScreenVisible == EscMenuControlGui.InputScreen.Joystick)
-						{
-							this.ControlGui.ResetSecundaryDefault();
-						}
-					}
-					else
-					{
-						this.ControlGui.ResetPrimaryDefault();
-					}
-				}
-				else
-				{
-					this.ControlGui.ResetDefault();
-				}
+				this._optionsControllerTabPresenter.ResetDefault();
 				break;
-			}
 			case OptionsWindow.OptionScreenKind.Game:
 				this.GameGui.ResetDefault();
 				break;
@@ -222,17 +205,20 @@ namespace HeavyMetalMachines.Frontend
 
 		private void ChangeTab(OptionsWindow.OptionScreenKind newScreen)
 		{
+			this.HideTab(this._currentScreen);
 			this._currentScreen = newScreen;
-			EscMenuControlGui.InputScreen inputScreenVisible = this.ControlGui.InputScreenVisible;
 			this.GraphicsToggle.value = false;
 			this.InterfaceToggle.value = false;
 			this.AudioToggle.value = false;
 			this.CommandsToggle.value = false;
-			this.GraphicGui.Hide();
-			this.ControlGui.Hide();
-			this.GameGui.Hide();
-			this.AudioGui.Hide();
-			switch (this._currentScreen)
+			this.ShowTab(newScreen);
+			this._currentToggle.value = true;
+			this.ReloadCurrent();
+		}
+
+		private void ShowTab(OptionsWindow.OptionScreenKind optionScreenKind)
+		{
+			switch (optionScreenKind)
 			{
 			case OptionsWindow.OptionScreenKind.Audio:
 				this._currentToggle = this.AudioToggle;
@@ -240,15 +226,7 @@ namespace HeavyMetalMachines.Frontend
 				break;
 			case OptionsWindow.OptionScreenKind.Control:
 				this._currentToggle = this.CommandsToggle;
-				this.ControlGui.Show();
-				if (inputScreenVisible == EscMenuControlGui.InputScreen.MouseKeyboard)
-				{
-					this.ControlGui.ShowKeyBoardMousePanel();
-				}
-				else if (inputScreenVisible == EscMenuControlGui.InputScreen.Joystick)
-				{
-					this.ControlGui.ShowJoystickPanel();
-				}
+				ObservableExtensions.Subscribe<Unit>(Observable.ContinueWith<Unit, Unit>(this._optionsControllerTabPresenter.Initialize(), (Unit _) => this._optionsControllerTabPresenter.Show()));
 				break;
 			case OptionsWindow.OptionScreenKind.Game:
 				this._currentToggle = this.InterfaceToggle;
@@ -259,26 +237,47 @@ namespace HeavyMetalMachines.Frontend
 				this.GraphicGui.Show();
 				break;
 			}
-			this._currentToggle.value = true;
-			this.ReloadCurrent();
+		}
+
+		private void HideTab(OptionsWindow.OptionScreenKind optionScreenKind)
+		{
+			switch (optionScreenKind)
+			{
+			case OptionsWindow.OptionScreenKind.Audio:
+				this.AudioGui.Hide();
+				break;
+			case OptionsWindow.OptionScreenKind.Control:
+				ObservableExtensions.Subscribe<Unit>(Observable.ContinueWith<Unit, Unit>(this._optionsControllerTabPresenter.Hide(), (Unit _) => this._optionsControllerTabPresenter.Dispose()));
+				break;
+			case OptionsWindow.OptionScreenKind.Game:
+				this.GameGui.Hide();
+				break;
+			case OptionsWindow.OptionScreenKind.Graphic:
+				this.GraphicGui.Hide();
+				break;
+			}
 		}
 
 		private void ReloadCurrent()
 		{
-			switch (this._currentScreen)
+			OptionsWindow.OptionScreenKind currentScreen = this._currentScreen;
+			if (currentScreen != OptionsWindow.OptionScreenKind.Graphic)
 			{
-			case OptionsWindow.OptionScreenKind.Audio:
-				this.AudioGui.ReloadCurrent();
-				break;
-			case OptionsWindow.OptionScreenKind.Control:
-				this.ControlGui.ReloadCurrent();
-				break;
-			case OptionsWindow.OptionScreenKind.Game:
-				this.GameGui.ReloadCurrent();
-				break;
-			case OptionsWindow.OptionScreenKind.Graphic:
+				if (currentScreen != OptionsWindow.OptionScreenKind.Game)
+				{
+					if (currentScreen == OptionsWindow.OptionScreenKind.Audio)
+					{
+						this.AudioGui.ReloadCurrent();
+					}
+				}
+				else
+				{
+					this.GameGui.ReloadCurrent();
+				}
+			}
+			else
+			{
 				this.GraphicGui.ReloadCurrent();
-				break;
 			}
 		}
 
@@ -301,8 +300,6 @@ namespace HeavyMetalMachines.Frontend
 
 		public EscMenuAudioGui AudioGui;
 
-		public EscMenuControlGui ControlGui;
-
 		public EscMenuGameGui GameGui;
 
 		public EscMenuGraphicGui GraphicGui;
@@ -317,11 +314,26 @@ namespace HeavyMetalMachines.Frontend
 
 		public new UIPanel Panel;
 
+		[SerializeField]
+		private UIGrid _togglesGrid;
+
+		[SerializeField]
+		private UiNavigationGroupHolder _uiNavigationGroupHolder;
+
+		[SerializeField]
+		private MultiPlatformLocalizationDraft _resetControlDraft;
+
 		private OptionsWindow.OptionScreenKind _currentScreen;
 
 		private UIToggle _currentToggle;
 
 		private Guid _confirmWindowGuid;
+
+		[InjectOnClient]
+		private IOptionsControllerTabPresenter _optionsControllerTabPresenter;
+
+		[InjectOnClient]
+		private IGetCurrentPublisher _getCurrentPublisher;
 
 		public delegate void OnCloseDelegate(OptionsWindow optionsWindow);
 

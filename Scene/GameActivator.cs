@@ -1,5 +1,5 @@
 ﻿using System;
-using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Infra.Context;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Scene
@@ -20,7 +20,7 @@ namespace HeavyMetalMachines.Scene
 			GameHubBehaviour.Hub.BombManager.ListenToPhaseChange -= this.OnPhaseChange;
 		}
 
-		private void OnPhaseChange(BombScoreBoard.State state)
+		private void OnPhaseChange(BombScoreboardState state)
 		{
 			for (int i = 0; i < this.Targets.Length; i++)
 			{
@@ -33,7 +33,7 @@ namespace HeavyMetalMachines.Scene
 
 		public static readonly BitLogger Log = new BitLogger(typeof(GameActivator));
 
-		public BombScoreBoard.State ActivatedState = BombScoreBoard.State.BombDelivery;
+		public BombScoreboardState ActivatedState = BombScoreboardState.BombDelivery;
 
 		public Identifiable Parent;
 

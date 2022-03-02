@@ -105,7 +105,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			return this._gadget.MaxChargeTime * (1f - attributes.CooldownReductionGadget2Pct) - attributes.CooldownReductionGadget2;
 		}
 
-		public void DestroyEffect(DestroyEffect evt)
+		public void DestroyEffect(DestroyEffectMessage evt)
 		{
 		}
 

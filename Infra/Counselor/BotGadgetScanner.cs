@@ -7,7 +7,7 @@ namespace HeavyMetalMachines.Infra.Counselor
 {
 	public class BotGadgetScanner : IScanner
 	{
-		public BotGadgetScanner(SensorController controller, string shouldUseParameterName, string isIdleParameterName, BotAIGoalManager.GadgetAIState gadgetAiState)
+		public BotGadgetScanner(SensorController controller, string shouldUseParameterName, string isIdleParameterName, GadgetAIState gadgetAiState)
 		{
 			this._shouldUseParameterHash = controller.GetHash(shouldUseParameterName);
 			this._isIdleParameterHash = controller.GetHash(isIdleParameterName);
@@ -29,7 +29,7 @@ namespace HeavyMetalMachines.Infra.Counselor
 		{
 		}
 
-		private BotAIGoalManager.GadgetAIState _gadgetAiState;
+		private GadgetAIState _gadgetAiState;
 
 		private int _shouldUseParameterHash;
 

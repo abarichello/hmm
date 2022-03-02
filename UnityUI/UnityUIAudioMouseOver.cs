@@ -18,12 +18,12 @@ namespace HeavyMetalMachines.UnityUI
 		{
 			if (this._selectableId == -1 || this._selectable.IsInteractable())
 			{
-				this._sfxController.Play(this.asset, base.transform, 1f, this.parameterBytes, 0, this._forceResetTimeline);
+				this._sfxController.Play(this.asset, base.transform, 1f, UnityUIAudioMouseOver._parameter, 0, this._forceResetTimeline);
 			}
 		}
 
 		[SerializeField]
-		private FMODAsset asset;
+		private AudioEventAsset asset;
 
 		[SerializeField]
 		private SFXController _sfxController;
@@ -31,7 +31,7 @@ namespace HeavyMetalMachines.UnityUI
 		[SerializeField]
 		private bool _forceResetTimeline = true;
 
-		private byte[] parameterBytes = new byte[0];
+		private static readonly byte[] _parameter = new byte[0];
 
 		private Selectable _selectable;
 

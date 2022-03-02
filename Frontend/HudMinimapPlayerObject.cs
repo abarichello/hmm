@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using HeavyMetalMachines.Arena;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Match;
 using Pocketverse;
@@ -19,15 +20,14 @@ namespace HeavyMetalMachines.Frontend
 
 		private void UpdateArrowRotation()
 		{
-			Quaternion localRotation = this._arrowRotatorGroupTransform.localRotation;
-			Vector3 eulerAngles = localRotation.eulerAngles;
-			float num = -this.TargetTransform.localRotation.eulerAngles.y;
-			eulerAngles.Set(0f, 0f, num + (float)this._arrowRotationOffset);
-			localRotation.eulerAngles = eulerAngles;
-			this._arrowRotatorGroupTransform.localRotation = localRotation;
+			Vector3 forward = this.TargetTransform.forward;
+			Vector2 vector;
+			vector..ctor(forward.x, forward.z);
+			Vector3 vector2 = Quaternion.AngleAxis((float)this._arrowRotationOffset, Vector3.forward) * vector;
+			this._arrowRotatorGroupTransform.up = -vector2;
 		}
 
-		public void Setup(PlayerData playerData, GameArenaInfo arenaInfo, HudMinimapUiController.HudMinimapPlayerGuiAssets playerGuiAssets)
+		public void Setup(PlayerData playerData, IGameArenaInfo arenaInfo, HudMinimapUiController.HudMinimapPlayerGuiAssets playerGuiAssets)
 		{
 			this.Setup();
 			this._playerCarId = playerData.PlayerCarId;
@@ -62,12 +62,6 @@ namespace HeavyMetalMachines.Frontend
 			this._combatObject.ListenToObjectSpawn += this.OnCombatObjecSpawn;
 			this._combatObject.ListenToObjectUnspawn += this.OnCombatObjecUnspawn;
 			this._isAlive = this._combatObject.IsAlive();
-			if (GameHubBehaviour.Hub.Match.ArenaIndex == 3 && arenaInfo.ArenaFlipRotation == 180)
-			{
-				Quaternion localRotation = this._iconImage.rectTransform.localRotation;
-				localRotation.z = (float)arenaInfo.ArenaFlipRotation;
-				this._iconImage.rectTransform.localRotation = localRotation;
-			}
 			this.SetVisibility(this._isAlive);
 			this.OnUpdate();
 		}
@@ -77,18 +71,6 @@ namespace HeavyMetalMachines.Frontend
 			List<int> bombCarriersIds = GameHubBehaviour.Hub.BombManager.ActiveBomb.BombCarriersIds;
 			bool flag = bombCarriersIds.Count > 0 && bombCarriersIds[0] == this._playerCarId;
 			this._grabBombBorderCanvasGroup.alpha = ((!flag) ? 0f : 1f);
-			if (flag)
-			{
-				if (!this._mainCanvas.overrideSorting)
-				{
-					this._mainCanvas.overrideSorting = true;
-					this._mainCanvas.sortingOrder = this._carrierBombSortingOrder;
-				}
-			}
-			else if (this._mainCanvas.overrideSorting)
-			{
-				this._mainCanvas.overrideSorting = false;
-			}
 		}
 
 		public Vector3 GetGuiObjectPosition()

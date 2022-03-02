@@ -47,22 +47,22 @@ namespace HeavyMetalMachines.Frontend
 		public Color GadgetTitleLabelFullColor;
 
 		[Header("[Audio]")]
-		public FMODAsset audioSnapshot;
+		public AudioEventAsset audioSnapshot;
 
-		public FMODAsset OpenWindowFmodAsset;
+		public AudioEventAsset OpenWindowFmodAsset;
 
-		public FMODAsset CloseWindowFmodAsset;
+		public AudioEventAsset CloseWindowFmodAsset;
 
-		public FMODAsset BuyAudioFmodAsset;
+		public AudioEventAsset BuyAudioFmodAsset;
 
-		public FMODAsset DeniedByBalanceAudioFmodAsset;
+		public AudioEventAsset DeniedByBalanceAudioFmodAsset;
 
-		public FMODAsset DeniedByLevelAudioFmodAsset;
+		public AudioEventAsset DeniedByLevelAudioFmodAsset;
 
-		public FMODAsset GadgetFullAudioFmodAsset;
+		public AudioEventAsset GadgetFullAudioFmodAsset;
 
-		public FMODAsset SellAudioFmodAsset;
+		public AudioEventAsset SellAudioFmodAsset;
 
-		public FMODAsset RevertAudioFmodAsset;
+		public AudioEventAsset RevertAudioFmodAsset;
 	}
 }

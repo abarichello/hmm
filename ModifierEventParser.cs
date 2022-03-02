@@ -1,11 +1,13 @@
 ﻿using System;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Combat.Gadget;
+using HeavyMetalMachines.Playback;
 using Pocketverse;
+using Zenject;
 
 namespace HeavyMetalMachines
 {
-	public class ModifierEventParser : KeyFrameParser
+	public class ModifierEventParser : KeyFrameParser, IModifierEventDispatcher
 	{
 		public override KeyFrameType Type
 		{
@@ -27,6 +29,10 @@ namespace HeavyMetalMachines
 				{
 					combatObject = null;
 					modifierEventHolder = new ModifierEventHolder();
+					ModifierEventParser.Log.DebugFormat("Controller={0} not found, doing a bogus parse", new object[]
+					{
+						num
+					});
 				}
 				else
 				{
@@ -40,8 +46,17 @@ namespace HeavyMetalMachines
 					ModifierEventHolder.EventData eventData = modifierEventHolder._events[i];
 					int otherId = eventData.OtherId;
 					GadgetSlot slot = eventData.Slot;
-					Identifiable @object = GameHubObject.Hub.ObjectCollection.GetObject(otherId);
-					if (!(combatObject == null) || !(@object == null))
+					Identifiable @object = this._objectCollection.GetObject(otherId);
+					if (combatObject == null && @object == null)
+					{
+						ModifierEventParser.Log.DebugFormat("Processing modifier event for={0} other={1} slot={2} no object found", new object[]
+						{
+							num,
+							otherId,
+							slot
+						});
+					}
+					else
 					{
 						CombatObject combatObject2 = (!(@object != null)) ? null : @object.GetBitComponent<CombatObject>();
 						bool flag2 = combatObject2 != null;
@@ -89,10 +104,16 @@ namespace HeavyMetalMachines
 				return;
 			}
 			stream.WriteBool(false);
-			int frameId = GameHubObject.Hub.PlaybackManager.NextId();
-			GameHubObject.Hub.PlaybackManager.SendKeyFrame(this.Type, false, frameId, -1, stream.ToArray());
+			int nextFrameId = this._serverDispatcher.GetNextFrameId();
+			this._serverDispatcher.SendFrame(this.Type.Convert(), false, nextFrameId, -1, stream.ToArray());
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(ModifierEventParser));
+
+		[Inject]
+		private IIdentifiableCollection _objectCollection;
+
+		[Inject]
+		private IServerPlaybackDispatcher _serverDispatcher;
 	}
 }

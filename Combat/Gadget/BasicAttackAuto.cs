@@ -86,7 +86,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 		{
 			this._searchTargetCombat = null;
 			this._searchLastTimeMillis = (long)GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
-			Collider[] array = Physics.OverlapSphere(this.Combat.Transform.position, this.GetRange(), 1077058560);
+			Collider[] array = Physics.OverlapSphere(this.Combat.Transform.position, this.GetRange(), 1077054464);
 			for (int i = 0; i < array.Length; i++)
 			{
 				CombatObject combat = CombatRef.GetCombat(array[i]);

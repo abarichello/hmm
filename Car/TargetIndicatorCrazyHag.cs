@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Combat.Gadget;
+using HeavyMetalMachines.Match;
 using HeavyMetalMachines.Utils;
 using Pocketverse;
 using UnityEngine;
@@ -19,7 +20,12 @@ namespace HeavyMetalMachines.Car
 		protected override void PostInitPlayers()
 		{
 			base.PostInitPlayers();
-			if (GameHubBehaviour.Hub.Net.IsServer() || !this.m_poCurrentPlayer || this.m_poCurrentPlayer.Player.Character.Character != CharacterTarget.CrazyHag)
+			if (GameHubBehaviour.Hub.Net.IsServer() || !this.m_poCurrentPlayer)
+			{
+				return;
+			}
+			this._isCrazyHag = (this.m_poCurrentPlayer.Player.GetCharacter() == CharacterTarget.CrazyHag);
+			if (!this._isCrazyHag)
 			{
 				return;
 			}
@@ -51,7 +57,7 @@ namespace HeavyMetalMachines.Car
 				return this.m_fPreviousClosestTarget;
 			}
 			this.m_fPreviousClosestTarget = -1L;
-			Identifiable y = null;
+			Identifiable identifiable = null;
 			switch (this.UsedGadgetSlot)
 			{
 			case GadgetSlot.CustomGadget0:
@@ -68,7 +74,7 @@ namespace HeavyMetalMachines.Car
 				{
 					TargetIndicatorCrazyHag.<>f__mg$cache1 = new GadgetBehaviour.CriteriaFunction(GadgetBehaviour.ShortestMagnitude);
 				}
-				y = poGadgetBehaviour.GetTarget(effect, stSourcePosition, cnHitExceptionList, funcToCalc, TargetIndicatorCrazyHag.<>f__mg$cache1);
+				identifiable = poGadgetBehaviour.GetTarget(effect, stSourcePosition, cnHitExceptionList, funcToCalc, TargetIndicatorCrazyHag.<>f__mg$cache1);
 				goto IL_167;
 			}
 			case GadgetSlot.CustomGadget1:
@@ -80,7 +86,7 @@ namespace HeavyMetalMachines.Car
 				{
 					TargetIndicatorCrazyHag.<>f__mg$cache2 = new GadgetBehaviour.CriteriaFunction(GadgetBehaviour.ShortestMagnitude);
 				}
-				y = poGadgetBehaviour2.GetTarget(effect2, stSourcePosition, cnHitExceptionList2, TargetIndicatorCrazyHag.<>f__mg$cache2, null);
+				identifiable = poGadgetBehaviour2.GetTarget(effect2, stSourcePosition, cnHitExceptionList2, TargetIndicatorCrazyHag.<>f__mg$cache2, null);
 				goto IL_167;
 			}
 			case GadgetSlot.BoostGadget:
@@ -92,7 +98,7 @@ namespace HeavyMetalMachines.Car
 				{
 					TargetIndicatorCrazyHag.<>f__mg$cache3 = new GadgetBehaviour.CriteriaFunction(GadgetBehaviour.ShortestMagnitude);
 				}
-				y = poGadgetBehaviour3.GetTarget(effect3, stSourcePosition, cnHitExceptionList3, TargetIndicatorCrazyHag.<>f__mg$cache3, null);
+				identifiable = poGadgetBehaviour3.GetTarget(effect3, stSourcePosition, cnHitExceptionList3, TargetIndicatorCrazyHag.<>f__mg$cache3, null);
 				goto IL_167;
 			}
 			}
@@ -105,7 +111,7 @@ namespace HeavyMetalMachines.Car
 			int num = this.m_apoPlayers.Length;
 			while (i < num)
 			{
-				if (this.m_apoPlayers[i].Id == y)
+				if (this.m_apoPlayers[i].Id == identifiable)
 				{
 					stPointingDirection = this.m_apoPlayers[i].transform.position - stSourcePosition;
 					this.m_stPreviousPosition = stPointingDirection;
@@ -123,7 +129,7 @@ namespace HeavyMetalMachines.Car
 			{
 				return;
 			}
-			if (!this.m_poCurrentPlayer || this.m_poCurrentPlayer.Player.Character.Character != CharacterTarget.CrazyHag || !this.m_poCurrentPlayer.IsAlive())
+			if (!this.m_poCurrentPlayer || !this._isCrazyHag || !this.m_poCurrentPlayer.IsAlive())
 			{
 				return;
 			}
@@ -138,20 +144,20 @@ namespace HeavyMetalMachines.Car
 			{
 				Matrix4x4 identity = Matrix4x4.identity;
 				Vector3 position2 = this.m_apoPlayers[(int)(checked((IntPtr)num))].Transform.position;
-				Vector3 pos = position2 + this.AimOffset + TargetIndicatorCrazyHag.m_stMeshCursorGroundOffset;
+				Vector3 vector = position2 + this.AimOffset + TargetIndicatorCrazyHag.m_stMeshCursorGroundOffset;
 				Mesh mesh = (!flag) ? this.AimMeshDisabled : this.AimMesh;
 				this.m_poAimCursorMaterial.mainTexture = ((!flag) ? this.AimTextureDisabled : this.AimTexture);
-				identity.SetTRS(pos, TargetIndicatorCrazyHag.m_stMeshCursorRotation, this.AimMeshScale);
+				identity.SetTRS(vector, TargetIndicatorCrazyHag.m_stMeshCursorRotation, this.AimMeshScale);
 				Graphics.DrawMesh(mesh, identity, this.m_poAimCursorMaterial, this.m_nCursorLayer, null);
 			}
-			float d = 1f;
+			float num2 = 1f;
 			Matrix4x4 identity2 = Matrix4x4.identity;
-			Vector3 pos2 = position + this.RangeOffset + TargetIndicatorCrazyHag.m_stMeshCursorGroundOffset;
+			Vector3 vector2 = position + this.RangeOffset + TargetIndicatorCrazyHag.m_stMeshCursorGroundOffset;
 			Mesh mesh2 = (!flag) ? this.RangeMeshDisabled : this.RangeMesh;
 			this.m_poAimCursorMaterial.mainTexture = ((!flag) ? this.RangeTextureDisabled : this.RangeTexture);
 			if (this.m_fOriginalRange != 0f && this.m_fRange != 0f)
 			{
-				d = this.m_fRange / this.m_fOriginalRange;
+				num2 = this.m_fRange / this.m_fOriginalRange;
 			}
 			else if (!this.m_boWarnedOnce)
 			{
@@ -162,7 +168,7 @@ namespace HeavyMetalMachines.Car
 					this.m_fOriginalRange
 				});
 			}
-			identity2.SetTRS(pos2, TargetIndicatorCrazyHag.m_stMeshCursorRotation, this.RangeMeshScale * d);
+			identity2.SetTRS(vector2, TargetIndicatorCrazyHag.m_stMeshCursorRotation, this.RangeMeshScale * num2);
 			Graphics.DrawMesh(mesh2, identity2, this.m_poAimCursorMaterial, this.m_nCursorLayer, null);
 		}
 
@@ -173,14 +179,14 @@ namespace HeavyMetalMachines.Car
 			{
 				return;
 			}
-			HeavyMetalMachines.Utils.Debug.Assert(this.AimMesh != null, "Trying to set a null aim mesh for TargetIndicatorCrazyHag.", HeavyMetalMachines.Utils.Debug.TargetTeam.All);
-			HeavyMetalMachines.Utils.Debug.Assert(this.AimTexture != null, "Trying to set a null aim texture for TargetIndicatorCrazyHag.", HeavyMetalMachines.Utils.Debug.TargetTeam.All);
-			HeavyMetalMachines.Utils.Debug.Assert(this.AimMeshDisabled != null, "Trying to set a null disabled aim mesh for TargetIndicatorCrazyHag.", HeavyMetalMachines.Utils.Debug.TargetTeam.All);
-			HeavyMetalMachines.Utils.Debug.Assert(this.AimTextureDisabled != null, "Trying to set a null disabled aim texture for TargetIndicatorCrazyHag", HeavyMetalMachines.Utils.Debug.TargetTeam.All);
-			HeavyMetalMachines.Utils.Debug.Assert(this.RangeMesh != null, "Trying to set a null range mesh for TargetIndicatorCrazyHag.", HeavyMetalMachines.Utils.Debug.TargetTeam.All);
-			HeavyMetalMachines.Utils.Debug.Assert(this.RangeTexture != null, "Trying to set a null range texture for TargetIndicatorCrazyHag.", HeavyMetalMachines.Utils.Debug.TargetTeam.All);
-			HeavyMetalMachines.Utils.Debug.Assert(this.RangeMeshDisabled != null, "Trying to set a null disabled range mesh for TargetIndicatorCrazyHag.", HeavyMetalMachines.Utils.Debug.TargetTeam.All);
-			HeavyMetalMachines.Utils.Debug.Assert(this.RangeTextureDisabled != null, "Trying to set a null disabled range texture for TargetIndicatorCrazyHag.", HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+			Debug.Assert(this.AimMesh != null, "Trying to set a null aim mesh for TargetIndicatorCrazyHag.", Debug.TargetTeam.All);
+			Debug.Assert(this.AimTexture != null, "Trying to set a null aim texture for TargetIndicatorCrazyHag.", Debug.TargetTeam.All);
+			Debug.Assert(this.AimMeshDisabled != null, "Trying to set a null disabled aim mesh for TargetIndicatorCrazyHag.", Debug.TargetTeam.All);
+			Debug.Assert(this.AimTextureDisabled != null, "Trying to set a null disabled aim texture for TargetIndicatorCrazyHag", Debug.TargetTeam.All);
+			Debug.Assert(this.RangeMesh != null, "Trying to set a null range mesh for TargetIndicatorCrazyHag.", Debug.TargetTeam.All);
+			Debug.Assert(this.RangeTexture != null, "Trying to set a null range texture for TargetIndicatorCrazyHag.", Debug.TargetTeam.All);
+			Debug.Assert(this.RangeMeshDisabled != null, "Trying to set a null disabled range mesh for TargetIndicatorCrazyHag.", Debug.TargetTeam.All);
+			Debug.Assert(this.RangeTextureDisabled != null, "Trying to set a null disabled range texture for TargetIndicatorCrazyHag.", Debug.TargetTeam.All);
 		}
 
 		public Mesh AimMesh;
@@ -228,6 +234,8 @@ namespace HeavyMetalMachines.Car
 		private long m_fPreviousClosestTarget = -1L;
 
 		private Vector3 m_stPreviousPosition = Vector3.forward;
+
+		private bool _isCrazyHag;
 
 		[CompilerGenerated]
 		private static GadgetBehaviour.CriteriaFunction <>f__mg$cache0;

@@ -24,11 +24,11 @@ namespace HeavyMetalMachines.Infra.Counselor
 				return;
 			}
 			float num;
-			context.GetParameter(this._redDistanceToGoalId, out num);
+			context.GetParameter(this._redDistanceToGoalId, ref num);
 			float num2 = num - this.previousRedValue;
 			this.previousRedValue = num;
 			float num3;
-			context.GetParameter(this._blueDistanceToGoalId, out num3);
+			context.GetParameter(this._blueDistanceToGoalId, ref num3);
 			float num4 = num3 - this.previousBlueValue;
 			this.previousBlueValue = num3;
 			if (Mathf.Abs(num2 - num4) < GameHubObject.Hub.CounselorConfig.WrongWaySensibility)

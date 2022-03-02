@@ -66,7 +66,7 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
-		public override void PerkDestroyed(DestroyEffect destroyEffect)
+		public override void PerkDestroyed(DestroyEffectMessage destroyEffectMessage)
 		{
 			this.RemoveListener();
 		}

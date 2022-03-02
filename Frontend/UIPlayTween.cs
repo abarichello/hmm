@@ -6,8 +6,8 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Frontend
 {
-	[AddComponentMenu("NGUI/Interaction/Play Tween")]
 	[ExecuteInEditMode]
+	[AddComponentMenu("NGUI/Interaction/Play Tween")]
 	public class UIPlayTween : MonoBehaviour
 	{
 		protected bool IsAllowedToClick()
@@ -18,7 +18,7 @@ namespace HeavyMetalMachines.Frontend
 				return true;
 			}
 			bool flag = uiMouseButton == (this.AllowedMouseClick & uiMouseButton);
-			UnityEngine.Debug.LogFormat("[{0}] IsAllowedToClick: {1}", new object[]
+			Debug.LogFormat("[{0}] IsAllowedToClick: {1}", new object[]
 			{
 				base.gameObject.name,
 				flag
@@ -295,7 +295,7 @@ namespace HeavyMetalMachines.Frontend
 				EventDelegate.Execute(this.onFinished);
 				if (this.eventReceiver != null && !string.IsNullOrEmpty(this.callWhenFinished))
 				{
-					this.eventReceiver.SendMessage(this.callWhenFinished, SendMessageOptions.DontRequireReceiver);
+					this.eventReceiver.SendMessage(this.callWhenFinished, 1);
 				}
 				this.eventReceiver = null;
 				UIPlayTween.current = null;

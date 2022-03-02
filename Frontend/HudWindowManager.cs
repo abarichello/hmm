@@ -1,20 +1,34 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.DriverHelper;
+using HeavyMetalMachines.Infra.Context;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Input.ControllerInput;
 using HeavyMetalMachines.Match;
-using HeavyMetalMachines.Options;
+using HeavyMetalMachines.MuteSystem;
+using HeavyMetalMachines.Options.Presenting;
+using HeavyMetalMachines.Spectator;
+using HeavyMetalMachines.Spectator.View;
 using HeavyMetalMachines.VFX;
+using Hoplon.Input;
+using Hoplon.Input.UiNavigation.InputDeliverer;
+using Hoplon.ToggleableFeatures;
 using Pocketverse;
 using Pocketverse.MuralContext;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
-	public class HudWindowManager : GameHubBehaviour, ICleanupListener
+	public class HudWindowManager : GameHubBehaviour, ICleanupListener, IHudWindowManager
 	{
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		public event HudWindowManager.GuiGameStateChange OnGuiStateChange;
+		public event GuiGameStateChange OnGuiStateChange;
+
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
+		public event Action OnHelp;
 
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<IHudWindow> OnNewWindowAdded;
@@ -29,15 +43,15 @@ namespace HeavyMetalMachines.Frontend
 		{
 			get
 			{
-				return this.State == HudWindowManager.GuiGameState.Transitioning;
+				return this.State == GuiGameState.Transitioning;
 			}
 		}
 
-		public HudWindowManager.GuiGameState State
+		public GuiGameState State
 		{
 			get
 			{
-				return (!GameHubBehaviour.Hub.GuiScripts.Loading.IsLoading && !GameHubBehaviour.Hub.GuiScripts.LoadingVersus.WindowGameObject.activeInHierarchy) ? this._state : HudWindowManager.GuiGameState.Transitioning;
+				return (!GameHubBehaviour.Hub.GuiScripts.Loading.IsLoading && !GameHubBehaviour.Hub.GuiScripts.LoadingVersus.WindowGameObject.activeInHierarchy) ? this._state : GuiGameState.Transitioning;
 			}
 			set
 			{
@@ -60,7 +74,7 @@ namespace HeavyMetalMachines.Frontend
 				}
 				if (GameHubBehaviour.Hub == null || !GameHubBehaviour.Hub.Net.IsClient())
 				{
-					UnityEngine.Debug.LogWarning("[HUDWindowManager] - Dangerous stuff. Can cause an NPE if not expecting null.");
+					Debug.LogWarning("[HUDWindowManager] - Dangerous stuff. Can cause an NPE if not expecting null.");
 					return null;
 				}
 				HudWindowManager._singleton = GameHubBehaviour.Hub.GetComponent<HudWindowManager>();
@@ -82,6 +96,7 @@ namespace HeavyMetalMachines.Frontend
 			}
 			if (!addingWindow.CanOpen())
 			{
+				HudWindowManager.Log.Debug("Trying to Push IHudWindow when it cannot open");
 				return;
 			}
 			if (addingWindow.CanBeHiddenByEscKey())
@@ -129,9 +144,10 @@ namespace HeavyMetalMachines.Frontend
 			return x.GetDepth().CompareTo(y.GetDepth());
 		}
 
-		public void CloseAll(Func<IHudWindow, bool> filter = null)
+		public void CloseAll()
 		{
 			this._disableOpenWindows = true;
+			HudWindowManager.Log.Debug("CloseAll. disableOpenWindows true");
 			for (int i = 0; i < this.hudWindows.Count; i++)
 			{
 				IHudWindow hudWindow = this.hudWindows[i];
@@ -143,6 +159,10 @@ namespace HeavyMetalMachines.Frontend
 				{
 					if (hudWindow.IsWindowVisible())
 					{
+						HudWindowManager.Log.DebugFormat("Will close:{0}", new object[]
+						{
+							hudWindow.GetType()
+						});
 						hudWindow.ChangeWindowVisibility(false);
 					}
 					if (this.OnWindowRemoved != null)
@@ -151,15 +171,10 @@ namespace HeavyMetalMachines.Frontend
 					}
 				}
 			}
-			if (filter != null)
-			{
-				this.hudWindows.RemoveAll((IHudWindow x) => !filter(x));
-			}
-			else
-			{
-				this.hudWindows.Clear();
-			}
+			this.hudWindows.Clear();
+			this._diContainer.Resolve<IMuteSystemPresenter>().Hide();
 			this._disableOpenWindows = false;
+			HudWindowManager.Log.Debug("CloseAll. disableOpenWindows false");
 		}
 
 		public bool IsWindowVisible<T>() where T : IHudWindow
@@ -203,6 +218,10 @@ namespace HeavyMetalMachines.Frontend
 			}
 			if (removingWindow.IsWindowVisible())
 			{
+				HudWindowManager.Log.DebugFormat("Will close:{0}", new object[]
+				{
+					removingWindow.GetType()
+				});
 				removingWindow.ChangeWindowVisibility(false);
 			}
 			for (int i = this.hudWindows.Count - 1; i >= 0; i--)
@@ -231,6 +250,7 @@ namespace HeavyMetalMachines.Frontend
 			Game game = GameHubBehaviour.Hub.State.getGameState(GameState.GameStateKind.Game) as Game;
 			game.OnGameOver += this.Game_OnGameOver;
 			GameHubBehaviour.Hub.BombManager.ListenToPhaseChange += this.BombManager_ListenToPhaseChange;
+			HudWindowManager.Log.Debug("State listeners installed.");
 		}
 
 		private void OnEnable()
@@ -240,6 +260,7 @@ namespace HeavyMetalMachines.Frontend
 				this._driverHelperController = GameHubBehaviour.Hub.GuiScripts.DriverHelper;
 			}
 			GameHubBehaviour.Hub.State.ListenToStateChanged += this.GameState_ListenToStateChanged;
+			HudWindowManager.Log.Debug("Created");
 		}
 
 		private void OnDisable()
@@ -253,25 +274,26 @@ namespace HeavyMetalMachines.Frontend
 			GameHubBehaviour.Hub.BombManager.ListenToPhaseChange -= this.BombManager_ListenToPhaseChange;
 			this.CleanGameListeners();
 			this._stateListenersInstalled = false;
+			HudWindowManager.Log.Debug("Destroyed");
 		}
 
-		private void BombManager_ListenToPhaseChange(BombScoreBoard.State obj)
+		private void BombManager_ListenToPhaseChange(BombScoreboardState obj)
 		{
-			if (obj != BombScoreBoard.State.Warmup)
+			if (obj != BombScoreboardState.Warmup)
 			{
-				this.State = HudWindowManager.GuiGameState.Game;
+				this.State = GuiGameState.Game;
 			}
 		}
 
 		private void Game_OnGameOver(MatchData.MatchState matchWinner)
 		{
-			this.State = HudWindowManager.GuiGameState.Transitioning;
+			this.State = GuiGameState.Transitioning;
 			if (GameHubBehaviour.Hub.Match.LevelIsTutorial())
 			{
 				this.Remove(GameHubBehaviour.Hub.GuiScripts.Esc);
 				return;
 			}
-			this.CloseAll(null);
+			this.CloseAll();
 		}
 
 		private void GameState_ListenToStateChanged(GameState ChangedState)
@@ -280,21 +302,29 @@ namespace HeavyMetalMachines.Frontend
 			switch (GameHubBehaviour.Hub.State.Current.StateKind)
 			{
 			case GameState.GameStateKind.MainMenu:
-				this.State = HudWindowManager.GuiGameState.MainMenu;
+				this.State = GuiGameState.MainMenu;
 				return;
 			case GameState.GameStateKind.Game:
 				UIProgressionController.OnProgressionControllerVisibilityChange += this.EndGame_OnProgressionControllerVisibilityChange;
+				if (this._spectatorService.IsSpectating)
+				{
+					ObservableExtensions.Subscribe<Unit>(this._spectatorHelper.LoadSpectatorHelper());
+				}
+				return;
+			case GameState.GameStateKind.Profile:
+				this.State = GuiGameState.Profile;
 				return;
 			case GameState.GameStateKind.Splash:
 			case GameState.GameStateKind.HORTA:
+			case GameState.GameStateKind.Welcome:
 				this.InstallListeners();
 				return;
 			case GameState.GameStateKind.Loading:
-				this.State = HudWindowManager.GuiGameState.Transitioning;
-				this.CloseAll(null);
+				this.State = GuiGameState.Transitioning;
+				this.CloseAll();
 				return;
 			case GameState.GameStateKind.Reconnect:
-				this.State = HudWindowManager.GuiGameState.Reconnect;
+				this.State = GuiGameState.Reconnect;
 				return;
 			}
 		}
@@ -306,25 +336,25 @@ namespace HeavyMetalMachines.Frontend
 			{
 				if (stateKind == GameState.GameStateKind.Pick)
 				{
-					this.State = HudWindowManager.GuiGameState.PickScreen;
+					this.State = GuiGameState.PickScreen;
 				}
 			}
 			else
 			{
-				this.State = HudWindowManager.GuiGameState.MainMenu;
+				this.State = GuiGameState.MainMenu;
 			}
-			this.CloseAll(null);
+			this.CloseAll();
 		}
 
 		private void EndGame_OnProgressionControllerVisibilityChange(bool visibility)
 		{
 			if (visibility)
 			{
-				this.State = HudWindowManager.GuiGameState.Debriefing;
+				this.State = GuiGameState.Debriefing;
 				return;
 			}
-			this.State = HudWindowManager.GuiGameState.Transitioning;
-			this.CloseAll(null);
+			this.State = GuiGameState.Transitioning;
+			this.CloseAll();
 			this.CleanGameListeners();
 		}
 
@@ -332,10 +362,10 @@ namespace HeavyMetalMachines.Frontend
 		{
 			if (!GameHubBehaviour.Hub || !GameHubBehaviour.Hub.State || GameHubBehaviour.Hub.Net.IsServer())
 			{
-				this.State = HudWindowManager.GuiGameState.Transitioning;
+				this.State = GuiGameState.Transitioning;
 				return;
 			}
-			HudWindowManager.GuiGameState state = this.State;
+			GuiGameState state = this.State;
 			if (this.previous != state && this.OnGuiStateChange != null)
 			{
 				this.OnGuiStateChange(state);
@@ -353,44 +383,70 @@ namespace HeavyMetalMachines.Frontend
 			{
 				return;
 			}
-			if (!Input.GetKeyDown(KeyCode.Escape))
+			this.OptionsInputUpdate();
+			this.HelpInputUpdate();
+		}
+
+		private void OptionsInputUpdate()
+		{
+			EscMenuGui esc = GameHubBehaviour.Hub.GuiScripts.Esc;
+			this.UiNavigationOptionsInputUpdate(esc);
+		}
+
+		private void UiNavigationOptionsInputUpdate(EscMenuGui escMenuGui)
+		{
+			if (this._inputActionPoller.GetButtonDown(50))
 			{
-				if (ControlOptions.GetButtonDown(ControlAction.Help) && this._driverHelperController)
-				{
-					if (this._driverHelperController.IsWindowVisible())
-					{
-						this.Remove(this._driverHelperController);
-					}
-					else
-					{
-						this.Push(this._driverHelperController);
-						if (HudWindowManager.EvtDriverHelperEnabled != null)
-						{
-							HudWindowManager.EvtDriverHelperEnabled();
-						}
-					}
-				}
+				this.TryToToggleOptionsWindowVisibility(escMenuGui);
+			}
+		}
+
+		private void TryToToggleOptionsWindowVisibility(EscMenuGui escMenuGui)
+		{
+			if (this._optionsControllerTabPresenter.IsBinding())
+			{
 				return;
 			}
-			if (this.hudWindows.Count == 0)
+			if (escMenuGui.IsOptionsWindowVisible())
 			{
-				this.Push(GameHubBehaviour.Hub.GuiScripts.Esc);
+				escMenuGui.HideOptionsWindow();
+			}
+			else
+			{
+				escMenuGui.SetWindowVisibility(!escMenuGui.Visible);
+			}
+		}
+
+		private void HelpInputUpdate()
+		{
+			if (!this._inputActionPoller.GetButtonDown(0))
+			{
 				return;
 			}
-			for (int i = this.hudWindows.Count - 1; i >= 0; i--)
+			if (this.OnHelp != null)
 			{
-				if (this.hudWindows[i].CanBeHiddenByEscKey())
+				this.OnHelp();
+			}
+			else if (this._driverHelperController)
+			{
+				if (this._driverHelperController.IsWindowVisible())
 				{
-					this.Remove(this.hudWindows[i]);
-					return;
+					this.Remove(this._driverHelperController);
+				}
+				else
+				{
+					this.Push(this._driverHelperController);
+					if (HudWindowManager.EvtDriverHelperEnabled != null)
+					{
+						HudWindowManager.EvtDriverHelperEnabled();
+					}
 				}
 			}
-			this.Push(GameHubBehaviour.Hub.GuiScripts.Esc);
 		}
 
 		public void OnCleanup(CleanupMessage msg)
 		{
-			this.CloseAll(null);
+			this.CloseAll();
 			this.CleanGameListeners();
 		}
 
@@ -404,33 +460,47 @@ namespace HeavyMetalMachines.Frontend
 			UIProgressionController.OnProgressionControllerVisibilityChange -= this.EndGame_OnProgressionControllerVisibilityChange;
 		}
 
+		private const string AddFriendsSceneName = "UI_ADD_Social_Add_friends";
+
 		private static readonly BitLogger Log = new BitLogger(typeof(HudWindowManager));
+
+		[InjectOnClient]
+		private IControllerInputActionPoller _inputActionPoller;
+
+		[InjectOnClient]
+		private ISpectatorService _spectatorService;
+
+		[InjectOnClient]
+		private ISpectatorHelperFactory _spectatorHelper;
+
+		[InjectOnClient]
+		private IIsFeatureToggled _isFeatureToggled;
+
+		[InjectOnClient]
+		private IUiNavigationInputDeliverer _uiNavigationInputDeliverer;
+
+		[InjectOnClient]
+		private IInputGetActiveDevicePoller _inputGetActiveDevicePoller;
+
+		[InjectOnClient]
+		private IOptionsControllerTabPresenter _optionsControllerTabPresenter;
+
+		[InjectOnClient]
+		private DiContainer _diContainer;
 
 		private bool _stateListenersInstalled;
 
 		private static HudWindowManager _singleton;
 
-		private HudWindowManager.GuiGameState _state;
+		private GuiGameState _state;
 
 		private DriverHelperController _driverHelperController;
 
 		private List<IHudWindow> hudWindows;
 
-		private HudWindowManager.GuiGameState previous;
+		private GuiGameState previous;
 
 		private bool _disableOpenWindows;
-
-		public delegate void GuiGameStateChange(HudWindowManager.GuiGameState currentGuiGameState);
-
-		public enum GuiGameState
-		{
-			Transitioning,
-			MainMenu,
-			PickScreen,
-			Game,
-			Debriefing,
-			Reconnect
-		}
 
 		public delegate void DriverHelperInstantiatedDelegate();
 	}

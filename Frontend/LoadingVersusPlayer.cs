@@ -1,40 +1,45 @@
 ﻿using System;
 using System.Collections;
 using Assets.Standard_Assets.Scripts.HMM.Customization;
+using HeavyMetalMachines.CompetitiveMode.View.Loading;
 using HeavyMetalMachines.Match;
-using HeavyMetalMachines.Utils;
+using HeavyMetalMachines.Players.Presenting;
+using HeavyMetalMachines.Publishing;
+using HeavyMetalMachines.Publishing.Presenting;
 using HeavyMetalMachines.VFX;
 using Pocketverse;
-using SharedUtils.Loading;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
 	public class LoadingVersusPlayer : GameHubBehaviour
 	{
-		public void UpdatePlayerInfo(LoadingVersusController loadingVersusController, PlayerData playerData, bool isFlipped)
+		public void UpdatePlayerInfo(LoadingVersusController loadingVersusController, PlayerData playerData, bool isFlipped, IMatchTeams teams)
 		{
-			this.CarSprite.SpriteName = HudUtils.GetCarSkinSpriteName(GameHubBehaviour.Hub, playerData.Character, playerData.Customizations.SelectedSkin);
-			this.BorderIconSprite.flip = ((!isFlipped) ? UIBasicSprite.Flip.Nothing : UIBasicSprite.Flip.Horizontally);
-			bool flag = GameHubBehaviour.Hub.Players.CurrentPlayerData.Team == playerData.Team;
-			this.CharacterNameLabel.text = playerData.Character.LocalizedName;
-			this.CharacterLevelLabel.text = string.Empty;
-			this.CharacterIconSprite.SpriteName = HudUtils.GetPlayerIconName(GameHubBehaviour.Hub, playerData.Character.CharacterItemTypeGuid, HudUtils.PlayerIconSize.Size64);
-			string playerName = NGUIText.EscapeSymbols(playerData.Name);
-			GUIUtils.ClampLabel(this.PlayerNameLabel, playerName);
+			Guid id = playerData.CharacterItemType.Id;
+			string characterLocalizedName = playerData.GetCharacterLocalizedName();
+			LoadingVersusPlayer.Log.DebugFormat("Will UpdatePlayerInfo (UI) for player:{0} isBot:{1} char:{2}", new object[]
+			{
+				playerData.Name,
+				playerData.IsBot,
+				characterLocalizedName
+			});
 			if (!playerData.IsBot)
 			{
-				TeamUtils.GetUserTagAsync(GameHubBehaviour.Hub, playerData.UserId, delegate(string teamTag)
-				{
-					if (!string.IsNullOrEmpty(teamTag))
-					{
-						GUIUtils.ClampLabel(this.PlayerNameLabel, string.Format("[{0}]{1}[-] {2}", HudUtils.RGBToHex(Color.white), teamTag, playerName));
-					}
-				}, delegate(Exception exception)
-				{
-					LoadingVersusPlayer.Log.Warn(string.Format("Error on GetUserTagAsync. Exception:{0}", exception));
-				});
+				ObservableExtensions.Subscribe<Unit>(this._diContainer.Resolve<ILoadingVersusPlayerRankPresenter>().LoadRank(playerData.PlayerId, this._loadingVersusPlayerRankView));
 			}
+			this.CarSprite.SpriteName = HudUtils.GetCarSkinSpriteName(GameHubBehaviour.Hub.InventoryColletion, id, playerData.Customizations.GetGuidBySlot(59));
+			this.BorderIconSprite.flip = ((!isFlipped) ? UIBasicSprite.Flip.Nothing : UIBasicSprite.Flip.Horizontally);
+			bool flag = GameHubBehaviour.Hub.Players.CurrentPlayerData.Team == playerData.Team;
+			this.CharacterNameLabel.text = characterLocalizedName;
+			this.CharacterLevelLabel.text = string.Empty;
+			this.CharacterIconSprite.SpriteName = HudUtils.GetPlayerIconName(GameHubBehaviour.Hub, id, HudUtils.PlayerIconSize.Size64);
+			string text = NGUIText.EscapeSymbols(playerData.Name);
+			IGetDisplayableNickName getDisplayableNickName = this._diContainer.Resolve<IGetDisplayableNickName>();
+			text = ((!playerData.IsBot) ? getDisplayableNickName.GetFormattedNickNameWithPlayerTag(playerData.PlayerId, text, new long?(playerData.PlayerTag)) : playerData.Name);
+			this.PlayerNameLabel.text = text;
 			bool flag2 = playerData == GameHubBehaviour.Hub.Players.CurrentPlayerData;
 			this.PingGroupGameObject.SetActive(flag2);
 			if (flag)
@@ -86,6 +91,25 @@ namespace HeavyMetalMachines.Frontend
 			}
 			this.LoadingProgressBar.gameObject.SetActive(true);
 			PortraitDecoratorGui.UpdatePortraitSprite(playerData.Customizations, this.FounderBoxSprite, PortraitDecoratorGui.PortraitSpriteType.LoadingVersusBox);
+			this.UpdatePsnInfo(playerData);
+			this._playerNameInfoGrid.Reposition();
+		}
+
+		private void UpdatePsnInfo(PlayerData playerData)
+		{
+			if (playerData.IsBot)
+			{
+				this._psnIdGroupGameObject.SetActive(false);
+				return;
+			}
+			IGetPublisherPresentingData getPublisherPresentingData = this._diContainer.Resolve<IGetPublisherPresentingData>();
+			Publisher publisherById = Publishers.GetPublisherById(playerData.PublisherId);
+			PublisherPresentingData publisherPresentingData = getPublisherPresentingData.Get(publisherById);
+			this._psnIdGroupGameObject.SetActive(publisherPresentingData.ShouldShowPublisherUserName);
+			if (publisherPresentingData.ShouldShowPublisherUserName)
+			{
+				this._psnIdLabel.text = playerData.PublisherUserName;
+			}
 		}
 
 		private IEnumerator UpdatePingCoroutine(LoadingVersusController loadingVersusController)
@@ -107,14 +131,7 @@ namespace HeavyMetalMachines.Frontend
 				{
 					break;
 				}
-				if (playerId == currentPlayerData.PlayerId)
-				{
-					this.UpdateLoadingInfo(SingletonMonoBehaviour<LoadingManager>.Instance.LoadingProgress);
-				}
-				else
-				{
-					this.UpdateLoadingInfo(GameHubBehaviour.Hub.Match.LoadingProgress.GetPlayerProgress(playerId));
-				}
+				this.UpdateLoadingInfo((playerId != currentPlayerData.PlayerId) ? GameHubBehaviour.Hub.Match.LoadingProgress.GetPlayerProgress(playerId) : 0f);
 				yield return UnityUtils.WaitForEndOfFrame;
 			}
 			yield break;
@@ -151,6 +168,9 @@ namespace HeavyMetalMachines.Frontend
 
 		private static readonly BitLogger Log = new BitLogger(typeof(LoadingVersusPlayer));
 
+		[Inject]
+		private DiContainer _diContainer;
+
 		public HMMUI2DDynamicSprite CarSprite;
 
 		public HMMUI2DDynamicSprite FounderBoxSprite;
@@ -174,5 +194,17 @@ namespace HeavyMetalMachines.Frontend
 		public UILabel PingLabel;
 
 		public UI2DSprite BorderIconSprite;
+
+		[SerializeField]
+		private NguiLoadingVersusPlayerRankView _loadingVersusPlayerRankView;
+
+		[SerializeField]
+		private UIGrid _playerNameInfoGrid;
+
+		[SerializeField]
+		private GameObject _psnIdGroupGameObject;
+
+		[SerializeField]
+		private UILabel _psnIdLabel;
 	}
 }

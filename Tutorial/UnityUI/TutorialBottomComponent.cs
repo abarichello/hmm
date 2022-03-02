@@ -15,33 +15,17 @@ namespace HeavyMetalMachines.Tutorial.UnityUI
 			}
 		}
 
-		public TranslationSheets TitleSheet
+		public TutorialBottomDataDescription[] DataDescriptions
 		{
 			get
 			{
-				return this._titleSheet;
-			}
-		}
-
-		public string DescriptionLabelDraft
-		{
-			get
-			{
-				return this._descriptionLabelTranslated;
-			}
-		}
-
-		public TranslationSheets DescriptionSheet
-		{
-			get
-			{
-				return this._descriptionSheet;
+				return this._dataDescriptions;
 			}
 		}
 
 		public void Load()
 		{
-			SceneManager.LoadSceneAsync("UI_ADD_TutorialBottomPanel", LoadSceneMode.Additive);
+			SceneManager.LoadSceneAsync("UI_ADD_TutorialBottomPanel", 1);
 		}
 
 		public void Unload()
@@ -62,10 +46,10 @@ namespace HeavyMetalMachines.Tutorial.UnityUI
 			this._tutorialPanelView = tutorialPanelView;
 		}
 
-		public void Show(string titleLabelTranslated, string descriptionLabelTranslated)
+		public void Show(string titleLabelTranslated, TutorialBottomDataDescription[] tutorialDataDescriptions)
 		{
 			this._titleLabelTranslated = titleLabelTranslated;
-			this._descriptionLabelTranslated = descriptionLabelTranslated;
+			this._dataDescriptions = tutorialDataDescriptions;
 			this._tutorialPanelView.SetVisibility(true);
 		}
 
@@ -80,10 +64,6 @@ namespace HeavyMetalMachines.Tutorial.UnityUI
 
 		private string _titleLabelTranslated;
 
-		private TranslationSheets _titleSheet;
-
-		private string _descriptionLabelTranslated;
-
-		private TranslationSheets _descriptionSheet;
+		private TutorialBottomDataDescription[] _dataDescriptions;
 	}
 }

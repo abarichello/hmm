@@ -76,7 +76,7 @@ namespace HeavyMetalMachines.Render
 						masterVFX = (MasterVFX)GameHubBehaviour.Hub.Resources.PrefabCacheInstantiate(this.Feedbacks[i].VfxPrefab, base.transform.position, base.transform.rotation);
 						if (masterVFX != null)
 						{
-							masterVFX.transform.parent = GameHubBehaviour.Hub.Drawer.Effects;
+							GameHubBehaviour.Hub.Drawer.AddEffect(masterVFX.transform);
 							masterVFX.baseMasterVFX = this.Feedbacks[i].VfxPrefab;
 							masterVFX.Activate(this.combatObject.Id, this.combatObject.Id, this.combatObject.transform);
 						}

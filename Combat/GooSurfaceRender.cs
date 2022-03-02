@@ -34,7 +34,7 @@ namespace HeavyMetalMachines.Combat
 		{
 			if (this.overlapMaterialInstance)
 			{
-				UnityEngine.Object.Destroy(this.overlapMaterialInstance);
+				Object.Destroy(this.overlapMaterialInstance);
 			}
 		}
 
@@ -47,7 +47,7 @@ namespace HeavyMetalMachines.Combat
 			}
 			if (this.overlapMaterialInstance == null && this.OverlapMaterial != null)
 			{
-				this.overlapMaterialInstance = UnityEngine.Object.Instantiate<Material>(this.OverlapMaterial);
+				this.overlapMaterialInstance = Object.Instantiate<Material>(this.OverlapMaterial);
 			}
 		}
 
@@ -105,7 +105,7 @@ namespace HeavyMetalMachines.Combat
 			this.overlapMaterialInstance.color = new Color(1f, 1f, 1f, this.alpha);
 			if (this.fadeOut && this.alpha == 0f)
 			{
-				UnityEngine.Object.Destroy(this);
+				Object.Destroy(this);
 			}
 			float num = Time.realtimeSinceStartup - this.lastTime;
 			this.lastTime = Time.realtimeSinceStartup;

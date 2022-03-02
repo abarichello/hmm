@@ -78,7 +78,6 @@ namespace HeavyMetalMachines.Tutorial
 			{
 				yield break;
 			}
-			Debug.Log(string.Format("Will center at:{0}", targetTransform.name));
 			uiCenterOnChild.CenterOn(targetTransform);
 			yield break;
 		}

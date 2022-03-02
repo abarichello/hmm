@@ -9,6 +9,8 @@ namespace HeavyMetalMachines.UpdateStream
 
 		public abstract void Write(BitStream stream);
 
+		public abstract void Clear();
+
 		protected virtual void Awake()
 		{
 			base.Id.EvtIdentifiableRegisterStatusChange += this.OnIdentifiableRegisterStatusChange;
@@ -23,10 +25,19 @@ namespace HeavyMetalMachines.UpdateStream
 		{
 			if (isRegistering)
 			{
+				MovementStream.Log.DebugFormat("{0} started id={1}", new object[]
+				{
+					base.name,
+					base.Id.ObjId
+				});
 				GameHubBehaviour.Hub.UpdateManager.AddMovementStream(base.Id.ObjId, this);
 			}
 			else
 			{
+				MovementStream.Log.DebugFormat("{0} stopped", new object[]
+				{
+					base.name
+				});
 				GameHubBehaviour.Hub.UpdateManager.RemoveMovementStream(base.Id.ObjId);
 			}
 		}

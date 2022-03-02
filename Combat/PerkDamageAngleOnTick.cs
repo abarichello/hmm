@@ -31,7 +31,7 @@ namespace HeavyMetalMachines.Combat
 			Vector3 position = base._trans.position;
 			position.y = 0f;
 			base._trans.position = position;
-			BarrierUtils.OverlapSphereRaycastFromCenter(base._trans.position, this._range, 1077058560, PerkDamageAngleOnTick._objects);
+			BarrierUtils.OverlapSphereRaycastFromCenter(base._trans.position, this._range, 1077054464, PerkDamageAngleOnTick._objects);
 			for (int i = 0; i < PerkDamageAngleOnTick._objects.Count; i++)
 			{
 				BarrierUtils.CombatHit combatHit = PerkDamageAngleOnTick._objects[i];
@@ -62,17 +62,17 @@ namespace HeavyMetalMachines.Combat
 			{
 				return;
 			}
-			Vector3 a = Quaternion.Euler(0f, this.Angle / 2f, 0f) * base._trans.forward;
-			Vector3 a2 = Quaternion.Euler(0f, -this.Angle / 2f, 0f) * base._trans.forward;
+			Vector3 vector = Quaternion.Euler(0f, this.Angle / 2f, 0f) * base._trans.forward;
+			Vector3 vector2 = Quaternion.Euler(0f, -this.Angle / 2f, 0f) * base._trans.forward;
 			Gizmos.color = Color.red;
-			Gizmos.DrawLine(base._trans.position, base._trans.position + a * this._range);
+			Gizmos.DrawLine(base._trans.position, base._trans.position + vector * this._range);
 			Gizmos.DrawLine(base._trans.position, base._trans.position + Vector3.up * 10f);
-			Gizmos.DrawLine(base._trans.position + Vector3.up * 10f, base._trans.position + a * this._range + Vector3.up * 10f);
-			Gizmos.DrawLine(base._trans.position + a * this._range, base._trans.position + a * this._range + Vector3.up * 10f);
+			Gizmos.DrawLine(base._trans.position + Vector3.up * 10f, base._trans.position + vector * this._range + Vector3.up * 10f);
+			Gizmos.DrawLine(base._trans.position + vector * this._range, base._trans.position + vector * this._range + Vector3.up * 10f);
 			Gizmos.color = Color.blue;
-			Gizmos.DrawLine(base._trans.position, base._trans.position + a2 * this._range);
-			Gizmos.DrawLine(base._trans.position + a2 * this._range, base._trans.position + a2 * this._range + Vector3.up * 10f);
-			Gizmos.DrawLine(base._trans.position + Vector3.up * 10f, base._trans.position + a2 * this._range + Vector3.up * 10f);
+			Gizmos.DrawLine(base._trans.position, base._trans.position + vector2 * this._range);
+			Gizmos.DrawLine(base._trans.position + vector2 * this._range, base._trans.position + vector2 * this._range + Vector3.up * 10f);
+			Gizmos.DrawLine(base._trans.position + Vector3.up * 10f, base._trans.position + vector2 * this._range + Vector3.up * 10f);
 			Gizmos.color = new Color(1f, 0f, 0f, 0.2f);
 			Gizmos.DrawSphere(base._trans.position, this._range);
 		}

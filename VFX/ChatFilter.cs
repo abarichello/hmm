@@ -23,7 +23,7 @@ namespace HeavyMetalMachines.VFX
 
 		private void InstantiateIcon()
 		{
-			GameObject gameObject = UnityEngine.Object.Instantiate<GameObject>(this.IconPrefab.gameObject);
+			GameObject gameObject = Object.Instantiate<GameObject>(this.IconPrefab.gameObject);
 			gameObject.transform.parent = this.IconsParent.transform;
 			gameObject.transform.position = Vector3.zero;
 			gameObject.transform.localScale = Vector3.one;

@@ -58,7 +58,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			return this._currentTargetEffectId;
 		}
 
-		protected override void InnerOnDestroyEffect(DestroyEffect evt)
+		protected override void InnerOnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (evt.RemoveData.TargetEventId != this._currentTargetEffectId && this._currentTargetEffectId != -1)
 			{
@@ -197,31 +197,31 @@ namespace HeavyMetalMachines.Combat.Gadget
 			{
 				return;
 			}
-			Vector3 a = Quaternion.Euler(0f, this.Angle * 0.5f, 0f) * this.Combat.transform.forward;
-			Vector3 a2 = Quaternion.Euler(0f, -this.Angle * 0.5f, 0f) * this.Combat.transform.forward;
+			Vector3 vector = Quaternion.Euler(0f, this.Angle * 0.5f, 0f) * this.Combat.transform.forward;
+			Vector3 vector2 = Quaternion.Euler(0f, -this.Angle * 0.5f, 0f) * this.Combat.transform.forward;
 			Gizmos.color = Color.red;
 			float range = this.GetRange();
-			Vector3 vector = this.DummyPosition();
-			Gizmos.DrawLine(vector, vector + a * range);
-			Gizmos.DrawLine(vector, vector + Vector3.up * 10f);
-			Gizmos.DrawLine(vector + Vector3.up * 10f, vector + a * range + Vector3.up * 10f);
-			Gizmos.DrawLine(vector + a * range, vector + a * range + Vector3.up * 10f);
+			Vector3 vector3 = this.DummyPosition();
+			Gizmos.DrawLine(vector3, vector3 + vector * range);
+			Gizmos.DrawLine(vector3, vector3 + Vector3.up * 10f);
+			Gizmos.DrawLine(vector3 + Vector3.up * 10f, vector3 + vector * range + Vector3.up * 10f);
+			Gizmos.DrawLine(vector3 + vector * range, vector3 + vector * range + Vector3.up * 10f);
 			Gizmos.color = Color.blue;
-			Gizmos.DrawLine(vector, vector + a2 * range);
-			Gizmos.DrawLine(vector + a2 * range, vector + a2 * range + Vector3.up * 10f);
-			Gizmos.DrawLine(vector + Vector3.up * 10f, vector + a2 * range + Vector3.up * 10f);
+			Gizmos.DrawLine(vector3, vector3 + vector2 * range);
+			Gizmos.DrawLine(vector3 + vector2 * range, vector3 + vector2 * range + Vector3.up * 10f);
+			Gizmos.DrawLine(vector3 + Vector3.up * 10f, vector3 + vector2 * range + Vector3.up * 10f);
 			Gizmos.color = new Color(1f, 0f, 0f, 0.2f);
-			Gizmos.DrawSphere(vector, range);
+			Gizmos.DrawSphere(vector3, range);
 			Gizmos.color = Color.blue;
-			Gizmos.DrawWireSphere(vector + this.Combat.transform.forward * (float)this.MyInfo.InitialOverlapSphereRadius, (float)this.MyInfo.InitialOverlapSphereRadius);
-			Vector3 vector2 = this.Combat.transform.forward;
+			Gizmos.DrawWireSphere(vector3 + this.Combat.transform.forward * (float)this.MyInfo.InitialOverlapSphereRadius, (float)this.MyInfo.InitialOverlapSphereRadius);
+			Vector3 vector4 = this.Combat.transform.forward;
 			if (this._currentTargetCombat)
 			{
-				vector2 = this._currentTargetCombat.transform.position - this.DummyPosition();
+				vector4 = this._currentTargetCombat.transform.position - this.DummyPosition();
 			}
-			Vector3 b = vector2.normalized * range;
+			Vector3 vector5 = vector4.normalized * range;
 			Gizmos.color = Color.yellow;
-			Gizmos.DrawLine(this.DummyPosition(), (!(this._currentTargetCombat != null)) ? (this.DummyPosition() + b) : (this._currentTargetCombat.transform.position + b));
+			Gizmos.DrawLine(this.DummyPosition(), (!(this._currentTargetCombat != null)) ? (this.DummyPosition() + vector5) : (this._currentTargetCombat.transform.position + vector5));
 		}
 
 		private int _currentTargetEffectId = -1;

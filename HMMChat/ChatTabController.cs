@@ -114,7 +114,7 @@ namespace HeavyMetalMachines.HMMChat
 			ChatTabButtonReference chatTabButtonReference;
 			this.Tabs.TryGetValue(universalid, out chatTabButtonReference);
 			this.Tabs.Remove(universalid);
-			UnityEngine.Object.Destroy(chatTabButtonReference.gameObject);
+			Object.Destroy(chatTabButtonReference.gameObject);
 			this.ShowTabs();
 			this.ConfigureNavigationUnreadMessageButtons();
 		}

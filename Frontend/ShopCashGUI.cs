@@ -1,13 +1,16 @@
 ﻿using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Globalization;
 using ClientAPI;
 using ClientAPI.Objects;
+using HeavyMetalMachines.Localization;
 using HeavyMetalMachines.PurchaseFeedback;
+using HeavyMetalMachines.Store;
+using HeavyMetalMachines.Swordfish;
 using HeavyMetalMachines.Utils;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
@@ -22,15 +25,14 @@ namespace HeavyMetalMachines.Frontend
 			this._numFilters = Enum.GetNames(typeof(ShopCashGUI.CashGuiFilter)).Length;
 			this._currentFilter = ShopCashGUI.CashGuiFilter.Price;
 			this.LocalizeAndconfigureFilterTitleLabel();
-			this.gridScript.sorting = UIGrid.Sorting.Custom;
-			this.gridScript.onCustomSort = new Comparison<Transform>(this.GridCustomSort);
-			this._shopCashGuiLoadFeedback.SetReadyFeedbackAction(new System.Action(this.EnableShopCashItemsDisplay));
-			base.StartCoroutine(this.CreateCardsPool());
+			this._shopCashGuiLoadFeedback.SetReadyFeedbackAction(new Action(this.EnableShopCashItemsDisplay));
+			this.CreateCardsPool();
 		}
 
 		protected void OnDestroy()
 		{
 			this._disposed = true;
+			this.TrySetStoreIcon(false);
 		}
 
 		private void OnDisable()
@@ -38,27 +40,26 @@ namespace HeavyMetalMachines.Frontend
 			this.SetWaitingForTransaction(false);
 		}
 
-		private IEnumerator CreateCardsPool()
+		private void CreateCardsPool()
 		{
-			HeavyMetalMachines.Utils.Debug.Assert(this.ShopCashItemCardPool > 0, string.Format("Invalid value for ShopCashGUI.ShopCashItemCardPool[{0}] - Must be greater than zero.", this.ShopCashItemCardPool), HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+			Debug.Assert(this.ShopCashItemCardPool > 0, string.Format("Invalid value for ShopCashGUI.ShopCashItemCardPool[{0}] - Must be greater than zero.", this.ShopCashItemCardPool), Debug.TargetTeam.All);
 			this.ShopCashItemPool = new ShopCashItem[this.ShopCashItemCardPool];
 			this.ShopCashItemReference.gameObject.SetActive(false);
 			this.ShopCashItemPool[0] = this.ShopCashItemReference;
 			for (int i = 1; i < this.ShopCashItemCardPool; i++)
 			{
-				ShopCashItem shopCashItem = UnityEngine.Object.Instantiate<ShopCashItem>(this.ShopCashItemReference, Vector3.zero, Quaternion.identity);
+				ShopCashItem shopCashItem = Object.Instantiate<ShopCashItem>(this.ShopCashItemReference, Vector3.zero, Quaternion.identity);
 				shopCashItem.transform.parent = this.ShopCashItemReference.transform.parent;
 				shopCashItem.transform.localScale = this.ShopCashItemReference.transform.localScale;
 				shopCashItem.gameObject.name = "z_shop_item_" + i;
 				this.ShopCashItemPool[i] = shopCashItem;
-				yield return UnityUtils.WaitForEndOfFrame;
 			}
 			for (int j = 0; j < this.ShopCashItemPool.Length; j++)
 			{
 				ShopCashItem shopCashItem2 = this.ShopCashItemPool[j];
 				shopCashItem2.ItemSprite.gameObject.SetActive(false);
 				shopCashItem2.SoonLabel.gameObject.SetActive(true);
-				shopCashItem2.SoonLabel.text = Language.Get("SHOP_CASH_SOON", TranslationSheets.MainMenuGui);
+				shopCashItem2.SoonLabel.text = Language.Get("SHOP_CASH_SOON", TranslationContext.MainMenuGui);
 				shopCashItem2.HardValueGroupGameObject.SetActive(false);
 				shopCashItem2.PriceValueGroupGameObject.SetActive(false);
 				shopCashItem2.DiscountGroupGameObject.SetActive(false);
@@ -67,8 +68,8 @@ namespace HeavyMetalMachines.Frontend
 			}
 			this.gridScript.repositionNow = true;
 			this.gridScript.Reposition();
+			base.UiNavigationAxisSelectorRebuilder.RebuildAndSelect();
 			this.LoadItens();
-			yield break;
 		}
 
 		private void AddShopItem(HardCurrencyProduct hardCurrencyProduct, string isoCurrency)
@@ -89,12 +90,11 @@ namespace HeavyMetalMachines.Frontend
 							break;
 						}
 					}
-					HeavyMetalMachines.Utils.Debug.Assert(!string.IsNullOrEmpty(text), string.Format("ShopCashGUI.AddShopItem - Image url not found.", new object[0]), HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+					Debug.Assert(!string.IsNullOrEmpty(text), string.Format("ShopCashGUI.AddShopItem - Image url not found.", new object[0]), Debug.TargetTeam.All);
 					shopCashItem.ItemSprite.SpriteName = text;
 					shopCashItem.ItemSprite.gameObject.SetActive(true);
 					shopCashItem.SoonLabel.gameObject.SetActive(false);
 					int num = hardCurrencyProduct.Amount + hardCurrencyProduct.Bonus;
-					shopCashItem.gameObject.name = num.ToString("0");
 					shopCashItem.HardTotalLabel.text = num.ToString("0");
 					shopCashItem.HardQuantityLabel.text = hardCurrencyProduct.Amount.ToString("0");
 					shopCashItem.HardBonusLabel.text = hardCurrencyProduct.Bonus.ToString("0");
@@ -141,39 +141,13 @@ namespace HeavyMetalMachines.Frontend
 			{
 				return;
 			}
-			if (this.IsHardCurrencyProductsUnavailable(hardCurrencyProducts.HardCurrencyProduct))
+			if (hardCurrencyProducts.HardCurrencyProduct == null || hardCurrencyProducts.HardCurrencyProduct.Length == 0)
 			{
-				this._shopCashGuiLoadFeedback.SetState(ShopCashGUILoadFeedbackState.Unavailable);
-				this._shopCashGuiLoadFeedback.ShowFeedback();
+				this.SetEmptyStoreFeedback();
 				return;
 			}
 			this._shopCashGuiLoadFeedback.SetState(ShopCashGUILoadFeedbackState.Ready);
 			this.DisplayShopCashItems(hardCurrencyProducts);
-		}
-
-		private bool IsHardCurrencyProductsUnavailable(ICollection<HardCurrencyProduct> hardCurrencyProduct)
-		{
-			return hardCurrencyProduct == null || hardCurrencyProduct.Count == 0;
-		}
-
-		private void DisplayShopCashItems(HardCurrencyProducts hardCurrencyProduct)
-		{
-			HardCurrencyProduct[] hardCurrencyProduct2 = hardCurrencyProduct.HardCurrencyProduct;
-			string currencyCultureName = hardCurrencyProduct.CurrencyCultureName;
-			HeavyMetalMachines.Utils.Debug.Assert(currencyCultureName.Length == RegionInfo.CurrentRegion.ISOCurrencySymbol.Length, string.Format("Invalid CurrencyCultureName:[{0}]. Must be an ISOCurrencySymbol. Current region ISO:[{1}]", currencyCultureName, RegionInfo.CurrentRegion.ISOCurrencySymbol), HeavyMetalMachines.Utils.Debug.TargetTeam.All);
-			for (int i = 0; i < hardCurrencyProduct2.Length; i++)
-			{
-				this.AddShopItem(hardCurrencyProduct2[i], currencyCultureName);
-			}
-			this.gridScript.repositionNow = true;
-			this.gridScript.Reposition();
-			this.LocalizeAndconfigureFilterTitleLabel();
-			this._shopCashGuiLoadFeedback.ShowFeedback();
-		}
-
-		private void EnableShopCashItemsDisplay()
-		{
-			this.gridScript.gameObject.SetActive(true);
 		}
 
 		private void OnGetHardCurrencyProductsFailure(object state, Exception exception)
@@ -182,20 +156,76 @@ namespace HeavyMetalMachines.Frontend
 			{
 				exception
 			});
+			this.SetEmptyStoreFeedback();
+		}
+
+		private void SetEmptyStoreFeedback()
+		{
+			this._shopCashGuiLoadFeedback.SetState(ShopCashGUILoadFeedbackState.Unavailable);
+			this._shopCashGuiLoadFeedback.ShowFeedback();
+		}
+
+		private void DisplayShopCashItems(HardCurrencyProducts hardCurrencyProduct)
+		{
+			string currencyCultureName = hardCurrencyProduct.CurrencyCultureName;
+			ShopCashGUI.Log.DebugFormat("LoadItems. Swordfish GetHardCurrencyProductsWithCultureName - Currency: {0}, CultureInfoName: {1}, TestFormat: {2}", new object[]
+			{
+				currencyCultureName,
+				CultureUtils.GetCultureInfoName(currencyCultureName),
+				CultureUtils.FormatValue(currencyCultureName, Convert.ToDecimal(1.99f))
+			});
+			Debug.Assert(currencyCultureName.Length == RegionInfo.CurrentRegion.ISOCurrencySymbol.Length, string.Format("Invalid CurrencyCultureName:[{0}]. Must be an ISOCurrencySymbol. Current region ISO:[{1}]", currencyCultureName, RegionInfo.CurrentRegion.ISOCurrencySymbol), Debug.TargetTeam.All);
+			HardCurrencyProduct[] hardCurrencyProduct2 = hardCurrencyProduct.HardCurrencyProduct;
+			Array.Sort<HardCurrencyProduct>(hardCurrencyProduct2, new Comparison<HardCurrencyProduct>(this.SortHardCurrencyProducts));
+			for (int i = 0; i < hardCurrencyProduct2.Length; i++)
+			{
+				this.AddShopItem(hardCurrencyProduct2[i], currencyCultureName);
+			}
+			this.gridScript.repositionNow = true;
+			this.gridScript.Reposition();
+			this.LocalizeAndconfigureFilterTitleLabel();
+			if (this.IsVisible())
+			{
+				this._shopCashGuiLoadFeedback.ShowFeedback();
+			}
+		}
+
+		private int SortHardCurrencyProducts(HardCurrencyProduct x, HardCurrencyProduct y)
+		{
+			int num = x.Amount + x.Bonus;
+			int value = y.Amount + y.Bonus;
+			return num.CompareTo(value);
+		}
+
+		private void EnableShopCashItemsDisplay()
+		{
+			this.gridScript.gameObject.SetActive(true);
 		}
 
 		public override void Show()
 		{
-			this._shopCashGuiLoadFeedback.ShowFeedback();
 			base.Show();
+			this._shopCashGuiLoadFeedback.ShowFeedback();
 			this.ShowPage(base.CurrentPage);
 			this.gridScript.Reposition();
+			this.TrySetStoreIcon(true);
+			if (this._shopCashGuiLoadFeedback.GetState() == ShopCashGUILoadFeedbackState.Unavailable)
+			{
+				ObservableExtensions.Subscribe<long>(Platform.Current.ShowEmptyStoreDialog(), delegate(long onNext)
+				{
+				}, delegate(Exception onError)
+				{
+					ShopCashGUI.Log.Error("TRC R4055 breach: Failed to display empty store dialog");
+				});
+			}
 		}
 
 		public override void Hide()
 		{
+			this.TrySetStoreIcon(false);
 			this._shopCashGuiLoadFeedback.HideFeedback();
 			base.Hide();
+			base.gameObject.SetActive(false);
 		}
 
 		public void ShowPage(int page)
@@ -206,17 +236,23 @@ namespace HeavyMetalMachines.Frontend
 			base.UpdatePageButtonControllers();
 		}
 
-		public void OnClickCashItem(int charIndex)
+		public void OnClickCashItem(int cashItemIndex)
 		{
+			this.SetWaitingForTransaction(true);
+			this.TrySetStoreIcon(false);
 			this.SetItemsColliders(false);
-			if (!GameHubBehaviour.Hub.ClientApi.overlay.IsOverlayEnabled())
+			bool flag = GameHubBehaviour.Hub.ClientApi.overlay.IsOverlayEnabled();
+			int serialHardCurrencyProductId = this.ShopCashItemPool[cashItemIndex].SerialHardCurrencyProductId;
+			string text = string.Format("SerialHardCurrencyProductId={0} IsOverlayEnabled={1}", serialHardCurrencyProductId, flag);
+			this._clientBiLogger.BILogClientMsg(123, text, true);
+			if (!flag)
 			{
 				Guid confirmWindowGuid = Guid.NewGuid();
 				ConfirmWindowProperties properties = new ConfirmWindowProperties
 				{
 					Guid = confirmWindowGuid,
-					QuestionText = Language.Get("SHOP_STEAM_OVERLAY_NOT_ENABLED", TranslationSheets.Store),
-					OkButtonText = Language.Get("Ok", "GUI"),
+					QuestionText = Language.Get("SHOP_STEAM_OVERLAY_NOT_ENABLED", TranslationContext.Store),
+					OkButtonText = Language.Get("Ok", TranslationContext.GUI),
 					OnOk = delegate()
 					{
 						GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.HideConfirmWindow(confirmWindowGuid);
@@ -224,15 +260,16 @@ namespace HeavyMetalMachines.Frontend
 					}
 				};
 				GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.OpenConfirmWindow(properties);
+				this.SetWaitingForTransaction(false);
+				this.TrySetStoreIcon(true);
 				return;
 			}
-			this.SetWaitingForTransaction(true);
 			CartItem cartItem = new CartItem
 			{
-				SerialProductId = this.ShopCashItemPool[charIndex].SerialHardCurrencyProductId,
+				SerialProductId = serialHardCurrencyProductId,
 				Quantity = 1
 			};
-			GameHubBehaviour.Hub.ClientApi.billing.SteamPurchaseItem(null, cartItem, new SwordfishClientApi.ParameterizedCallback<long>(this.SteamPurchaseItemOkCallback), new SwordfishClientApi.ErrorCallback(this.SteamPurchaseItemErrorCallback));
+			GameHubBehaviour.Hub.ClientApi.billing.PurchaseItem(null, cartItem, new SwordfishClientApi.ParameterizedCallback<long>(this.SteamPurchaseItemOkCallback), new SwordfishClientApi.ErrorCallback(this.SteamPurchaseItemErrorCallback));
 		}
 
 		private void SteamPurchaseItemErrorCallback(object state, Exception exception)
@@ -240,15 +277,18 @@ namespace HeavyMetalMachines.Frontend
 			ShopCashGUI.Log.Error("SteamPurchaseItemErrorCallback: " + exception.Message);
 			this.SetItemsColliders(true);
 			this.SetWaitingForTransaction(false);
+			this.TrySetStoreIcon(true);
 		}
 
 		private void SteamPurchaseItemOkCallback(object state, long obj)
 		{
+			ShopCashGUI.Log.Debug("SteamPurchaseItemOkCallback");
 			this.SetWaitingForTransaction(false);
+			this.TrySetStoreIcon(true);
 			this._purchaseFeedbackComponent.TryToShowBoughtHardCurrency(delegate
 			{
 				this.SetItemsColliders(true);
-			});
+			}, this._localBalanceStorage);
 		}
 
 		public void GoNextFilter()
@@ -288,46 +328,53 @@ namespace HeavyMetalMachines.Frontend
 			{
 				if (currentFilter == ShopCashGUI.CashGuiFilter.PriceInverted)
 				{
-					this.FilterTitle.text = Language.Get("shop_cash_page_filter_PRICE_DESCENDING", TranslationSheets.Store);
+					this.FilterTitle.text = Language.Get("shop_cash_page_filter_PRICE_DESCENDING", TranslationContext.Store);
 				}
 			}
 			else
 			{
-				this.FilterTitle.text = Language.Get("shop_cash_page_filter_PRICE", TranslationSheets.Store);
+				this.FilterTitle.text = Language.Get("shop_cash_page_filter_PRICE", TranslationContext.Store);
 			}
-		}
-
-		private int GridCustomSort(Transform x, Transform y)
-		{
-			int num = (this._currentFilter != ShopCashGUI.CashGuiFilter.PriceInverted) ? 1 : -1;
-			int num2;
-			bool flag = int.TryParse(x.name, out num2);
-			int value;
-			bool flag2 = int.TryParse(y.name, out value);
-			if (flag && flag2)
-			{
-				return num2.CompareTo(value) * num;
-			}
-			if (flag)
-			{
-				return -1;
-			}
-			if (flag2)
-			{
-				return 1;
-			}
-			return string.CompareOrdinal(x.name, y.name) * num;
 		}
 
 		private void SetWaitingForTransaction(bool waiting)
 		{
+			ShopCashGUI.Log.Debug(string.Format("enable/disable waitingWindow purchase {0}, hash: {1}, InstanceID: {2} ", waiting, this.GetHashCode(), base.GetInstanceID()));
 			if (waiting)
 			{
 				GameHubBehaviour.Hub.GuiScripts.SharedPreGameWindow.ShowWaitingWindow(base.GetType());
 			}
 			else
 			{
-				GameHubBehaviour.Hub.GuiScripts.SharedPreGameWindow.HideWaitinWindow(base.GetType());
+				GameHubBehaviour.Hub.GuiScripts.SharedPreGameWindow.HideWaitingWindow(base.GetType());
+			}
+		}
+
+		private void TrySetStoreIcon(bool show)
+		{
+			if (this.Shop.GetCurrentTab() == ShopGUI.Tab.Cash)
+			{
+				if (Platform.Current.IsConsole())
+				{
+					if (show)
+					{
+						if (!GameHubBehaviour.Hub.ClientApi.publisher.billing.TryShowStoreIcon(0))
+						{
+							ShopCashGUI.Log.Error("TRC R4051 breach: Publisher store icon not displayed");
+						}
+					}
+					else
+					{
+						GameHubBehaviour.Hub.ClientApi.publisher.billing.TryHideStoreIcon();
+					}
+				}
+				else
+				{
+					ShopCashGUI.Log.DebugFormat("TrySetStoreIcon: {0}", new object[]
+					{
+						show
+					});
+				}
 			}
 		}
 
@@ -337,8 +384,8 @@ namespace HeavyMetalMachines.Frontend
 			ConfirmWindowProperties properties = new ConfirmWindowProperties
 			{
 				Guid = confirmWindowGuid,
-				QuestionText = Language.Get("Buy_Item_Error", "Store"),
-				OkButtonText = Language.Get("Ok", "Store"),
+				QuestionText = Language.Get("Buy_Item_Error", TranslationContext.Store),
+				OkButtonText = Language.Get("Ok", TranslationContext.Store),
 				OnOk = delegate()
 				{
 					GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.HideConfirmWindow(confirmWindowGuid);
@@ -349,6 +396,7 @@ namespace HeavyMetalMachines.Frontend
 
 		private void SetItemsColliders(bool isEnabled)
 		{
+			this.Shop.SetBackButtonCollider(isEnabled);
 			for (int i = 0; i < this.ShopCashItemPool.Length; i++)
 			{
 				ShopCashItem shopCashItem = this.ShopCashItemPool[i];
@@ -369,6 +417,9 @@ namespace HeavyMetalMachines.Frontend
 		[Header("[Infra]")]
 		[SerializeField]
 		private PurchaseFeedbackComponent _purchaseFeedbackComponent;
+
+		[Inject]
+		private readonly ILocalBalanceStorage _localBalanceStorage;
 
 		[Header("INTERNAL")]
 		public bool EnableCashShop;
@@ -395,6 +446,9 @@ namespace HeavyMetalMachines.Frontend
 		public Sprite BestValueSprite;
 
 		private bool _disposed;
+
+		[Inject]
+		private IClientBILogger _clientBiLogger;
 
 		private enum CashGuiFilter
 		{

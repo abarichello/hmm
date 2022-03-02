@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.VFX;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Render
@@ -26,13 +27,35 @@ namespace HeavyMetalMachines.Render
 		protected override void OnActivate()
 		{
 			base.OnActivate();
-			this.targetGameObject.SetActive(true);
+			if (this.hideUnhideTargetGameObject)
+			{
+				this.targetGameObject.SetActive(true);
+			}
+			if (!this.baseVFX)
+			{
+				return;
+			}
+			if (this.activateDeactivateBaseVFX)
+			{
+				this.baseVFX.Activate(this.fakeTargetInfo);
+			}
 		}
 
 		protected override void OnDeactivate()
 		{
 			base.OnDeactivate();
-			this.targetGameObject.SetActive(false);
+			if (this.hideUnhideTargetGameObject)
+			{
+				this.targetGameObject.SetActive(false);
+			}
+			if (!this.baseVFX)
+			{
+				return;
+			}
+			if (this.activateDeactivateBaseVFX)
+			{
+				this.baseVFX.SignalDeactivation();
+			}
 		}
 
 		public GameObject targetGameObject;
@@ -54,5 +77,16 @@ namespace HeavyMetalMachines.Render
 		private Vector3 initialPosition;
 
 		private float currentY;
+
+		[SerializeField]
+		private bool hideUnhideTargetGameObject = true;
+
+		[SerializeField]
+		private bool activateDeactivateBaseVFX;
+
+		[SerializeField]
+		private BaseVFX baseVFX;
+
+		protected MasterVFX.TargetFXInfo fakeTargetInfo;
 	}
 }

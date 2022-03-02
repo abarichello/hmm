@@ -1,7 +1,8 @@
 ﻿using System;
 using HeavyMetalMachines.Bank;
+using HeavyMetalMachines.Combat.Gadget;
+using HeavyMetalMachines.DataTransferObjects.Player;
 using HeavyMetalMachines.Infra.Context;
-using HeavyMetalMachines.Swordfish.Player;
 using Pocketverse;
 using Pocketverse.Util;
 using UnityEngine;
@@ -65,7 +66,8 @@ namespace HeavyMetalMachines
 				num = this.DebuffTime;
 				break;
 			}
-			return Mathf.Floor(playerPerformance) / (num * matchTime);
+			float num2 = num * matchTime;
+			return (num2 != 0f) ? (Mathf.Floor(playerPerformance) / num2) : 0f;
 		}
 
 		public void SetPerformance(RewardsBag rewards, PlayerStats stats, IMatchStats matchStats)
@@ -77,6 +79,19 @@ namespace HeavyMetalMachines
 			rewards.RepairDone = rewards2.GetPerformance(stats.HealingProvided, matchTimeSeconds, RewardsInfo.PerformanceIndicatorKind.RepairDone);
 			rewards.BombTime = rewards2.GetPerformance(stats.BombPossessionTime, matchTimeSeconds, RewardsInfo.PerformanceIndicatorKind.BombTime);
 			rewards.DebuffTime = rewards2.GetPerformance(stats.DebuffTime, matchTimeSeconds, RewardsInfo.PerformanceIndicatorKind.DebuffTime);
+			rewards.BombDeliveredCount = stats.BombsDelivered;
+			rewards.KillsCount = stats.KillsAndAssists;
+			rewards.DeathsCount = stats.Deaths;
+			rewards.TotalDamage = (int)stats.DamageDealtToPlayers;
+			rewards.TotalRepair = (int)stats.HealingProvided;
+			rewards.TravelledDistanceKilometers = (int)stats.TravelledDistance / 1000;
+			rewards.TravelledDistanceMeters = (int)stats.TravelledDistance;
+			rewards.SpeedBoostCount = stats.GetGadgetUses(GadgetSlot.BoostGadget);
+			rewards.BombLostCount = stats.BombCarrierKills;
+			rewards.BombStolenCount = stats.BombTakenCount;
+			rewards.TotalBombPossession = (int)stats.BombPossessionTime;
+			rewards.TotalDebuffTime = (int)stats.DebuffTime;
+			rewards.TotalTimePlayed = GameHubScriptableObject.Hub.GameTime.MatchTimer.GetTime() / 1000;
 			if (RewardsInfo.GetPerformanceMedal(rewards.DamageDone) > 0)
 			{
 				num++;
@@ -123,6 +138,10 @@ namespace HeavyMetalMachines
 		public int RankedWinScrapAmount;
 
 		public int RankedLoseScrapAmount;
+
+		public int TournamentWinScrapAmount;
+
+		public int TournamentLoseScrapAmount;
 
 		[Header("Performance indicators")]
 		public float DamageDone;

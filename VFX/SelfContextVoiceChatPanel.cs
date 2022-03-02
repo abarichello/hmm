@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Collections;
-using HeavyMetalMachines.VFX.PlotKids.VoiceChat;
+using HeavyMetalMachines.VoiceChat.Business;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.VFX
 {
@@ -15,16 +16,17 @@ namespace HeavyMetalMachines.VFX
 
 		public void onButtonClick_EnableDesableVoiceChat()
 		{
-			SingletonMonoBehaviour<VoiceChatController>.Instance.IsMicEnabled = !SingletonMonoBehaviour<VoiceChatController>.Instance.IsMicEnabled;
+			this._enableOrDisableLocalPlayerVoiceChatMicrophone.Toggle();
 			this.EnableDisableVoiceChat();
 		}
 
 		private void EnableDisableVoiceChat()
 		{
-			this._micIcon_ActivatedSprite.enabled = SingletonMonoBehaviour<VoiceChatController>.Instance.IsMicEnabled;
-			this._micIcon_DesactivatedSprite.enabled = !SingletonMonoBehaviour<VoiceChatController>.Instance.IsMicEnabled;
-			this._mic_Activated_Label.enabled = !SingletonMonoBehaviour<VoiceChatController>.Instance.IsMicEnabled;
-			this._mic_Desactivated_Label.enabled = SingletonMonoBehaviour<VoiceChatController>.Instance.IsMicEnabled;
+			bool flag = this._isLocalPlayerMicrophoneEnabled.IsEnabled();
+			this._micIcon_ActivatedSprite.enabled = flag;
+			this._micIcon_DesactivatedSprite.enabled = !flag;
+			this._mic_Activated_Label.enabled = !flag;
+			this._mic_Desactivated_Label.enabled = flag;
 		}
 
 		public void onButtonClick_Close()
@@ -55,5 +57,11 @@ namespace HeavyMetalMachines.VFX
 
 		[NonSerialized]
 		public SocialModalGUI ParentGUI;
+
+		[Inject]
+		private IEnableOrDisableLocalPlayerVoiceChatMicrophone _enableOrDisableLocalPlayerVoiceChatMicrophone;
+
+		[Inject]
+		private IIsLocalPlayerMicrophoneEnabled _isLocalPlayerMicrophoneEnabled;
 	}
 }

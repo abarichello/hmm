@@ -1,16 +1,26 @@
 ﻿using System;
 using System.Diagnostics;
+using HeavyMetalMachines.Localization;
 using HeavyMetalMachines.Options;
+using HeavyMetalMachines.Presenting;
+using HeavyMetalMachines.VFX;
 using Holoville.HOTween;
-using Holoville.HOTween.Core;
 using Pocketverse;
-using SharedUtils.Loading;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Frontend
 {
-	public class GuiLoadingController : GameHubBehaviour
+	public class GuiLoadingController : GameHubBehaviour, IGenericLoadingPresenter
 	{
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
+		public event GuiLoadingController.OnHidingAnimationComplete OnHidingAnimationCompleted;
+
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
+		public event GuiLoadingController.OnShowAnimationComplete OnShowAnimationCompleted;
+
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
+		public event Action OnHideLoading;
+
 		public bool IsLoading
 		{
 			get
@@ -23,66 +33,53 @@ namespace HeavyMetalMachines.Frontend
 		{
 			this._loading = this.LoadingPanel.gameObject.activeInHierarchy;
 			this.LoadingPanel.alpha = (float)((!this._loading) ? 0 : 1);
-			this.LoadingProgressBar.value = 0f;
-			this.TutorialLoadingStarted = false;
-		}
-
-		private void Update()
-		{
-			this.isFakingProgress &= !LoadingManager.IsLoading;
-			this.LoadingProgressBar.value = Mathf.Clamp(this.LoadingProgressBar.value + Time.deltaTime * UnityEngine.Random.value / 60f, this.minFakeProgress, this.maxFakeProgress);
-			if (!this.isFakingProgress)
-			{
-				this.LoadingProgressBar.value = Mathf.Max(this.LoadingProgressBar.value, SingletonMonoBehaviour<LoadingManager>.Instance.InterpolatedProgress);
-			}
 		}
 
 		public void ShowDefaultLoading(bool useLoadingTransition = false)
 		{
-			this._shouldLoading = true;
 			if (this._loading)
 			{
+				GuiLoadingController.Log.Info("Not showing loading screen because it is already being shown.");
 				return;
 			}
+			this.ForceShowDefaultLoading(useLoadingTransition);
+		}
+
+		private void ForceShowDefaultLoading(bool useLoadingTransition = false)
+		{
 			this.TutorialUIHolder.SetActive(false);
 			this.DefaultBackground.gameObject.SetActive(true);
 			this.TutorialBackground.gameObject.SetActive(false);
-			this.DefaultBackground.color = ((!useLoadingTransition) ? Color.white : this.backgroundColorLoading);
-			this.ShowLoading(useLoadingTransition);
+			this.DefaultBackground.color = Color.white;
+			GuiLoadingController.Log.Info("Showing default loading screen.");
+			this.ShowLoading();
 		}
 
 		public void ShowTutorialLoading(bool useLoadingTransition = false)
 		{
-			this._shouldLoading = true;
 			this.TutorialUIHolder.SetActive(true);
 			this.TutorialBackground.gameObject.SetActive(true);
 			this.DefaultBackground.gameObject.SetActive(false);
-			this.TutorialUIHolder.SetActive(true);
-			this.TutorialBackground.gameObject.SetActive(true);
-			this.DefaultBackground.gameObject.SetActive(false);
-			this.LoadingProgressBar.value = 0f;
-			this.isFakingProgress = true;
-			this.TutorialBackground.color = ((!useLoadingTransition) ? Color.white : this.backgroundColorLoading);
-			this.ShowLoading(useLoadingTransition);
+			this.TutorialBackground.color = Color.white;
+			this.SetupTutorialInputInfo();
+			GuiLoadingController.Log.Info("Showing tutorial loading screen.");
+			this.ShowLoading();
 		}
 
-		public void ShowLoading(bool loadingTransition)
+		private void SetupTutorialInputInfo()
 		{
-			this.titleLabel.text = Language.Get("Loading_loading", TranslationSheets.Loading);
+			this._windowsPlatformGroupGameObject.SetActive(true);
+		}
+
+		private void ShowLoading()
+		{
+			this.titleLabel.text = Language.Get("Loading_loading", TranslationContext.Loading);
 			this.ResetText();
-			LoadingManager.WarnIfBundleLoad = false;
 			this.LoadingPanel.alpha = 0f;
 			this.LoadingPanel.gameObject.SetActive(true);
 			HOTween.Kill(this.LoadingPanel);
-			if (loadingTransition)
-			{
-				HOTween.To(this.LoadingPanel, 0.5f, new TweenParms().Prop("alpha", 1).UpdateType(UpdateType.TimeScaleIndependentUpdate).OnComplete(new TweenDelegate.TweenCallback(this.OnShowComplete)));
-			}
-			else
-			{
-				this.LoadingPanel.alpha = 1f;
-				this.OnShowComplete();
-			}
+			this.LoadingPanel.alpha = 1f;
+			this.OnShowComplete();
 			this.ShowRandomizedTip();
 			this._loading = true;
 		}
@@ -95,34 +92,21 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		public event Action OnHideLoading;
-
 		public void HideLoading()
 		{
-			this._shouldLoading = false;
+			GuiLoadingController.Log.InfoFormatStackTrace("OnHideLoading", new object[0]);
 			if (this.OnHideLoading != null)
 			{
+				GuiLoadingController.Log.Info("Not hiding loading screen because it is already hidden.");
 				this.OnHideLoading();
 			}
 			if (!this._loading)
 			{
 				return;
 			}
-			if (SingletonMonoBehaviour<LoadingManager>.Instance.InterpolatedProgress < 1f && this.LoadingProgressBar.gameObject.activeInHierarchy)
-			{
-				SingletonMonoBehaviour<LoadingManager>.Instance.OnInterpolatedProgressFinished += this.OnInterpolatedLoadingProgressFinished;
-				return;
-			}
-			this.OnInterpolatedLoadingProgressFinished();
-		}
-
-		private void OnInterpolatedLoadingProgressFinished()
-		{
 			HOTween.Kill(this.LoadingPanel);
-			HOTween.To(this.LoadingPanel, 1f, new TweenParms().Prop("alpha", 0).UpdateType(UpdateType.TimeScaleIndependentUpdate).OnComplete(new TweenDelegate.TweenCallback(this.OnHideComplete)));
+			this.OnHideComplete();
 			this._loading = false;
-			LoadingManager.WarnIfBundleLoad = true;
 		}
 
 		private void OnHideComplete()
@@ -134,15 +118,9 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		public event GuiLoadingController.OnHidingAnimationComplete OnHidingAnimationCompleted;
-
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		public event GuiLoadingController.OnShowAnimationComplete OnShowAnimationCompleted;
-
-		public void ResetText()
+		private void ResetText()
 		{
-			this.ChangeText(Language.Get("Loading_loading", TranslationSheets.Loading));
+			this.ChangeText(Language.Get("Loading_loading", TranslationContext.Loading));
 		}
 
 		public void ChangeText(string text)
@@ -153,59 +131,89 @@ namespace HeavyMetalMachines.Frontend
 		private void ShowRandomizedTip()
 		{
 			this.TipLabelGroupGameObject.SetActive(false);
-			if (this.TipsSettings.Tips.Length == 0)
+			GameState.GameStateKind stateKind = GameHubBehaviour.Hub.State.Current.StateKind;
+			if (stateKind == GameState.GameStateKind.Splash || stateKind == GameState.GameStateKind.Welcome)
 			{
-				GuiLoadingController.Log.ErrorFormat("No tip defined for loading screen. Please check the asset [{0}]", new object[]
+				return;
+			}
+			this.ThirdPartyLogosGroupGameObject.SetActive(false);
+			LoadingTip[] tipList = this.GetTipList();
+			if (tipList.Length == 0)
+			{
+				GuiLoadingController.Log.ErrorFormat("No tip defined for loading screen [IsConsole={0}]. Please check the asset [{1}].", new object[]
 				{
+					Platform.Current.IsConsole(),
 					this.TipsSettings
 				});
 				return;
 			}
-			LoadingTip loadingTip = this.TipsSettings.Tips[UnityEngine.Random.Range(0, this.TipsSettings.Tips.Length)];
-			if (!string.IsNullOrEmpty(loadingTip.TranslationDraft))
+			LoadingTip loadingTip = tipList[Random.Range(0, tipList.Length)];
+			if (!string.IsNullOrEmpty(loadingTip.TranslationDraft.CurrentPlatformDraft))
 			{
 				this.TipLabelGroupGameObject.SetActive(true);
-				this.TipLabel.text = Language.Get(loadingTip.TranslationDraft, loadingTip.TranslationSheet);
+				this.TipLabel.text = Language.Get(loadingTip.TranslationDraft.CurrentPlatformDraft, loadingTip.TranslationSheet);
 			}
 		}
 
-		public static readonly BitLogger Log = new BitLogger(typeof(GuiLoadingController));
+		private LoadingTip[] GetTipList()
+		{
+			return (!Platform.Current.IsConsole()) ? this.TipsSettings.Tips : this.TipsSettings.ConsoleTips;
+		}
 
-		[Header("Default")]
-		public UI2DSprite DefaultBackground;
+		public void Show()
+		{
+			this.ForceShowDefaultLoading(false);
+		}
 
-		public UIPanel LoadingPanel;
+		public void Hide()
+		{
+			this.HideLoading();
+		}
 
-		public UILabel titleLabel;
+		private static readonly BitLogger Log = new BitLogger(typeof(GuiLoadingController));
 
-		public Color backgroundColorLoading;
+		[Header("[Default]")]
+		[SerializeField]
+		private HMMUI2DDynamicTexture DefaultBackground;
 
-		public LoadingTipsSettings TipsSettings;
+		[SerializeField]
+		private UIPanel LoadingPanel;
 
-		public GameObject TipLabelGroupGameObject;
+		[SerializeField]
+		private UILabel titleLabel;
 
-		public UILabel TipLabel;
+		[SerializeField]
+		private Color backgroundColorLoading;
 
-		[Header("Tutorial")]
-		public UI2DSprite TutorialBackground;
+		[SerializeField]
+		private LoadingTipsSettings TipsSettings;
 
-		public GameObject TutorialUIHolder;
+		[SerializeField]
+		private GameObject TipLabelGroupGameObject;
 
-		public UIProgressBar LoadingProgressBar;
+		[SerializeField]
+		private GameObject ThirdPartyLogosGroupGameObject;
 
-		public bool TutorialLoadingStarted;
+		[SerializeField]
+		private UILabel TipLabel;
+
+		[Header("[Tutorial]")]
+		[SerializeField]
+		private UI2DSprite TutorialBackground;
+
+		[SerializeField]
+		private GameObject TutorialUIHolder;
+
+		[SerializeField]
+		private GameObject _windowsPlatformGroupGameObject;
+
+		[SerializeField]
+		private GameObject _orbisPlatformGroupGameObject;
+
+		[SerializeField]
+		private GameObject _xboxOnePlatformGroupGameObject;
 
 		private bool _loading;
-
-		private bool _shouldLoading;
-
-		private const float expectedLoadingTime = 60f;
-
-		private float minFakeProgress;
-
-		private float maxFakeProgress = 0.95f;
-
-		private bool isFakingProgress = true;
 
 		public delegate void OnHidingAnimationComplete();
 

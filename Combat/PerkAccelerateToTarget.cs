@@ -1,10 +1,8 @@
 ﻿using System;
 using Pocketverse;
-using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	[RequireComponent(typeof(Rigidbody))]
 	public class PerkAccelerateToTarget : PerkMoveToTarget
 	{
 		public override void PerkInitialized()

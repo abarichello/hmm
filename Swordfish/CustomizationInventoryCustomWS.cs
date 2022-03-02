@@ -1,6 +1,6 @@
 ﻿using System;
 using ClientAPI;
-using Commons.Swordfish.Progression;
+using HeavyMetalMachines.DataTransferObjects.Progression;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Swordfish

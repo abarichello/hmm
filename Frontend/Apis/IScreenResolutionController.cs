@@ -8,5 +8,7 @@ namespace HeavyMetalMachines.Frontend.Apis
 		Vector2 GetClientWindowDimensions();
 
 		Vector2 GetClientWindowOffset();
+
+		Resolution GetCurrentResolution();
 	}
 }

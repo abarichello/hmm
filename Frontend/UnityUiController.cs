@@ -10,7 +10,7 @@ namespace HeavyMetalMachines.Frontend
 		{
 			if (!GameHubBehaviour.Hub.Net.IsClient())
 			{
-				UnityEngine.Object.Destroy(base.gameObject);
+				Object.Destroy(base.gameObject);
 				return;
 			}
 			Camera mainCamera = UICamera.mainCamera;
@@ -24,7 +24,7 @@ namespace HeavyMetalMachines.Frontend
 		{
 			if (visibility)
 			{
-				UnityEngine.Object.Destroy(base.gameObject);
+				Object.Destroy(base.gameObject);
 			}
 		}
 
@@ -40,7 +40,7 @@ namespace HeavyMetalMachines.Frontend
 			{
 				return;
 			}
-			UnityEngine.Object.Destroy(base.gameObject);
+			Object.Destroy(base.gameObject);
 		}
 
 		public void OnDestroy()

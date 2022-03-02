@@ -1,10 +1,13 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using HeavyMetalMachines.Bank;
-using HeavyMetalMachines.Character;
+using HeavyMetalMachines.Characters;
 using HeavyMetalMachines.Event;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Memory;
 using Pocketverse;
 using Pocketverse.MuralContext;
 using UnityEngine;
@@ -20,7 +23,7 @@ namespace HeavyMetalMachines.Combat
 				LevelSpawn result;
 				if ((result = this._spawn) == null)
 				{
-					result = (this._spawn = (LevelSpawn)UnityEngine.Object.FindObjectOfType(typeof(LevelSpawn)));
+					result = (this._spawn = (LevelSpawn)Object.FindObjectOfType(typeof(LevelSpawn)));
 				}
 				return result;
 			}
@@ -112,9 +115,9 @@ namespace HeavyMetalMachines.Combat
 			this.ListenToObjectDeath = null;
 		}
 
-		private void OnPhaseChanged(BombScoreBoard.State state)
+		private void OnPhaseChanged(BombScoreboardState state)
 		{
-			if (state != BombScoreBoard.State.Shop)
+			if (state != BombScoreboardState.Shop)
 			{
 				return;
 			}
@@ -151,7 +154,7 @@ namespace HeavyMetalMachines.Combat
 			BaseSpawnManager.Log.InfoFormat("Creating character={1} for={0} ObjectId={2}", new object[]
 			{
 				player.PlayerAddress,
-				player.Character.Character,
+				player.GetCharacter(),
 				objId
 			});
 			Transform transform = (!this.Spawn) ? base.transform : this.Spawn.GetStart(player);
@@ -163,6 +166,10 @@ namespace HeavyMetalMachines.Combat
 			spawnData.SourceEventId = -1;
 			spawnData.PlayerAddress = player.PlayerAddress;
 			spawnData.EventKind = PlayerEvent.Kind.Create;
+			BaseSpawnManager.Log.DebugFormat("configuring CarGenerator {0}", new object[]
+			{
+				player.PlayerAddress
+			});
 			IFuture<Identifiable> fut = new Future<Identifiable>();
 			this.GetFactory().OrderObject(objId, fut);
 			Vector3 spawnPos = transform.position;
@@ -170,6 +177,10 @@ namespace HeavyMetalMachines.Combat
 			this.BuildQueue.Add(objId, fut);
 			fut.WhenDone(delegate(IFuture future)
 			{
+				BaseSpawnManager.Log.DebugFormat("CreatePlayer: factory ordered: ", new object[]
+				{
+					this.name
+				});
 				player.CharacterInstance = fut.Result;
 				player.CharacterInstance.transform.position = spawnPos;
 				player.CharacterInstance.transform.rotation = spawnRot;
@@ -357,6 +368,10 @@ namespace HeavyMetalMachines.Combat
 			}
 			if (!flag)
 			{
+				BaseSpawnManager.Log.DebugFormat("Player not found: {0}", new object[]
+				{
+					data.TargetId
+				});
 				IFuture<Identifiable> future;
 				if (this.BuildQueue.TryGetValue(data.TargetId, out future))
 				{
@@ -385,7 +400,11 @@ namespace HeavyMetalMachines.Combat
 			{
 				if (this.Players[i].Player.PlayerCarId == data.TargetId)
 				{
-					this.Players[i].Unspawn(data.Location, data.Reason, data.CauserId);
+					if (GameHubBehaviour.Hub.Net.IsClient() && this.Players[i].Player.PlayerCarId == GameHubBehaviour.Hub.Players.CurrentPlayerData.PlayerCarId)
+					{
+						base.StartCoroutine(this.CollectGC());
+					}
+					this.Players[i].Unspawn(data.Location, data.Reason, data.CauserId, data.TargetId);
 					break;
 				}
 			}
@@ -400,6 +419,20 @@ namespace HeavyMetalMachines.Combat
 			this.ListenToObjectUnspawn(data);
 		}
 
+		private IEnumerator CollectGC()
+		{
+			for (int i = 0; i < 10; i++)
+			{
+				yield return null;
+			}
+			GarbageCollector.Collect("Local player has been unspawned.");
+			for (int j = 0; j < 10; j++)
+			{
+				yield return null;
+			}
+			yield break;
+		}
+
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event BaseSpawnManager.PlayerUnspawnListener ListenToObjectUnspawn;
 
@@ -408,20 +441,20 @@ namespace HeavyMetalMachines.Combat
 
 		private void CheckPlayer(SpawnController controller)
 		{
-			if (GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreBoard.State.PreReplay || GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreBoard.State.Replay)
+			if (GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreboardState.PreReplay || GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreboardState.Replay)
 			{
 				return;
 			}
 			switch (controller.State)
 			{
-			case SpawnController.StateType.Unspawned:
+			case SpawnStateKind.Unspawned:
 				if (!controller.ShouldFinishDeathTime())
 				{
 					return;
 				}
 				this.DeathTimeFinished(controller);
 				break;
-			case SpawnController.StateType.PreSpawned:
+			case SpawnStateKind.PreSpawned:
 			{
 				BaseSpawnManager.PlayerRespawnInfos playerRespawnInfos;
 				this.PlayerRespawnInfosDic.TryGetValue(controller.Player.PlayerCarId, out playerRespawnInfos);
@@ -440,7 +473,7 @@ namespace HeavyMetalMachines.Combat
 				}
 				break;
 			}
-			case SpawnController.StateType.Respawning:
+			case SpawnStateKind.Respawning:
 			{
 				BaseSpawnManager.PlayerRespawnInfos playerRespawnInfos;
 				this.PlayerRespawnInfosDic.TryGetValue(controller.Player.PlayerCarId, out playerRespawnInfos);
@@ -456,7 +489,7 @@ namespace HeavyMetalMachines.Combat
 
 		protected virtual void DeathTimeFinished(SpawnController controller)
 		{
-			if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState != BombScoreBoard.State.BombDelivery)
+			if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState != BombScoreboardState.BombDelivery)
 			{
 				Transform spawn = controller.GetSpawn();
 				this.ForceObjectSpawn(controller, spawn.position, spawn.forward);

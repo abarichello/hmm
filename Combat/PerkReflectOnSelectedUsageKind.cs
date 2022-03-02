@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkReflectOnSelectedUsageKind : BasePerk, IPerkWithCollision, DestroyEffect.IDestroyEffectListener
+	public class PerkReflectOnSelectedUsageKind : BasePerk, IPerkWithCollision, DestroyEffectMessage.IDestroyEffectListener
 	{
 		public override void PerkInitialized()
 		{
@@ -40,13 +40,13 @@ namespace HeavyMetalMachines.Combat
 		{
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (GameHubBehaviour.Hub.Net.IsClient() || !this.UsageKind.HasFlag(PerkUsageKind.OnDestroy))
 			{
 				return;
 			}
-			Collider[] array = Physics.OverlapSphere(evt.RemoveData.Origin, this._latestRadius, 1085471744);
+			Collider[] array = Physics.OverlapSphere(evt.RemoveData.Origin, this._latestRadius, 1085467648);
 			for (int i = 0; i < array.Length; i++)
 			{
 				Collider collider = array[i];

@@ -30,7 +30,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			this._doubleShoot.SetLevel(upgradeName, level);
 		}
 
-		protected override void OnMyEffectDestroyed(DestroyEffect evt)
+		protected override void OnMyEffectDestroyed(DestroyEffectMessage evt)
 		{
 			if (this._doubleShoot.BoolGet())
 			{

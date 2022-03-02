@@ -4,8 +4,9 @@ using System.Diagnostics;
 using System.Linq;
 using ClientAPI;
 using ClientAPI.Objects;
-using Commons.Swordfish.Progression;
-using HeavyMetalMachines.Swordfish.Player;
+using HeavyMetalMachines.DataTransferObjects.Progression;
+using HeavyMetalMachines.Items.DataTransferObjects;
+using Hoplon.Serialization;
 using Pocketverse;
 
 namespace HeavyMetalMachines
@@ -13,17 +14,11 @@ namespace HeavyMetalMachines
 	public class PlayerInventory : GameHubBehaviour
 	{
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		public event System.Action OnInvetoryReload;
+		public event Action OnInvetoryReload;
 
 		public bool HasItemOfType(Guid itemTypeId)
 		{
 			return this._ownedItensQuantity.ContainsKey(itemTypeId);
-		}
-
-		public bool HasMaxStackItemType(ClientAPI.Objects.ItemType itemType)
-		{
-			int num;
-			return this._ownedItensQuantity.TryGetValue(itemType.Id, out num) && num >= itemType.MaxStackSize;
 		}
 
 		public InventoryAdapter GetInventory(PlayerInventory.Check check)
@@ -50,7 +45,7 @@ namespace HeavyMetalMachines
 			for (int i = 0; i < this.Inventories.Length; i++)
 			{
 				InventoryAdapter inventoryAdapter = this.Inventories[i];
-				InventoryBag inventoryBag = (InventoryBag)((JsonSerializeable<T>)inventoryAdapter.Inventory.Bag);
+				InventoryBag inventoryBag = (InventoryBag)((JsonSerializeable<!0>)inventoryAdapter.Inventory.Bag);
 				if (inventoryBag != null && inventoryBag.Kind == inventoryKind)
 				{
 					return inventoryAdapter;
@@ -63,31 +58,6 @@ namespace HeavyMetalMachines
 		{
 			InventoryAdapter inventoryAdapterByKind = this.GetInventoryAdapterByKind(inventoryKind);
 			return (inventoryAdapterByKind != null) ? inventoryAdapterByKind.Inventory : null;
-		}
-
-		[Obsolete]
-		public InventoryAdapter GetInventoryFor(Category cat)
-		{
-			InventoryBag.InventoryKind kind = InventoryBag.InventoryKind.Customization;
-			if (cat != Category.Characters)
-			{
-				if (cat != Category.Boosters)
-				{
-					if (cat == Category.Announcer)
-					{
-						kind = InventoryBag.InventoryKind.Account;
-					}
-				}
-				else
-				{
-					kind = InventoryBag.InventoryKind.Boosters;
-				}
-			}
-			else
-			{
-				kind = InventoryBag.InventoryKind.Characters;
-			}
-			return this.GetInventory((InventoryAdapter i) => ((InventoryBag)((JsonSerializeable<T>)i.Inventory.Bag)).Kind == kind);
 		}
 
 		public Item GetItemById(long itemId)
@@ -148,6 +118,18 @@ namespace HeavyMetalMachines
 			}
 			this._ownedItensQuantity.Clear();
 			this.Inventories = this.AdpatedInventoryies(inventories, allItems);
+			PlayerInventory.Log.Debug("SetAllReloadedItems - Inventories: " + this.Inventories.Length);
+		}
+
+		public void RefreshPlayerCustomizations()
+		{
+			Inventory inventoryByKind = this.GetInventoryByKind(3);
+			InventoryBag inventoryBag = (InventoryBag)((JsonSerializeable<!0>)inventoryByKind.Bag);
+			CustomizationContent customizationContent = new CustomizationContent();
+			customizationContent.DeserializeAndUpdate(inventoryBag.Content);
+			customizationContent.SyncDictionary();
+			this.Customizations = customizationContent;
+			PlayerInventory.Log.Debug("RefreshPlayerCustomizations: " + inventoryBag.Content);
 		}
 
 		public void ReloadInventoryByID(long inventoryId)
@@ -165,7 +147,7 @@ namespace HeavyMetalMachines
 
 		private void OnGetInventorySucess(object state, Inventory inventory)
 		{
-			InventoryBag inventoryBag = (InventoryBag)((JsonSerializeable<T>)inventory.Bag);
+			InventoryBag inventoryBag = (InventoryBag)((JsonSerializeable<!0>)inventory.Bag);
 			if (inventoryBag == null)
 			{
 				return;
@@ -198,7 +180,7 @@ namespace HeavyMetalMachines
 			for (int i = 0; i < this.Inventories.Length; i++)
 			{
 				InventoryAdapter inventoryAdapter = this.Inventories[i];
-				InventoryBag inventoryBag = (InventoryBag)((JsonSerializeable<T>)inventoryAdapter.Inventory.Bag);
+				InventoryBag inventoryBag = (InventoryBag)((JsonSerializeable<!0>)inventoryAdapter.Inventory.Bag);
 				if (inventoryBag != null && inventoryBag.Kind == inventoryKind)
 				{
 					return i;
@@ -207,28 +189,32 @@ namespace HeavyMetalMachines
 			return -1;
 		}
 
-		public void ReloadItem(long itemId, System.Action whenDone = null)
+		public void FetchItem(long itemId, Action<Item> successCallback = null, Action<Exception> errorCallback = null)
 		{
 			GameHubBehaviour.Hub.ClientApi.inventory.GetItemById(null, itemId, delegate(object state, Item item)
 			{
-				InventoryAdapter inventory = this.GetInventory((InventoryAdapter i) => i.Inventory.Id == item.InventoryId);
-				inventory.ConcatItem(item);
-				if (whenDone != null)
+				if (successCallback != null)
 				{
-					whenDone();
+					successCallback(item);
 				}
-				this.PopulateOwnedItensDictionary(item.ItemTypeId);
 			}, delegate(object state, Exception exception)
 			{
-				PlayerInventory.Log.ErrorFormat("Error when reloading item! Exception={0}", new object[]
+				PlayerInventory.Log.ErrorFormat("Error when fetching item. Exception={0}", new object[]
 				{
 					exception
 				});
-				if (whenDone != null)
+				if (errorCallback != null)
 				{
-					whenDone();
+					errorCallback(exception);
 				}
 			});
+		}
+
+		public void AddItem(Item item)
+		{
+			InventoryAdapter inventory = this.GetInventory((InventoryAdapter i) => i.Inventory.Id == item.InventoryId);
+			inventory.ConcatItem(item);
+			this.PopulateOwnedItensDictionary(item.ItemTypeId);
 		}
 
 		public void ReloadItemByItemTypeId(Guid itemTypeId, long inventoryId, Action<long> whenDone = null)
@@ -242,7 +228,7 @@ namespace HeavyMetalMachines
 					return;
 				}
 				Item item = items[num];
-				long itemId = inventoryAdapter.GetItemId(itemTypeId);
+				long itemId = inventoryAdapter.GetItemId(item.ItemTypeId);
 				if (itemId < 0L)
 				{
 					inventoryAdapter.ConcatItem(item);
@@ -284,7 +270,7 @@ namespace HeavyMetalMachines
 			}).ToArray<Item>();
 		}
 
-		public void ReloadAllItems(System.Action whenDone = null)
+		public void ReloadAllItems(Action whenDone = null)
 		{
 			new PlayerInventory.InventoryLoadingState(whenDone, this);
 		}
@@ -312,7 +298,7 @@ namespace HeavyMetalMachines
 
 		private class InventoryLoadingState
 		{
-			public InventoryLoadingState(System.Action whenDone, PlayerInventory playerInventory)
+			public InventoryLoadingState(Action whenDone, PlayerInventory playerInventory)
 			{
 				this._thisCallVersion = PlayerInventory.InventoryLoadingState._callVersion++;
 				this._playerPlayerInventory = playerInventory;
@@ -360,7 +346,7 @@ namespace HeavyMetalMachines
 
 			private static int _callVersion;
 
-			private System.Action _whenDone;
+			private Action _whenDone;
 
 			private PlayerInventory _playerPlayerInventory;
 

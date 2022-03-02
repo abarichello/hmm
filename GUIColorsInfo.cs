@@ -2,11 +2,324 @@
 using HeavyMetalMachines.Match;
 using Pocketverse;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace HeavyMetalMachines
 {
-	public class GUIColorsInfo : GameHubScriptableObject
+	public class GUIColorsInfo : GameHubScriptableObject, IGUIColorsInfo
 	{
+		public Color MyColor
+		{
+			get
+			{
+				return this._myColor;
+			}
+		}
+
+		public Color BlueTeamColor
+		{
+			get
+			{
+				return this._blueTeamColor;
+			}
+		}
+
+		public Color BlueTeamColorOld
+		{
+			get
+			{
+				return this._blueTeamColorOld;
+			}
+		}
+
+		public Color RedTeamColor
+		{
+			get
+			{
+				return this._redTeamColor;
+			}
+		}
+
+		public Color Victory
+		{
+			get
+			{
+				return this._victory;
+			}
+		}
+
+		public Color Defeat
+		{
+			get
+			{
+				return this._defeat;
+			}
+		}
+
+		public Color DifficultyLevel0
+		{
+			get
+			{
+				return this._difficultyLevel0;
+			}
+		}
+
+		public Color DifficultyLevel1
+		{
+			get
+			{
+				return this._difficultyLevel1;
+			}
+		}
+
+		public Color DifficultyLevel2
+		{
+			get
+			{
+				return this._difficultyLevel2;
+			}
+		}
+
+		public Color DifficultyLevel3
+		{
+			get
+			{
+				return this._difficultyLevel3;
+			}
+		}
+
+		public Color DifficultyLevel4
+		{
+			get
+			{
+				return this._difficultyLevel4;
+			}
+		}
+
+		public Color DifficultyLevel5
+		{
+			get
+			{
+				return this._difficultyLevel5;
+			}
+		}
+
+		public Color HealColor
+		{
+			get
+			{
+				return this._healColor;
+			}
+		}
+
+		public Color DamageColor
+		{
+			get
+			{
+				return this._damageColor;
+			}
+		}
+
+		public Color OwnDamageColor
+		{
+			get
+			{
+				return this._ownDamageColor;
+			}
+		}
+
+		public Color RespawnCrosshairColor
+		{
+			get
+			{
+				return this._respawnCrosshairColor;
+			}
+		}
+
+		public Color HighPingColor
+		{
+			get
+			{
+				return this._highPingColor;
+			}
+		}
+
+		public Color HighPingColorSecondary
+		{
+			get
+			{
+				return this._highPingColorSecondary;
+			}
+		}
+
+		public Color MediumPingColor
+		{
+			get
+			{
+				return this._mediumPingColor;
+			}
+		}
+
+		public Color MediumPingColorSecondary
+		{
+			get
+			{
+				return this._mediumPingColorSecondary;
+			}
+		}
+
+		public Color LowPingColor
+		{
+			get
+			{
+				return this._lowPingColor;
+			}
+		}
+
+		public Color LowPingColorSecondary
+		{
+			get
+			{
+				return this._lowPingColorSecondary;
+			}
+		}
+
+		public Color NoPingColor
+		{
+			get
+			{
+				return this._noPingColor;
+			}
+		}
+
+		public Color PingHighGradientTopColor
+		{
+			get
+			{
+				return this._pingHighGradientTopColor;
+			}
+		}
+
+		public Color PingHighGradientBottonColor
+		{
+			get
+			{
+				return this._pingHighGradientBottonColor;
+			}
+		}
+
+		public Color PingMediumGradientTopColor
+		{
+			get
+			{
+				return this._pingMediumGradientTopColor;
+			}
+		}
+
+		public Color PingMediumGradientBottonColor
+		{
+			get
+			{
+				return this._pingMediumGradientBottonColor;
+			}
+		}
+
+		public Color PingLowGradientTopColor
+		{
+			get
+			{
+				return this._pingLowGradientTopColor;
+			}
+		}
+
+		public Color PingLowGradientBottonColor
+		{
+			get
+			{
+				return this._pingLowGradientBottonColor;
+			}
+		}
+
+		public Color MyChatColor
+		{
+			get
+			{
+				return this._myChatColor;
+			}
+		}
+
+		public Color MyTeamChatColor
+		{
+			get
+			{
+				return this._myTeamChatColor;
+			}
+		}
+
+		public Color EnemyTeamChatColor
+		{
+			get
+			{
+				return this._enemyTeamChatColor;
+			}
+		}
+
+		public Color StorytellerChatColor
+		{
+			get
+			{
+				return this._storytellerChatColor;
+			}
+		}
+
+		public Color TeamTagColor
+		{
+			get
+			{
+				return this._teamTagColor;
+			}
+		}
+
+		public Color InstanceUtilityColor
+		{
+			get
+			{
+				return this._instanceUtilityColor;
+			}
+		}
+
+		public Color InstanceOffensiveColor
+		{
+			get
+			{
+				return this._instanceOffensiveColor;
+			}
+		}
+
+		public Color InstanceSupportColor
+		{
+			get
+			{
+				return this._instanceSupportColor;
+			}
+		}
+
+		public Color InstanceSurvivalColor
+		{
+			get
+			{
+				return this._instanceSurvivalColor;
+			}
+		}
+
+		public PlayerColorsInfo PlayerColorsInfo
+		{
+			get
+			{
+				return this._playerColorsInfo;
+			}
+		}
+
 		public static GUIColorsInfo Instance
 		{
 			get
@@ -41,13 +354,29 @@ namespace HeavyMetalMachines
 			return GUIColorsInfo.Instance.RedTeamColor;
 		}
 
-		public static Color GetChatColor(long playerId, TeamKind teamKind)
+		public static Color GetChatColor(long playerId, TeamKind teamKind, bool isStoryteller)
 		{
-			if (playerId == GameHubScriptableObject.Hub.Players.CurrentPlayerData.PlayerId)
+			PlayerData currentPlayerData = GameHubScriptableObject.Hub.Players.CurrentPlayerData;
+			if (playerId == currentPlayerData.PlayerId)
 			{
 				return GUIColorsInfo.Instance.MyChatColor;
 			}
-			if (teamKind == GameHubScriptableObject.Hub.Players.CurrentPlayerData.Team)
+			if (isStoryteller)
+			{
+				return GUIColorsInfo.Instance.StorytellerChatColor;
+			}
+			if (currentPlayerData.IsNarrator)
+			{
+				if (teamKind == TeamKind.Blue)
+				{
+					return GUIColorsInfo.Instance.MyTeamChatColor;
+				}
+				if (teamKind == TeamKind.Red)
+				{
+					return GUIColorsInfo.Instance.EnemyTeamChatColor;
+				}
+			}
+			else if (teamKind == currentPlayerData.Team)
 			{
 				return GUIColorsInfo.Instance.MyTeamChatColor;
 			}
@@ -79,87 +408,167 @@ namespace HeavyMetalMachines
 		}
 
 		[Header("Team Color")]
-		public Color MyColor;
+		[SerializeField]
+		[FormerlySerializedAs("MyColor")]
+		private Color _myColor;
 
-		public Color BlueTeamColor;
+		[SerializeField]
+		[FormerlySerializedAs("BlueTeamColor")]
+		private Color _blueTeamColor;
 
-		public Color BlueTeamColorOld;
+		[SerializeField]
+		[FormerlySerializedAs("BlueTeamColorOld")]
+		private Color _blueTeamColorOld;
 
-		public Color RedTeamColor;
+		[SerializeField]
+		[FormerlySerializedAs("RedTeamColor")]
+		private Color _redTeamColor;
 
 		[Header("State Color")]
-		public Color Victory;
+		[SerializeField]
+		[FormerlySerializedAs("Victory")]
+		private Color _victory;
 
-		public Color Defeat;
+		[SerializeField]
+		[FormerlySerializedAs("Defeat")]
+		private Color _defeat;
 
 		[Header("Character Info Colors")]
-		public Color DifficultyLevel0;
+		[SerializeField]
+		[FormerlySerializedAs("DifficultyLevel0")]
+		private Color _difficultyLevel0;
 
-		public Color DifficultyLevel1;
+		[SerializeField]
+		[FormerlySerializedAs("DifficultyLevel1")]
+		private Color _difficultyLevel1;
 
-		public Color DifficultyLevel2;
+		[SerializeField]
+		[FormerlySerializedAs("DifficultyLevel2")]
+		private Color _difficultyLevel2;
 
-		public Color DifficultyLevel3;
+		[SerializeField]
+		[FormerlySerializedAs("DifficultyLevel3")]
+		private Color _difficultyLevel3;
 
-		public Color DifficultyLevel4;
+		[SerializeField]
+		[FormerlySerializedAs("DifficultyLevel4")]
+		private Color _difficultyLevel4;
 
-		public Color DifficultyLevel5;
+		[SerializeField]
+		[FormerlySerializedAs("DifficultyLevel5")]
+		private Color _difficultyLevel5;
 
 		[Header("Event Colors")]
-		public Color HealColor;
+		[SerializeField]
+		[FormerlySerializedAs("HealColor")]
+		private Color _healColor;
 
-		public Color DamageColor;
+		[SerializeField]
+		[FormerlySerializedAs("DamageColor")]
+		private Color _damageColor;
 
-		public Color OwnDamageColor;
+		[SerializeField]
+		[FormerlySerializedAs("OwnDamageColor")]
+		private Color _ownDamageColor;
 
-		public Color RespawnCrosshairColor;
+		[SerializeField]
+		[FormerlySerializedAs("RespawnCrosshairColor")]
+		private Color _respawnCrosshairColor;
 
 		[Header("[Ping Colors]")]
-		public Color HighPingColor;
+		[SerializeField]
+		[FormerlySerializedAs("HighPingColor")]
+		private Color _highPingColor;
 
-		public Color HighPingColorSecondary;
+		[SerializeField]
+		[FormerlySerializedAs("HighPingColorSecondary")]
+		private Color _highPingColorSecondary;
 
-		public Color MediumPingColor;
+		[SerializeField]
+		[FormerlySerializedAs("MediumPingColor")]
+		private Color _mediumPingColor;
 
-		public Color MediumPingColorSecondary;
+		[SerializeField]
+		[FormerlySerializedAs("MediumPingColorSecondary")]
+		private Color _mediumPingColorSecondary;
 
-		public Color LowPingColor;
+		[SerializeField]
+		[FormerlySerializedAs("LowPingColor")]
+		private Color _lowPingColor;
 
-		public Color LowPingColorSecondary;
+		[SerializeField]
+		[FormerlySerializedAs("LowPingColorSecondary")]
+		private Color _lowPingColorSecondary;
 
-		public Color NoPingColor;
+		[SerializeField]
+		[FormerlySerializedAs("NoPingColor")]
+		private Color _noPingColor;
 
-		public Color PingHighGradientTopColor;
+		[SerializeField]
+		[FormerlySerializedAs("PingHighGradientTopColor")]
+		private Color _pingHighGradientTopColor;
 
-		public Color PingHighGradientBottonColor;
+		[SerializeField]
+		[FormerlySerializedAs("PingHighGradientBottonColor")]
+		private Color _pingHighGradientBottonColor;
 
-		public Color PingMediumGradientTopColor;
+		[SerializeField]
+		[FormerlySerializedAs("PingMediumGradientTopColor")]
+		private Color _pingMediumGradientTopColor;
 
-		public Color PingMediumGradientBottonColor;
+		[SerializeField]
+		[FormerlySerializedAs("PingMediumGradientBottonColor")]
+		private Color _pingMediumGradientBottonColor;
 
-		public Color PingLowGradientTopColor;
+		[SerializeField]
+		[FormerlySerializedAs("PingLowGradientTopColor")]
+		private Color _pingLowGradientTopColor;
 
-		public Color PingLowGradientBottonColor;
+		[SerializeField]
+		[FormerlySerializedAs("PingLowGradientBottonColor")]
+		private Color _pingLowGradientBottonColor;
 
 		[Header("[Chat Name Colors]")]
-		public Color MyChatColor;
+		[SerializeField]
+		[FormerlySerializedAs("MyChatColor")]
+		private Color _myChatColor;
 
-		public Color MyTeamChatColor;
+		[SerializeField]
+		[FormerlySerializedAs("MyTeamChatColor")]
+		private Color _myTeamChatColor;
 
-		public Color EnemyTeamChatColor;
+		[SerializeField]
+		[FormerlySerializedAs("EnemyTeamChatColor")]
+		private Color _enemyTeamChatColor;
+
+		[SerializeField]
+		[FormerlySerializedAs("StorytellerChatColor")]
+		private Color _storytellerChatColor;
 
 		[Header("[Team Colors]")]
-		public Color TeamTagColor;
+		[SerializeField]
+		[FormerlySerializedAs("TeamTagColor")]
+		private Color _teamTagColor;
 
 		[Header("[Instance Category Colors]")]
-		public Color InstanceUtilityColor;
+		[SerializeField]
+		[FormerlySerializedAs("InstanceUtilityColor")]
+		private Color _instanceUtilityColor;
 
-		public Color InstanceOffensiveColor;
+		[SerializeField]
+		[FormerlySerializedAs("InstanceOffensiveColor")]
+		private Color _instanceOffensiveColor;
 
-		public Color InstanceSupportColor;
+		[SerializeField]
+		[FormerlySerializedAs("InstanceSupportColor")]
+		private Color _instanceSupportColor;
 
-		public Color InstanceSurvivalColor;
+		[SerializeField]
+		[FormerlySerializedAs("InstanceSurvivalColor")]
+		private Color _instanceSurvivalColor;
 
-		public PlayerColorsInfo PlayerColorsInfo;
+		[SerializeField]
+		[FormerlySerializedAs("PlayerColorsInfo")]
+		private PlayerColorsInfo _playerColorsInfo;
 	}
 }

@@ -1,5 +1,6 @@
 ﻿using System;
 using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.VFX;
 using Pocketverse;
 using UnityEngine;
@@ -42,7 +43,7 @@ namespace HeavyMetalMachines.Render
 		{
 			if (!GameHubBehaviour.Hub || (GameHubBehaviour.Hub.Net.IsServer() && !GameHubBehaviour.Hub.Net.IsTest()))
 			{
-				UnityEngine.Object.Destroy(this);
+				Object.Destroy(this);
 				return;
 			}
 			this._sourceTransform = base.transform;
@@ -51,7 +52,7 @@ namespace HeavyMetalMachines.Render
 				CDummy component = base.transform.GetComponent<CDummy>();
 				if (component)
 				{
-					Transform dummy = component.GetDummy(this.Dummy, this.CustomDummyName);
+					Transform dummy = component.GetDummy(this.Dummy, this.CustomDummyName, null);
 					if (dummy != null)
 					{
 						this._sourceTransform = dummy;
@@ -174,11 +175,15 @@ namespace HeavyMetalMachines.Render
 		public void ObjectUnspawn(CombatObject obj, UnspawnEvent msg)
 		{
 			this._disableAllAfterDeath = true;
+			if (obj.Player.PlayerCarId == msg.ObjId)
+			{
+				this.OnEnable();
+			}
 		}
 
-		public void OnPhaseChange(BombScoreBoard.State state)
+		public void OnPhaseChange(BombScoreboardState state)
 		{
-			if (state == BombScoreBoard.State.Replay || state == BombScoreBoard.State.Shop)
+			if (state == BombScoreboardState.Replay || state == BombScoreboardState.Shop)
 			{
 				this._targetTransform = null;
 				base.enabled = false;

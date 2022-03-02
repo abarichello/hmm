@@ -95,13 +95,19 @@ namespace HeavyMetalMachines.Tutorial.InGame
 			if (GameHubBehaviour.Hub && GameHubBehaviour.Hub.Net.IsClient())
 			{
 				string msg = string.Format("Step={0} Name={1}", this.stepIndex, this._defaultGameObjectName);
-				GameHubBehaviour.Hub.Swordfish.Log.BILogClientMsg(ClientBITags.InGameTutorialStart, msg, false);
+				GameHubBehaviour.Hub.Swordfish.Log.BILogClientMsg(41, msg, false);
 			}
 			if (GameHubBehaviour.Hub && GameHubBehaviour.Hub.Net.IsServer())
 			{
-				string msg2 = string.Format("Step={0} Name={1} UserID={2}", this.stepIndex, this._defaultGameObjectName, GameHubBehaviour.Hub.Players.Players[0].UserSF.UniversalID);
-				GameHubBehaviour.Hub.Swordfish.Log.BILogServerMsg(ServerBITags.GameServerTutorialStepStart, msg2, false);
+				string text = string.Format("Step={0} Name={1} UserID={2}", this.stepIndex, this._defaultGameObjectName, GameHubBehaviour.Hub.Players.Players[0].UserSF.UniversalID);
+				InGameTutorialStep.Log.Debug("ServerBITags.GameServerTutorialStepStart - " + text);
+				GameHubBehaviour.Hub.Swordfish.Log.BILogServerMsg(7, text, false);
 			}
+			InGameTutorialStep.Log.DebugFormat("Step started: {0} {1}", new object[]
+			{
+				this.stepIndex,
+				this._defaultGameObjectName
+			});
 			this._onStepCompletedCallback = onStepCompleted;
 			base.gameObject.SetActive(true);
 			base.gameObject.name = string.Format("{0} [Step Started]", this._defaultGameObjectName);
@@ -170,16 +176,18 @@ namespace HeavyMetalMachines.Tutorial.InGame
 		{
 			if (GameHubBehaviour.Hub.Net.IsClient())
 			{
-				GameHubBehaviour.Hub.Swordfish.Log.BILogClientMsg(ClientBITags.InGameTutorialEnd, string.Format("Step={0} Name={1}", this.stepIndex, this._defaultGameObjectName), false);
+				GameHubBehaviour.Hub.Swordfish.Log.BILogClientMsg(42, string.Format("Step={0} Name={1}", this.stepIndex, this._defaultGameObjectName), false);
 			}
 			if (GameHubBehaviour.Hub.Net.IsServer())
 			{
-				string msg = string.Format("Step={0} Name={1} UserID={2}", this.stepIndex, this._defaultGameObjectName, GameHubBehaviour.Hub.Players.Players[0].UserSF.UniversalID);
-				GameHubBehaviour.Hub.Swordfish.Log.BILogServerMsg(ServerBITags.GameServerTutorialStepEnd, msg, false);
+				string text = string.Format("Step={0} Name={1} UserID={2}", this.stepIndex, this._defaultGameObjectName, GameHubBehaviour.Hub.Players.Players[0].UserSF.UniversalID);
+				InGameTutorialStep.Log.Debug("ServerBITags.GameServerTutorialStepEnd - " + text);
+				GameHubBehaviour.Hub.Swordfish.Log.BILogServerMsg(8, text, false);
 				if (this.stepIndex == this.tutorialStepsController.inGameTutorialSteps.Count - 1)
 				{
-					string msg2 = string.Format("Tutorial={0} UserID={1}", "GameServer Tutorial END", GameHubBehaviour.Hub.Players.Players[0].UserSF.UniversalID);
-					GameHubBehaviour.Hub.Swordfish.Log.BILogServerMsg(ServerBITags.GameServerTutorialEnd, msg2, false);
+					InGameTutorialStep.Log.Debug("ServerBITags.GameServerTutorialEnd");
+					string msg = string.Format("Tutorial={0} UserID={1}", "GameServer Tutorial END", GameHubBehaviour.Hub.Players.Players[0].UserSF.UniversalID);
+					GameHubBehaviour.Hub.Swordfish.Log.BILogServerMsg(6, msg, false);
 				}
 			}
 			base.gameObject.name = string.Format("{0} [Step Completed]", this._defaultGameObjectName);
@@ -197,10 +205,20 @@ namespace HeavyMetalMachines.Tutorial.InGame
 		{
 			if (GameHubBehaviour.Hub && GameHubBehaviour.Hub.Net.IsServer())
 			{
+				InGameTutorialStep.Log.DebugFormat("Will SyncBehaviourCompleted SERVER Step:{0} Index:{1}", new object[]
+				{
+					this.stepIndex,
+					inGameTutorialBehaviourBase.Index
+				});
 				this.tutorialStepsController.BehaviourCompletedOnServer(this, inGameTutorialBehaviourBase.Index);
 			}
 			else
 			{
+				InGameTutorialStep.Log.DebugFormat("Will SyncBehaviourCompleted CLIENT Step:{0} Index:{1}", new object[]
+				{
+					this.stepIndex,
+					inGameTutorialBehaviourBase.Index
+				});
 				this.tutorialStepsController.BehaviourCompletedOnClient(this, inGameTutorialBehaviourBase.Index);
 			}
 		}

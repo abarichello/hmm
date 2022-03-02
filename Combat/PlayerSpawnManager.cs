@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids;
-using HeavyMetalMachines.Character;
+using HeavyMetalMachines.Characters;
 using HeavyMetalMachines.Event;
 using HeavyMetalMachines.Match;
 using Pocketverse;

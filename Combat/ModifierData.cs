@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using HeavyMetalMachines.Combat.Gadget;
@@ -32,6 +33,11 @@ namespace HeavyMetalMachines.Combat
 			this.SetUpgrades(info, null);
 		}
 
+		public ModifierData(ModifierInfo info, float amount) : this(info)
+		{
+			this._amount.Value = amount;
+		}
+
 		public ModifierData(ModifierInfo info, GadgetInfo gadget)
 		{
 			this.GadgetInfo = gadget;
@@ -54,6 +60,9 @@ namespace HeavyMetalMachines.Combat
 				return this._lifeTime.Level;
 			}
 		}
+
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
+		public event ModifierData.OnModifierAppliedDelegate OnModifierApplied;
 
 		public float LifeTime
 		{
@@ -92,6 +101,14 @@ namespace HeavyMetalMachines.Combat
 			get
 			{
 				return (!this.IsSum) ? this._amount.Get() : this.SumAmount;
+			}
+		}
+
+		public void TriggerOnModifierAppliedEvent(CombatObject causer, CombatObject target, float amount)
+		{
+			if (this.OnModifierApplied != null)
+			{
+				this.OnModifierApplied(this, causer, target, amount, this.Amount);
 			}
 		}
 
@@ -337,5 +354,7 @@ namespace HeavyMetalMachines.Combat
 		public bool IsSum;
 
 		public float SumAmount;
+
+		public delegate void OnModifierAppliedDelegate(ModifierData mod, CombatObject causer, CombatObject target, float amount, float originalAmount);
 	}
 }

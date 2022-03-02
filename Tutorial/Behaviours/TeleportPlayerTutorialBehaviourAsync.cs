@@ -12,7 +12,7 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 		public IFuture ExecuteTaskOnClient(int teleportPlayerTask, float taskDuration)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1014, 2, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1015, 2, new object[]
 			{
 				teleportPlayerTask,
 				taskDuration
@@ -23,7 +23,7 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 		public IFuture TaskFinishedOnClient(int teleportPlayerTask)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1014, 3, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1015, 3, new object[]
 			{
 				teleportPlayerTask
 			});

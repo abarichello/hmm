@@ -108,7 +108,7 @@ namespace HeavyMetalMachines.VFX
 		{
 			if (this.draggingClone)
 			{
-				UnityEngine.Object.Destroy(this.draggingClone.gameObject);
+				Object.Destroy(this.draggingClone.gameObject);
 			}
 			this.draggingClone = null;
 		}
@@ -119,25 +119,25 @@ namespace HeavyMetalMachines.VFX
 			{
 				UICamera.currentTouch.clickNotification = UICamera.ClickNotification.BasedOnDelta;
 				Ray ray = UICamera.currentCamera.ScreenPointToRay(UICamera.currentTouch.pos);
-				float distance = 0f;
-				if (this.mPlane.Raycast(ray, out distance))
+				float num = 0f;
+				if (this.mPlane.Raycast(ray, ref num))
 				{
 					if (this.draggingClone == null)
 					{
-						this.draggingClone = UnityEngine.Object.Instantiate<Transform>(this.target);
+						this.draggingClone = Object.Instantiate<Transform>(this.target);
 						this.draggingClone.transform.parent = this.dragParent;
 						this.draggingClone.transform.localScale = Vector3.one;
 						this.draggingClone.transform.position = this.target.position;
 						this.draggingClone.gameObject.SetActive(true);
 						if (this.draggingClone.GetComponent<Collider>())
 						{
-							UnityEngine.Object.Destroy(this.draggingClone.GetComponent<Collider>());
+							Object.Destroy(this.draggingClone.GetComponent<Collider>());
 						}
 						TweenColor.Begin(this.draggingClone.gameObject, 0.1f, new Color(1f, 1f, 1f, 1f));
 						TweenColor.Begin(this.target.gameObject, 0.1f, new Color(1f, 1f, 1f, 0.2f));
 						HMMDragItem.CurrentDrag = this.target.gameObject;
 					}
-					Vector3 point = ray.GetPoint(distance);
+					Vector3 point = ray.GetPoint(num);
 					Vector3 vector = point - this.mLastPos;
 					this.mLastPos = point;
 					if (!this.mStarted)
@@ -209,14 +209,14 @@ namespace HeavyMetalMachines.VFX
 					if (component && component.ValidateDrop(this.target.gameObject))
 					{
 						TweenColor.Begin(this.target.gameObject, 0.1f, new Color(1f, 1f, 1f, 1f));
-						UnityEngine.Object.Destroy(this.draggingClone.gameObject);
+						Object.Destroy(this.draggingClone.gameObject);
 						HMMDragItem.CurrentDrag = null;
 					}
 				}
 				if (this.mMomentum.magnitude < 0.01f)
 				{
 					TweenColor.Begin(this.target.gameObject, 0.1f, new Color(1f, 1f, 1f, 1f));
-					UnityEngine.Object.Destroy(this.draggingClone.gameObject);
+					Object.Destroy(this.draggingClone.gameObject);
 					HMMDragItem.CurrentDrag = null;
 					return;
 				}
@@ -288,8 +288,8 @@ namespace HeavyMetalMachines.VFX
 		[SerializeField]
 		protected Vector3 scale = new Vector3(1f, 1f, 0f);
 
-		[HideInInspector]
 		[SerializeField]
+		[HideInInspector]
 		private float scrollWheelFactor;
 
 		private Plane mPlane;

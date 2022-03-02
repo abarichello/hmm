@@ -1,28 +1,38 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
+using Assets.ClientApiObjects;
+using Assets.ClientApiObjects.Components;
 using ClientAPI;
 using ClientAPI.Objects;
+using HeavyMetalMachines.Bank;
 using HeavyMetalMachines.Car;
-using HeavyMetalMachines.Character;
+using HeavyMetalMachines.Characters;
+using HeavyMetalMachines.DataTransferObjects.Player;
+using HeavyMetalMachines.DataTransferObjects.Progression;
+using HeavyMetalMachines.Infra.Context;
+using HeavyMetalMachines.Items.DataTransferObjects;
 using HeavyMetalMachines.Swordfish;
 using HeavyMetalMachines.Swordfish.Player;
+using Hoplon.Serialization;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Match
 {
 	[Serializable]
-	public class PlayerData : GameHubObject, IBitStreamSerializable
+	public class PlayerData : GameHubObject, IBitStreamSerializable, IPlayerData
 	{
 		public PlayerData(BitStream stream)
 		{
 			this.ReadFromBitStream(stream);
 		}
 
-		public PlayerData(string userId, int slot, TeamKind team, byte address, int gridIndex, bool isBot, bool isNarrator, BattlepassProgress battlepassProgress)
+		public PlayerData(string userId, int slot, TeamKind team, byte address, int gridIndex, bool isBot, int botId, bool isNarrator, BattlepassProgress battlepassProgress)
 		{
 			this.IsNarrator = isNarrator;
 			this.IsBot = isBot;
+			this.BotId = botId;
 			this.UserId = userId;
 			this.TeamSlot = slot;
 			this.Team = team;
@@ -32,10 +42,10 @@ namespace HeavyMetalMachines.Match
 		}
 
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		public event System.Action ServerListenToPlayerDisconnected;
+		public event Action ServerListenToPlayerDisconnected;
 
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		public event System.Action ServerListenToPlayerReconnected;
+		public event Action ServerListenToPlayerReconnected;
 
 		public static bool operator ==(PlayerData a, PlayerData b)
 		{
@@ -62,6 +72,45 @@ namespace HeavyMetalMachines.Match
 			return this.PlayerId.GetHashCode();
 		}
 
+		public IItemType CharacterItemType
+		{
+			get
+			{
+				return this._characterItemType;
+			}
+		}
+
+		public User User
+		{
+			get
+			{
+				return this.UserSF;
+			}
+		}
+
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
+		public event Action<PlayerData> ListenToPlayerConnectionStatusChanged;
+
+		public bool Connected
+		{
+			get
+			{
+				return this._connected;
+			}
+			set
+			{
+				if (this._connected == value)
+				{
+					return;
+				}
+				this._connected = value;
+				if (this.ListenToPlayerConnectionStatusChanged != null)
+				{
+					this.ListenToPlayerConnectionStatusChanged(this);
+				}
+			}
+		}
+
 		public PlayerBag Bag
 		{
 			get
@@ -75,19 +124,11 @@ namespace HeavyMetalMachines.Match
 			}
 		}
 
-		public string CharName
+		public Character[] SwordfishCharacters
 		{
 			get
 			{
-				return (!(this.Character != null)) ? string.Empty : this.Character.Asset;
-			}
-		}
-
-		public string CharLocalizedName
-		{
-			get
-			{
-				return (!(this.Character != null)) ? string.Empty : this.Character.LocalizedName;
+				return this._characters;
 			}
 		}
 
@@ -141,10 +182,20 @@ namespace HeavyMetalMachines.Match
 			this.Bag = (PlayerBag)this.PlayerSF.Bag;
 			this.MMR = serverPlayerData.MMR;
 			this.IsRookie = serverPlayerData.IsRookie;
-			this.FounderLevel = (FounderLevel)this.Bag.FounderPackLevel;
+			long? nameTag = serverPlayerData.Player.NameTag;
+			this.PlayerTag = ((nameTag == null) ? -1L : nameTag.Value);
+			this.FounderLevel = this.Bag.FounderPackLevel;
 			this.Name = this.PlayerSF.Name;
 			this._characters = serverPlayerData.Characters;
 			this.SetPlayerItems(serverPlayerData.PlayerItems);
+			PlayerData.Log.DebugFormat("Server player data loaded user={0} mmr={1} name={2}, IsRookie={3}, PlayerTag={4}", new object[]
+			{
+				this.UserId,
+				this.MMR,
+				this.Name,
+				this.IsRookie,
+				this.PlayerTag
+			});
 		}
 
 		private void SetPlayerItems(ServerPlayerItems serverPlayerItems)
@@ -175,6 +226,12 @@ namespace HeavyMetalMachines.Match
 			if (serverPlayerItems.Customization != null)
 			{
 				this.Customizations = serverPlayerItems.Customization;
+				this.Customizations.SyncDictionary();
+				PlayerData.Log.InfoFormat("Set Customization. PlayerID ={0} Customizations={1}", new object[]
+				{
+					this.PlayerId,
+					this.Customizations.ToString()
+				});
 			}
 		}
 
@@ -220,6 +277,10 @@ namespace HeavyMetalMachines.Match
 			new PlayerData.InventoryLoadingState(whenDone, this);
 		}
 
+		public bool IsBot { get; set; }
+
+		public TeamKind Team { get; set; }
+
 		public int GetPlayerCarObjectId()
 		{
 			return (!this.IsNarrator) ? ObjectId.New(ContentKind.PlayerCar.Byte(), (this.TeamSlot << 1) + ((this.Team != TeamKind.Red) ? 1 : 0)) : -1;
@@ -233,7 +294,7 @@ namespace HeavyMetalMachines.Match
 			}
 		}
 
-		public void SetCharacter(int charId)
+		public void SetCharacter(int charId, ICollectionScriptableObject inventoryCollection)
 		{
 			if (this._characterId != -1)
 			{
@@ -245,8 +306,9 @@ namespace HeavyMetalMachines.Match
 				return;
 			}
 			this._characterId = charId;
-			GameHubObject.Hub.InventoryColletion.AvailableCharactersByInfoId.TryGetValue(this._characterId, out this._character);
-			if (this._character == null)
+			Dictionary<int, IItemType> allCharactersByCharacterId = inventoryCollection.AllCharactersByCharacterId;
+			allCharactersByCharacterId.TryGetValue(this._characterId, out this._characterItemType);
+			if (this._characterItemType == null)
 			{
 				PlayerData.Log.ErrorFormat("Invalid character id={0} for player={1}", new object[]
 				{
@@ -256,11 +318,29 @@ namespace HeavyMetalMachines.Match
 			}
 		}
 
+		public void SetCharacter(Guid guid, ICollectionScriptableObject collectionScriptableObject)
+		{
+			this._characterItemType = collectionScriptableObject.Get(guid);
+			this._characterId = this._characterItemType.GetComponent<CharacterItemTypeComponent>().CharacterId;
+		}
+
 		public Identifiable CharacterInstance
 		{
 			get
 			{
-				return (!(this._characterInstance != null)) ? (this._characterInstance = GameHubObject.Hub.ObjectCollection.GetObject(this.GetPlayerCarObjectId())) : this._characterInstance;
+				if (this._characterInstance == null)
+				{
+					if (GameHubObject.Hub == null)
+					{
+						return null;
+					}
+					if (GameHubObject.Hub.ObjectCollection == null)
+					{
+						return null;
+					}
+					this._characterInstance = GameHubObject.Hub.ObjectCollection.GetObject(this.GetPlayerCarObjectId());
+				}
+				return this._characterInstance;
 			}
 			set
 			{
@@ -289,6 +369,18 @@ namespace HeavyMetalMachines.Match
 			get
 			{
 				return this._character;
+			}
+			set
+			{
+				this._character = value;
+			}
+		}
+
+		public virtual IPlayerStats PlayerStats
+		{
+			get
+			{
+				return this.CharacterInstance.GetBitComponent<PlayerStats>();
 			}
 		}
 
@@ -402,26 +494,35 @@ namespace HeavyMetalMachines.Match
 			bs.WriteCompressedLong(this.PlayerId);
 			bs.WriteString(this.UserId);
 			bs.WriteBool(this.IsBot);
+			bs.WriteCompressedInt(this.BotId);
 			bs.WriteBool(this.IsBotControlled);
 			bs.WriteBool(this.IsNarrator);
 			bs.WriteBool(this.IsLeaver);
 			bs.WriteString(this.Name);
+			bs.WriteString(this.PublisherUserName);
+			bs.WriteCompressedInt(this.PublisherId);
 			bs.WriteCompressedInt(this._characterId);
-			bs.WriteGuid(this.Customizations.SelectedSprayItemTypeId);
-			bs.WriteGuid(this.Customizations.SelectedRespawnVfxItemTypeId);
-			bs.WriteGuid(this.Customizations.SelectedTakeOffVfxItemTypeId);
-			bs.WriteGuid(this.Customizations.SelectedKillVfxItemTypeId);
-			bs.WriteGuid(this.Customizations.SelectedScoreVfxItemTypeId);
-			bs.WriteGuid(this.Customizations.SelectedPortraitItemTypeId);
-			bs.WriteGuid(this.Customizations.SelectedSkin);
+			bs.WriteGuid(this.Customizations.GetGuidBySlot(1));
+			bs.WriteGuid(this.Customizations.GetGuidBySlot(5));
+			bs.WriteGuid(this.Customizations.GetGuidBySlot(2));
+			bs.WriteGuid(this.Customizations.GetGuidBySlot(4));
+			bs.WriteGuid(this.Customizations.GetGuidBySlot(3));
+			bs.WriteGuid(this.Customizations.GetGuidBySlot(60));
+			bs.WriteGuid(this.Customizations.GetGuidBySlot(59));
+			bs.WriteGuid(this.Customizations.GetGuidBySlot(40));
+			bs.WriteGuid(this.Customizations.GetGuidBySlot(41));
+			bs.WriteGuid(this.Customizations.GetGuidBySlot(42));
+			bs.WriteGuid(this.Customizations.GetGuidBySlot(43));
+			bs.WriteGuid(this.Customizations.GetGuidBySlot(44));
 			bs.WriteByte(this.PlayerAddress);
 			bs.WriteTeamKind(this.Team);
 			bs.WriteBits(4, this.TeamSlot);
 			bs.WriteCompressedInt(this.GridIndex);
 			bs.WriteBool(this.Connected);
 			bs.WriteByte((byte)this.Level);
-			bs.WriteByte((byte)this.FounderLevel);
+			bs.WriteByte(this.FounderLevel);
 			bs.WriteBool(this.IsRookie);
+			bs.WriteCompressedLong(this.PlayerTag);
 		}
 
 		public void ReadFromBitStream(BitStream bs)
@@ -429,38 +530,53 @@ namespace HeavyMetalMachines.Match
 			this.PlayerId = bs.ReadCompressedLong();
 			this.UserId = bs.ReadString();
 			this.IsBot = bs.ReadBool();
+			this.BotId = bs.ReadCompressedInt();
 			this.IsBotControlled = bs.ReadBool();
 			this.IsNarrator = bs.ReadBool();
 			this.IsLeaver = bs.ReadBool();
 			this.Name = bs.ReadString();
+			this.PublisherUserName = bs.ReadString();
+			this.PublisherId = bs.ReadCompressedInt();
 			int num = bs.ReadCompressedInt();
-			this.Customizations.SelectedSprayItemTypeId = bs.ReadGuid();
-			this.Customizations.SelectedRespawnVfxItemTypeId = bs.ReadGuid();
-			this.Customizations.SelectedTakeOffVfxItemTypeId = bs.ReadGuid();
-			this.Customizations.SelectedKillVfxItemTypeId = bs.ReadGuid();
-			this.Customizations.SelectedScoreVfxItemTypeId = bs.ReadGuid();
-			this.Customizations.SelectedPortraitItemTypeId = bs.ReadGuid();
-			this.Customizations.SelectedSkin = bs.ReadGuid();
+			this.Customizations.SetGuidAndSlot(1, bs.ReadGuid());
+			this.Customizations.SetGuidAndSlot(5, bs.ReadGuid());
+			this.Customizations.SetGuidAndSlot(2, bs.ReadGuid());
+			this.Customizations.SetGuidAndSlot(4, bs.ReadGuid());
+			this.Customizations.SetGuidAndSlot(3, bs.ReadGuid());
+			this.Customizations.SetGuidAndSlot(60, bs.ReadGuid());
+			this.Customizations.SetGuidAndSlot(59, bs.ReadGuid());
+			this.Customizations.SetGuidAndSlot(40, bs.ReadGuid());
+			this.Customizations.SetGuidAndSlot(41, bs.ReadGuid());
+			this.Customizations.SetGuidAndSlot(42, bs.ReadGuid());
+			this.Customizations.SetGuidAndSlot(43, bs.ReadGuid());
+			this.Customizations.SetGuidAndSlot(44, bs.ReadGuid());
 			this.PlayerAddress = bs.ReadByte();
 			this.Team = bs.ReadTeamKind();
 			this.TeamSlot = bs.ReadBits(4);
 			this.GridIndex = bs.ReadCompressedInt();
 			this.Connected = bs.ReadBool();
 			this.Level = (int)bs.ReadByte();
-			this.FounderLevel = (FounderLevel)bs.ReadByte();
+			this.FounderLevel = bs.ReadByte();
 			this.IsRookie = bs.ReadBool();
+			this.PlayerTag = bs.ReadCompressedLong();
 			if (num != this._characterId)
 			{
-				this.SetCharacter(num);
+				this.SetCharacter(num, GameHubObject.Hub.InventoryColletion);
 			}
+			PlayerData.Log.InfoFormat("Set Customization. PlayerID ={0} Customizations={1}", new object[]
+			{
+				this.PlayerId,
+				this.Customizations.ToString()
+			});
 		}
 
 		public override string ToString()
 		{
+			CharacterTarget characterTarget = (this.CharacterItemType == null) ? CharacterTarget.None : this.GetCharacter();
 			return string.Format("Name={0} Character={1} IsCurrentPlayer={2} IsBot={3} CharId={4} Address={5} PlayerCarId={6} Team={7}/{8} GroupId={9} Connected={10} Leaver={11} HasCounselor={12}", new object[]
 			{
 				this.Name,
-				(!this.Character) ? "null" : this.Character.Character.ToString(),
+				characterTarget.ToString(),
 				this.IsCurrentPlayer,
 				this.IsBot,
 				(!this.IsNarrator) ? this.CharacterId.ToString() : "Narrator",
@@ -498,11 +614,13 @@ namespace HeavyMetalMachines.Match
 
 		public static readonly BitLogger Log = new BitLogger(typeof(PlayerData));
 
+		protected IItemType _characterItemType;
+
 		public string UserId;
 
 		public User UserSF;
 
-		public bool Connected;
+		private bool _connected;
 
 		[NonSerialized]
 		public bool Ready;
@@ -513,6 +631,12 @@ namespace HeavyMetalMachines.Match
 		public Player PlayerSF;
 
 		public string Name;
+
+		public int PublisherId;
+
+		public string PublisherUserName;
+
+		public long PlayerTag;
 
 		private PlayerBag _bag;
 
@@ -532,11 +656,9 @@ namespace HeavyMetalMachines.Match
 
 		public Guid GroupId;
 
-		public bool IsBot;
+		public int BotId;
 
 		public byte PlayerAddress;
-
-		public TeamKind Team;
 
 		public int TeamSlot;
 
@@ -546,7 +668,7 @@ namespace HeavyMetalMachines.Match
 
 		private Identifiable _characterInstance;
 
-		public CharacterInfo _character;
+		private CharacterInfo _character;
 
 		public bool IsLeaver;
 
@@ -597,7 +719,7 @@ namespace HeavyMetalMachines.Match
 
 			private void OnItemsLoaded(object state, string strServerPlayerItems)
 			{
-				ServerPlayerItems playerItems = (ServerPlayerItems)((JsonSerializeable<T>)strServerPlayerItems);
+				ServerPlayerItems playerItems = (ServerPlayerItems)((JsonSerializeable<!0>)strServerPlayerItems);
 				this._playerData.SetPlayerItems(playerItems);
 				this.Finalized();
 			}

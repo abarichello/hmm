@@ -11,6 +11,7 @@ namespace HeavyMetalMachines.Tutorial
 		Interception,
 		BombGrabbing,
 		BombCarrying,
-		BombDelivery
+		BombDelivery,
+		EndTutorial
 	}
 }

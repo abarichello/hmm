@@ -7,14 +7,14 @@ namespace HeavyMetalMachines
 	{
 		public static bool BoxIntersectsLineSegment(Vector3 start, Vector3 end, Matrix4x4 stInverseColliderTransform, Vector3 stColliderSize)
 		{
-			Vector3 b = stInverseColliderTransform.MultiplyPoint(start);
-			b.y = 0f;
-			Vector3 vector = stInverseColliderTransform.MultiplyPoint((start + end) / 2f);
+			Vector3 vector = stInverseColliderTransform.MultiplyPoint(start);
 			vector.y = 0f;
-			Vector3 a = vector - b;
-			float magnitude = a.magnitude;
-			Vector3 l = a / magnitude;
-			return HMMMathUtils.AABB_LineSegmentOverlap(l, vector, magnitude, stColliderSize / 2f);
+			Vector3 vector2 = stInverseColliderTransform.MultiplyPoint((start + end) / 2f);
+			vector2.y = 0f;
+			Vector3 vector3 = vector2 - vector;
+			float magnitude = vector3.magnitude;
+			Vector3 l = vector3 / magnitude;
+			return HMMMathUtils.AABB_LineSegmentOverlap(l, vector2, magnitude, stColliderSize / 2f);
 		}
 
 		private static bool AABB_LineSegmentOverlap(Vector3 l, Vector3 mid, float hl, Vector3 stExtents)
@@ -62,8 +62,8 @@ namespace HeavyMetalMachines
 			{
 				return (p - w).magnitude;
 			}
-			Vector3 b = v + num * (w - v);
-			return (p - b).magnitude;
+			Vector3 vector = v + num * (w - v);
+			return (p - vector).magnitude;
 		}
 
 		internal static Vector3 ProjectPtToLineSegment(Vector3 v, Vector3 w, Vector3 p)
@@ -105,8 +105,9 @@ namespace HeavyMetalMachines
 
 		private bool OBBOverlap(Vector3 a, Vector3 Pa, Vector3[] A, Vector3 b, Vector3 Pb, Vector3[] B)
 		{
-			Vector3 lhs = Pb - Pa;
-			Vector3 vector = new Vector3(Vector3.Dot(lhs, A[0]), Vector3.Dot(lhs, A[1]), Vector3.Dot(lhs, A[2]));
+			Vector3 vector = Pb - Pa;
+			Vector3 vector2;
+			vector2..ctor(Vector3.Dot(vector, A[0]), Vector3.Dot(vector, A[1]), Vector3.Dot(vector, A[2]));
 			Vector3[] array = new Vector3[3];
 			for (int i = 0; i < 3; i++)
 			{
@@ -122,7 +123,7 @@ namespace HeavyMetalMachines
 			{
 				num = a[i];
 				num2 = b[0] * Mathf.Abs(array[i][0]) + b[1] * Mathf.Abs(array[i][1]) + b[2] * Mathf.Abs(array[i][2]);
-				num3 = Mathf.Abs(vector[i]);
+				num3 = Mathf.Abs(vector2[i]);
 				if (num3 > num + num2)
 				{
 					return false;
@@ -132,7 +133,7 @@ namespace HeavyMetalMachines
 			{
 				num = a[0] * Mathf.Abs(array[0][j]) + a[1] * Mathf.Abs(array[1][j]) + a[2] * Mathf.Abs(array[2][j]);
 				num2 = b[j];
-				num3 = Mathf.Abs(vector[0] * array[0][j] + vector[1] * array[1][j] + vector[2] * array[2][j]);
+				num3 = Mathf.Abs(vector2[0] * array[0][j] + vector2[1] * array[1][j] + vector2[2] * array[2][j]);
 				if (num3 > num + num2)
 				{
 					return false;
@@ -140,63 +141,63 @@ namespace HeavyMetalMachines
 			}
 			num = a[1] * Mathf.Abs(array[2][0]) + a[2] * Mathf.Abs(array[1][0]);
 			num2 = b[1] * Mathf.Abs(array[0][2]) + b[2] * Mathf.Abs(array[0][1]);
-			num3 = Mathf.Abs(vector[2] * array[1][0] - vector[1] * array[2][0]);
+			num3 = Mathf.Abs(vector2[2] * array[1][0] - vector2[1] * array[2][0]);
 			if (num3 > num + num2)
 			{
 				return false;
 			}
 			num = a[1] * Mathf.Abs(array[2][1]) + a[2] * Mathf.Abs(array[1][1]);
 			num2 = b[0] * Mathf.Abs(array[0][2]) + b[2] * Mathf.Abs(array[0][0]);
-			num3 = Mathf.Abs(vector[2] * array[1][1] - vector[1] * array[2][1]);
+			num3 = Mathf.Abs(vector2[2] * array[1][1] - vector2[1] * array[2][1]);
 			if (num3 > num + num2)
 			{
 				return false;
 			}
 			num = a[1] * Mathf.Abs(array[2][2]) + a[2] * Mathf.Abs(array[1][2]);
 			num2 = b[0] * Mathf.Abs(array[0][1]) + b[1] * Mathf.Abs(array[0][0]);
-			num3 = Mathf.Abs(vector[2] * array[1][2] - vector[1] * array[2][2]);
+			num3 = Mathf.Abs(vector2[2] * array[1][2] - vector2[1] * array[2][2]);
 			if (num3 > num + num2)
 			{
 				return false;
 			}
 			num = a[0] * Mathf.Abs(array[2][0]) + a[2] * Mathf.Abs(array[0][0]);
 			num2 = b[1] * Mathf.Abs(array[1][2]) + b[2] * Mathf.Abs(array[1][1]);
-			num3 = Mathf.Abs(vector[0] * array[2][0] - vector[2] * array[0][0]);
+			num3 = Mathf.Abs(vector2[0] * array[2][0] - vector2[2] * array[0][0]);
 			if (num3 > num + num2)
 			{
 				return false;
 			}
 			num = a[0] * Mathf.Abs(array[2][1]) + a[2] * Mathf.Abs(array[0][1]);
 			num2 = b[0] * Mathf.Abs(array[1][2]) + b[2] * Mathf.Abs(array[1][0]);
-			num3 = Mathf.Abs(vector[0] * array[2][1] - vector[2] * array[0][1]);
+			num3 = Mathf.Abs(vector2[0] * array[2][1] - vector2[2] * array[0][1]);
 			if (num3 > num + num2)
 			{
 				return false;
 			}
 			num = a[0] * Mathf.Abs(array[2][2]) + a[2] * Mathf.Abs(array[0][2]);
 			num2 = b[0] * Mathf.Abs(array[1][1]) + b[1] * Mathf.Abs(array[1][0]);
-			num3 = Mathf.Abs(vector[0] * array[2][2] - vector[2] * array[0][2]);
+			num3 = Mathf.Abs(vector2[0] * array[2][2] - vector2[2] * array[0][2]);
 			if (num3 > num + num2)
 			{
 				return false;
 			}
 			num = a[0] * Mathf.Abs(array[1][0]) + a[1] * Mathf.Abs(array[0][0]);
 			num2 = b[1] * Mathf.Abs(array[2][2]) + b[2] * Mathf.Abs(array[2][1]);
-			num3 = Mathf.Abs(vector[1] * array[0][0] - vector[0] * array[1][0]);
+			num3 = Mathf.Abs(vector2[1] * array[0][0] - vector2[0] * array[1][0]);
 			if (num3 > num + num2)
 			{
 				return false;
 			}
 			num = a[0] * Mathf.Abs(array[1][1]) + a[1] * Mathf.Abs(array[0][1]);
 			num2 = b[0] * Mathf.Abs(array[2][2]) + b[2] * Mathf.Abs(array[2][0]);
-			num3 = Mathf.Abs(vector[1] * array[0][1] - vector[0] * array[1][1]);
+			num3 = Mathf.Abs(vector2[1] * array[0][1] - vector2[0] * array[1][1]);
 			if (num3 > num + num2)
 			{
 				return false;
 			}
 			num = a[0] * Mathf.Abs(array[1][2]) + a[1] * Mathf.Abs(array[0][2]);
 			num2 = b[0] * Mathf.Abs(array[2][1]) + b[1] * Mathf.Abs(array[2][0]);
-			num3 = Mathf.Abs(vector[1] * array[0][2] - vector[0] * array[1][2]);
+			num3 = Mathf.Abs(vector2[1] * array[0][2] - vector2[0] * array[1][2]);
 			return num3 <= num + num2;
 		}
 

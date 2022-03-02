@@ -6,8 +6,8 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Tutorial.Behaviours
 {
-	[RemoteClass]
 	[RequireComponent(typeof(Identifiable))]
+	[RemoteClass]
 	public class PickupUnspawnCountBehaviour : InGameTutorialBehaviourBase, IBitComponent
 	{
 		protected override void StartBehaviourOnServer()
@@ -104,12 +104,8 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 			this._delayed = future;
 		}
 
-		public object Invoke(int classId, short methodId, object[] args)
+		public object Invoke(int classId, short methodId, object[] args, BitStream bitstream = null)
 		{
-			if (classId != 1013)
-			{
-				throw new Exception("Hierarchy in RemoteClass is not allowed!!! " + classId);
-			}
 			this._delayed = null;
 			if (methodId != 3)
 			{
@@ -123,7 +119,7 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 
 		private int _pickupsCount;
 
-		public const int StaticClassId = 1013;
+		public const int StaticClassId = 1014;
 
 		private Identifiable _identifiable;
 

@@ -54,47 +54,11 @@ namespace HeavyMetalMachines.Combat.Gadget
 			}
 		}
 
-		public string LocalizedName
-		{
-			get
-			{
-				this.CheckTranslationSheet();
-				return Language.Get(this.DraftName, this._translationSheet);
-			}
-		}
-
-		private void CheckTranslationSheet()
-		{
-			if (this._translationSheet != TranslationSheets.All)
-			{
-				return;
-			}
-			this._translationSheet = ((!this.DraftName.StartsWith("SPONSOR")) ? TranslationSheets.CharactersMatchInfo : TranslationSheets.Sponsors);
-		}
-
-		public string LocalizedDescription
-		{
-			get
-			{
-				this.CheckTranslationSheet();
-				return Language.Get(this.DraftDescription, this._translationSheet);
-			}
-		}
-
-		public string LocalizedCooldownDescription
-		{
-			get
-			{
-				this.CheckTranslationSheet();
-				return (!string.IsNullOrEmpty(this.DraftCooldownDescription)) ? Language.Get(this.DraftCooldownDescription, this._translationSheet) : string.Empty;
-			}
-		}
-
 		public void PreCacheBaseFX(FXInfo fxInfo)
 		{
 			if (string.IsNullOrEmpty(fxInfo.Effect))
 			{
-				UnityEngine.Debug.LogError(string.Format("GadgetInfo::PreCacheBaseFX - fxInfo.Effect is null or empty - Name: {0}.{1}", this.Name, base.name), this);
+				Debug.LogError(string.Format("GadgetInfo::PreCacheBaseFX - fxInfo.Effect is null or empty - Name: {0}.{1}", this.Name, base.name), this);
 				return;
 			}
 			GameHubScriptableObject.Hub.Resources.PreCachePrefab(fxInfo.Effect, fxInfo.EffectPreCacheCount);
@@ -158,7 +122,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 					index,
 					modifierInfos.GetType()
 				});
-				HeavyMetalMachines.Utils.Debug.Assert(false, strMessage, HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+				Debug.Assert(false, strMessage, Debug.TargetTeam.All);
 				return new List<float>();
 			}
 			ModifierInfo modifierInfo = modifierInfos[index];
@@ -192,7 +156,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 					index,
 					modifierInfos.GetType()
 				});
-				HeavyMetalMachines.Utils.Debug.Assert(false, strMessage, HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+				Debug.Assert(false, strMessage, Debug.TargetTeam.All);
 				return new List<float>();
 			}
 			ModifierInfo modifierInfo = modifierInfos[index];
@@ -226,7 +190,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 					index,
 					modifierInfos.GetType()
 				});
-				HeavyMetalMachines.Utils.Debug.Assert(false, strMessage, HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+				Debug.Assert(false, strMessage, Debug.TargetTeam.All);
 				return new List<float>();
 			}
 			ModifierInfo modifierInfo = modifierInfos[index];
@@ -261,7 +225,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 					index,
 					modifierInfos.GetType()
 				});
-				HeavyMetalMachines.Utils.Debug.Assert(false, strMessage, HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+				Debug.Assert(false, strMessage, Debug.TargetTeam.All);
 				return new List<float>();
 			}
 			ModifierInfo modifierInfo = modifierInfos[index];
@@ -291,8 +255,8 @@ namespace HeavyMetalMachines.Combat.Gadget
 				{
 					for (int i = 0; i < upgradeableValue.Values.Length; i++)
 					{
-						float f = upgradeableValue.Values[i];
-						list.Add(Mathf.Abs(f));
+						float num = upgradeableValue.Values[i];
+						list.Add(Mathf.Abs(num));
 					}
 				}
 			}
@@ -355,14 +319,6 @@ namespace HeavyMetalMachines.Combat.Gadget
 
 		public string Name;
 
-		public string DraftName;
-
-		private TranslationSheets _translationSheet;
-
-		public string DraftDescription;
-
-		public string DraftCooldownDescription;
-
 		[FlagDrawer(typeof(GadgetNatureKind))]
 		public GadgetNatureKind Nature;
 
@@ -373,7 +329,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 		[Tooltip("When not pressing (or disarmed), the Effects are not going to be destroyed (to be used with AlwaysPressed)")]
 		public bool DoNotDestroyOnRelease;
 
-		public SpawnController.StateType SpawnStateTypeToRun = SpawnController.StateType.Spawned;
+		public SpawnStateKind SpawnStateTypeToRun = SpawnStateKind.Spawned;
 
 		public JokerBarKind UseJokerBar;
 
@@ -479,16 +435,14 @@ namespace HeavyMetalMachines.Combat.Gadget
 
 		public UpgradeInfo[] Upgrades;
 
-		public string DefaultInstance;
-
 		public InvisibleUpgradeInfo[] InvisibleUpgrades;
 
-		[ReadOnly]
 		[Header("##### AutoFilled, don't touch #####")]
+		[ReadOnly]
 		public FXInfo[] Effects;
 
-		[ReadOnly]
 		[Header("##### AutoFilled, don't touch #####")]
+		[ReadOnly]
 		public ModifierFeedbackInfo[] ModifierFeedbacks;
 
 		public ModifierInfo[] Damage;

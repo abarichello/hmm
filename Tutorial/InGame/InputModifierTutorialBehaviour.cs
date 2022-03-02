@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections;
+using HeavyMetalMachines.Input.ControllerInput;
 using HeavyMetalMachines.Options;
 using UnityEngine;
 
@@ -16,32 +17,32 @@ namespace HeavyMetalMachines.Tutorial.InGame
 		protected override void StartBehaviourOnServer()
 		{
 			base.StartBehaviourOnServer();
-			if (this._inputModifierInfo.UnlockedPlayerControls.Contains(ControlAction.MovementForward))
+			if (this._inputModifierInfo.UnlockedPlayerInputActions.Contains(4))
 			{
-				base.playerController.Combat.Movement.UnlockMovement();
+				base.playerController.Combat.Movement.UnpauseSimulation();
 			}
 			else
 			{
-				base.playerController.Combat.Movement.LockMovement();
+				base.playerController.Combat.Movement.PauseSimulation();
 			}
 		}
 
 		public void ApplyInputModifiers()
 		{
-			IEnumerator enumerator = Enum.GetValues(typeof(ControlAction)).GetEnumerator();
+			IEnumerator enumerator = Enum.GetValues(typeof(ControllerInputActions)).GetEnumerator();
 			try
 			{
 				while (enumerator.MoveNext())
 				{
 					object obj = enumerator.Current;
-					ControlAction controlAction = (ControlAction)obj;
-					if (this._inputModifierInfo.UnlockedPlayerControls.Contains(controlAction))
+					ControllerInputActions controllerInputActions = (ControllerInputActions)obj;
+					if (this._inputModifierInfo.UnlockedPlayerInputActions.Contains(controllerInputActions))
 					{
-						ControlOptions.UnlockControlAction(controlAction);
+						ControlOptions.UnlockControlAction(controllerInputActions);
 					}
 					else
 					{
-						ControlOptions.LockControlAction(controlAction);
+						ControlOptions.LockControlAction(controllerInputActions);
 					}
 				}
 			}

@@ -1,19 +1,29 @@
 ﻿using System;
+using System.Diagnostics;
 using HeavyMetalMachines.Utils;
+using Hoplon.Time;
 using Pocketverse;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Frontend
 {
-	public class HORTATime : IGameTime
+	public class HORTATime : IGameTime, ICurrentTime
 	{
 		public HORTATime()
 		{
 			this.MatchTimer = new TimeUtils.Chronometer(new Func<int>(this.GetPlaybackTime));
-			this._playbackStartTime = -1L;
-			this._paused = false;
-			this._originalFixedDeltaTime = Time.fixedDeltaTime;
+			this.Reset();
 		}
+
+		public float CurrentTime
+		{
+			get
+			{
+				return this._currentTime;
+			}
+		}
+
+		public int LastFrameTime { get; private set; }
 
 		public long PlaybackStartTime
 		{
@@ -23,28 +33,62 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
+		public void Update()
+		{
+			if (!this._timeSet)
+			{
+				return;
+			}
+			if (this.GetPlaybackTime() >= this.LastFrameTime)
+			{
+				return;
+			}
+			float realtimeSinceStartup = Time.realtimeSinceStartup;
+			this._currentTime += realtimeSinceStartup - this._lastRealtimeUpdate;
+			this._lastRealtimeUpdate = realtimeSinceStartup;
+			if (this._running && this._currentTime > this._runTarget)
+			{
+				this._currentTime = this._runTarget;
+				this.StopRun();
+			}
+		}
+
 		private long TimeMillis
 		{
 			get
 			{
-				return (long)((int)(Time.realtimeSinceStartup * 1000f));
+				return (long)((int)(this._currentTime * 1000f));
 			}
 		}
 
-		public int GetSynchTime()
+		private int TimeMillisSinceStartTime()
 		{
-			if (this._playbackStartTime < 0L)
+			if (!this._timeSet)
 			{
 				return 0;
 			}
-			return (int)Math.Max(0L, this.TimeMillis - this._playbackStartTime);
+			return (int)this.TimeMillis;
 		}
 
 		public int GetPlaybackTime()
 		{
-			int num = (int)((float)(this.GetSynchTime() - this.LastSynchTimeScaleChange) * Time.timeScale);
+			if (!this._timeSet)
+			{
+				return 0;
+			}
+			int num = (int)((float)(this.TimeMillisSinceStartTime() - this.LastSynchTimeScaleChange) * Time.timeScale);
 			int num2 = this.RewindedTimeMillis + this.AccumulatedSynchDelay;
 			return this.LastSynchTimeScaleChange + num - num2;
+		}
+
+		public int GetSynchTime()
+		{
+			if (!this._timeSet)
+			{
+				return 0;
+			}
+			int num = (int)((float)(this.TimeMillisSinceStartTime() - this.LastSynchTimeScaleChange) * Time.timeScale);
+			return this.LastSynchTimeScaleChange + num - this.AccumulatedSynchDelay;
 		}
 
 		public float GetPlaybackUnityTime()
@@ -54,35 +98,37 @@ namespace HeavyMetalMachines.Frontend
 
 		public void SetTimeScale(float timeScale)
 		{
-			int synchTime = this.GetSynchTime();
-			float num = (float)(synchTime - this.LastSynchTimeScaleChange) * (1f - Time.timeScale);
-			float num2 = num - (float)Math.Truncate((double)num) + this._accumulatedFloatError;
-			if (num2 >= 1f)
+			int num = this.TimeMillisSinceStartTime();
+			float num2 = (float)(num - this.LastSynchTimeScaleChange) * (1f - Time.timeScale);
+			float num3 = num2 - (float)Math.Truncate((double)num2) + this._accumulatedFloatError;
+			if (num3 >= 1f)
 			{
-				this.AccumulatedSynchDelay += (int)(num + this._accumulatedFloatError);
-				this._accumulatedFloatError = num2 - (float)Math.Truncate((double)num2);
+				this.AccumulatedSynchDelay += (int)(num2 + this._accumulatedFloatError);
+				this._accumulatedFloatError = num3 - (float)Math.Truncate((double)num3);
 			}
 			else
 			{
-				this.AccumulatedSynchDelay += (int)num;
-				this._accumulatedFloatError = num2;
+				this.AccumulatedSynchDelay += (int)num2;
+				this._accumulatedFloatError = num3;
 			}
-			this.LastSynchTimeScaleChange = synchTime;
+			this.LastSynchTimeScaleChange = num;
 			Time.timeScale = timeScale;
 			Time.fixedDeltaTime = this._originalFixedDeltaTime * timeScale;
-			this.LastSynchTimeScaleChange = this.GetSynchTime();
-			Time.timeScale = timeScale;
 		}
 
 		public TimeUtils.Chronometer MatchTimer { get; private set; }
 
 		public void SetTimeZero()
 		{
+			this._lastRealtimeUpdate = Time.realtimeSinceStartup;
+			this._timeSet = true;
+			this._currentTime = 0f;
+			this._running = false;
 			this._playbackStartTime = this.TimeMillis;
 			this._playbackUnityTime = Time.timeSinceLevelLoad;
 			this.AccumulatedSynchDelay = 0;
 			this._accumulatedFloatError = 0f;
-			this.LastSynchTimeScaleChange = this.GetSynchTime();
+			this.LastSynchTimeScaleChange = this.TimeMillisSinceStartTime();
 		}
 
 		public void SetTimeZero(long playbackStartTime, int lastSynchTimeScaleChange, int accumulatedSynchDelay, float timeScale)
@@ -96,107 +142,113 @@ namespace HeavyMetalMachines.Frontend
 
 		public int RewindedTimeMillis { get; set; }
 
-		public void TogglePause()
+		public DateTime Now()
 		{
-			if (this._fast)
+			return DateTime.Now;
+		}
+
+		public DateTime NowServerUtc()
+		{
+			return DateTime.UtcNow;
+		}
+
+		public void Reset()
+		{
+			this._timeSet = false;
+			this._currentTime = 0f;
+			this._playbackUnityTime = 0f;
+			this._playbackStartTime = -1L;
+			this._originalFixedDeltaTime = Time.fixedDeltaTime;
+			this.LastFrameTime = -1;
+		}
+
+		public void SetLastFrameTime(int time)
+		{
+			this.LastFrameTime = time;
+		}
+
+		public void SetTime(int millis)
+		{
+			bool flag = false;
+			float num = 1f;
+			if (Time.timeScale > 0f)
 			{
-				this.ToggleFastForward();
-			}
-			if (this._slow)
-			{
-				this.ToggleSlowMotion();
-			}
-			if (this._paused)
-			{
-				this.SetTimeScale(this._lastScale);
-				this._paused = false;
+				num = Time.timeScale;
 			}
 			else
 			{
-				this._lastScale = Time.timeScale;
+				flag = true;
+				this.SetTimeScale(num);
+			}
+			int synchTime = this.GetSynchTime();
+			int num2 = millis - synchTime;
+			this._currentTime += (float)num2 / num / 1000f;
+			this._playbackUnityTime -= (float)num2 * 0.001f / num;
+			if (flag)
+			{
 				this.SetTimeScale(0f);
-				this._paused = true;
 			}
+			HORTATime.Log.DebugFormat("Time set={0} st={1} pt={2}", new object[]
+			{
+				millis,
+				this.GetSynchTime(),
+				this.GetPlaybackTime()
+			});
 		}
 
-		public void ToggleFastForward()
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
+		private event Action _onRunEnded;
+
+		public void RunTo(int millis, Action onRunEnded)
 		{
-			if (this._paused)
+			if (onRunEnded != null)
 			{
-				this.TogglePause();
+				this._onRunEnded += onRunEnded;
 			}
-			if (this._slow)
+			if (this._running)
 			{
-				this.ToggleSlowMotion();
+				return;
 			}
-			if (this._fast)
-			{
-				this.SetTimeScale(this._lastScale);
-				this._fast = false;
-			}
-			else
-			{
-				this._lastScale = Time.timeScale;
-				this.SetTimeScale(3f);
-				this._fast = true;
-			}
+			this._running = true;
+			this._currentScale = Time.timeScale;
+			int num = millis - this.GetSynchTime();
+			this._runTarget = this._currentTime + (float)num / 16f / 1000f;
+			this.SetTimeScale(16f);
 		}
 
-		public void ToggleSlowMotion()
+		private void StopRun()
 		{
-			if (this._paused)
+			if (this._onRunEnded != null)
 			{
-				this.TogglePause();
+				this._onRunEnded();
+				this._onRunEnded = null;
 			}
-			if (this._fast)
-			{
-				this.ToggleFastForward();
-			}
-			if (this._slow)
-			{
-				this.SetTimeScale(this._lastScale);
-				this._slow = false;
-			}
-			else
-			{
-				this._lastScale = Time.timeScale;
-				this.SetTimeScale(0.33f);
-				this._slow = true;
-			}
-		}
-
-		public void ToggleOffAny()
-		{
-			if (this._paused)
-			{
-				this.TogglePause();
-			}
-			if (this._fast)
-			{
-				this.ToggleFastForward();
-			}
-			if (this._slow)
-			{
-				this.ToggleSlowMotion();
-			}
+			this._running = false;
+			this.SetTimeScale(this._currentScale);
 		}
 
 		public static readonly BitLogger Log = new BitLogger(typeof(HORTATime));
-
-		private float _lastScale;
-
-		private bool _paused;
-
-		private bool _fast;
-
-		private bool _slow;
 
 		private float _playbackUnityTime = -1f;
 
 		private long _playbackStartTime = -1L;
 
+		private float _lastRealtimeUpdate;
+
+		private float _currentTime;
+
+		private bool _timeSet;
+
 		private float _originalFixedDeltaTime;
 
 		private float _accumulatedFloatError;
+
+		private const float FastForwardSpeed = 16f;
+
+		private float _currentScale;
+
+		private bool _running;
+
+		private float _runTarget;
 	}
 }

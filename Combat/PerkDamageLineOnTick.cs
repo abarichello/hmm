@@ -15,7 +15,7 @@ namespace HeavyMetalMachines.Combat
 			Vector3 vector = position - originPosition;
 			float magnitude = vector.magnitude;
 			Vector3 normalized = vector.normalized;
-			this.Effect.Gadget.GetHittingCombatsInLine(originPosition, this.LineWidth, normalized, magnitude, 1077058560, this.Effect.Data.EffectInfo, ref this.combatObjects);
+			this.Effect.Gadget.GetHittingCombatsInLine(originPosition, this.LineWidth, normalized, magnitude, 1077054464, this.Effect.Data.EffectInfo, ref this.combatObjects);
 			for (int i = 0; i < this.combatObjects.Count; i++)
 			{
 				CombatObject combatObject = this.combatObjects[i];

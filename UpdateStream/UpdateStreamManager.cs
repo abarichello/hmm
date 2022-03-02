@@ -1,42 +1,68 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using HeavyMetalMachines.Combat;
-using HeavyMetalMachines.Fog;
+using HeavyMetalMachines.Infra.Context;
+using HeavyMetalMachines.Swordfish.API;
+using Hoplon.Metrics.Data;
 using Pocketverse;
 using Pocketverse.MuralContext;
+using Pocketverse.Util;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.UpdateStream
 {
-	public class UpdateStreamManager : GameHubBehaviour, ICleanupListener, ISerializationCallbackReceiver
+	public class UpdateStreamManager : GameHubBehaviour, ICleanupListener, ISerializationCallbackReceiver, IUpdateManager
 	{
-		public Dictionary<int, StreamObject> StreamObjectsMap
+		public IList<MovementStream> AllStreams
 		{
 			get
 			{
-				return this._streamObjects;
-			}
-		}
-
-		public List<StreamObject> StreamObjects
-		{
-			get
-			{
-				return this._streamObjectsList;
+				return this._movementStreamList;
 			}
 		}
 
 		private void Awake()
 		{
 			this._updaterHigh = new TimedUpdater(this.FrequencyHigh, true, true);
+			if (GameHubBehaviour.Hub.Net.IsServer())
+			{
+				this._histogramData = new ExecutionFrequencyHistogramData(1.0, this.UpdateHistogramBuckets);
+				ObservableExtensions.Subscribe<ScoreBoardState>(Observable.Do<ScoreBoardState>(this._scoreBoard.StateChangedObservation, new Action<ScoreBoardState>(this.CheckState)));
+			}
+		}
+
+		private void CheckState(ScoreBoardState state)
+		{
+			BombScoreboardState currentState = state.CurrentState;
+			if (currentState != BombScoreboardState.BombDelivery && currentState != BombScoreboardState.PreReplay)
+			{
+				this._histogramData.StopRunning();
+			}
+			else
+			{
+				this._histogramData.StartRunning();
+			}
+		}
+
+		public bool IsRunning()
+		{
+			return !this._stopped;
 		}
 
 		public void SetRunning(bool running)
 		{
 			this._stopped = !running;
-			if (running)
+			if (GameHubBehaviour.Hub.Net.IsServer() && !running)
 			{
-				TRCInterpolator.ResetUpdateTimers();
+				this._histogramData.StopRunning();
+				SerializedHistogramData serializedHistogramData = new SerializedHistogramData();
+				serializedHistogramData.Data = this._histogramData.Data;
+				serializedHistogramData.Buckets = Array.ConvertAll<int, string>(this._histogramData.BucketCallCounts, (int input) => input.ToString());
+				SerializedHistogramData serializedHistogramData2 = serializedHistogramData;
+				this._swordfishLogProvider.GetSwordfishLog().BILogServerMsg(17, string.Format("Update Stream Manager execution frequency data={0}", serializedHistogramData2.Serialize()), false);
 			}
 		}
 
@@ -48,48 +74,28 @@ namespace HeavyMetalMachines.UpdateStream
 			}
 			if (GameHubBehaviour.Hub.Net.IsClient())
 			{
-				TRCInterpolator.RunUpdate();
 				return;
 			}
 			if (this._updaterHigh.ShouldHalt())
 			{
 				return;
 			}
-			PlaybackManager.ModifierEvent.SendEvents();
-			if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState != BombScoreBoard.State.Replay)
+			this._histogramData.ProcessExecuted();
+			this._modifierEventDispatcher.SendEvents();
+			if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState != BombScoreboardState.Replay)
 			{
-				PlaybackManager.TransformStates.SendData();
-				PlaybackManager.TransformStates.SendMovementData(this._movementStreamList);
+				this._transformDispatcher.SendMovementData(this._movementStreamList);
 			}
-			PlaybackManager.PlayerStats.SendUpdate();
-			PlaybackManager.CombatStates.SendData();
-			PlaybackManager.CombatFeedbacks.SendData();
+			this._statsDispatcher.SendUpdate();
+			this._combatStatesDispatcher.SendData();
+			this._combatFeedbackDispatcher.SendData();
 		}
 
 		public void OnCleanup(CleanupMessage msg)
 		{
 			GameHubBehaviour.Hub.Stream.Cleanup();
-			this._streamObjects.Clear();
-			this._streamObjectsList.Clear();
 			this._movementStreamList.Clear();
 			this.MovementStreamsById.Clear();
-		}
-
-		public void AddObject(int id, StreamObject stream)
-		{
-			this._streamObjects[id] = stream;
-			if (!this._streamObjectsList.Contains(stream))
-			{
-				this._streamObjectsList.Add(stream);
-			}
-			GameHubBehaviour.Hub.Stream.AddObject(stream.Id);
-		}
-
-		public void RemoveObject(int id)
-		{
-			this._streamObjects.Remove(id);
-			this._streamObjectsList.RemoveAll((StreamObject x) => x == null || x.Id.ObjId == id);
-			GameHubBehaviour.Hub.Stream.Remove(id);
 		}
 
 		public void AddMovementStream(int id, MovementStream stream)
@@ -111,28 +117,44 @@ namespace HeavyMetalMachines.UpdateStream
 
 		public override void OnAfterDeserialize()
 		{
-			for (int i = 0; i < this._streamObjectsList.Count; i++)
+			for (int i = 0; i < this._movementStreamList.Count; i++)
 			{
-				StreamObject streamObject = this._streamObjectsList[i];
-				this._streamObjects[streamObject.Id.ObjId] = streamObject;
-			}
-			for (int j = 0; j < this._movementStreamList.Count; j++)
-			{
-				MovementStream movementStream = this._movementStreamList[j];
+				MovementStream movementStream = this._movementStreamList[i];
 				this.MovementStreamsById[movementStream.Id.ObjId] = movementStream;
 			}
 		}
 
 		public int FrequencyHigh;
 
+		[NonSerialized]
+		public int[] UpdateHistogramBuckets = Enumerable.Range(0, 31).ToArray<int>();
+
 		private TimedUpdater _updaterHigh;
 
 		public static readonly BitLogger Log = new BitLogger(typeof(UpdateStreamManager));
 
-		private readonly Dictionary<int, StreamObject> _streamObjects = new Dictionary<int, StreamObject>();
+		[Inject]
+		private ICombatFeedbackDispatcher _combatFeedbackDispatcher;
 
-		[SerializeField]
-		private List<StreamObject> _streamObjectsList = new List<StreamObject>();
+		[Inject]
+		private ICombatStatesDispatcher _combatStatesDispatcher;
+
+		[Inject]
+		private IModifierEventDispatcher _modifierEventDispatcher;
+
+		[Inject]
+		private ITransformDispatcher _transformDispatcher;
+
+		[Inject]
+		private IStatsDispatcher _statsDispatcher;
+
+		[Inject]
+		private IScoreBoard _scoreBoard;
+
+		[Inject]
+		private ISwordfishLogProvider _swordfishLogProvider;
+
+		private ExecutionFrequencyHistogramData _histogramData;
 
 		private readonly List<MovementStream> _movementStreamList = new List<MovementStream>();
 

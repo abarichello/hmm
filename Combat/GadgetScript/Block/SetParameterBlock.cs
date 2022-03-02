@@ -7,22 +7,7 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 	[CreateAssetMenu(menuName = "GadgetScript/Block/Parameter/SetParameter")]
 	public class SetParameterBlock : BaseBlock
 	{
-		protected override bool CheckSanity(IGadgetContext gadgetContext, IEventContext eventContext)
-		{
-			if (this._parameterToSet == null)
-			{
-				base.LogSanitycheckError("'Parameter To Set' parameter cannot be null.");
-				return false;
-			}
-			if (this._parameterValue == null)
-			{
-				base.LogSanitycheckError("'Parameter Value' parameter cannot be null.");
-				return false;
-			}
-			return true;
-		}
-
-		protected override IBlock InnerExecute(IGadgetContext gadgetContext, IEventContext eventContext)
+		public override IBlock Execute(IGadgetContext gadgetContext, IEventContext eventContext)
 		{
 			IHMMGadgetContext ihmmgadgetContext = (IHMMGadgetContext)gadgetContext;
 			IHMMEventContext ihmmeventContext = (IHMMEventContext)eventContext;
@@ -42,14 +27,19 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 			return this._nextBlock;
 		}
 
-		public override bool UsesParameterWithId(int parameterId)
+		[Header("Write")]
+		[Restrict(true, new Type[]
 		{
-			return base.CheckIsParameterWithId(this._parameterToSet, parameterId) || base.CheckIsParameterWithId(this._parameterValue, parameterId);
-		}
 
+		})]
 		[SerializeField]
 		private BaseParameter _parameterToSet;
 
+		[Header("Read")]
+		[Restrict(true, new Type[]
+		{
+
+		})]
 		[SerializeField]
 		private BaseParameter _parameterValue;
 

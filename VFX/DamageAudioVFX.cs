@@ -75,7 +75,7 @@ namespace HeavyMetalMachines.VFX
 		{
 		}
 
-		public FMODAsset DamageSFX;
+		public AudioEventAsset DamageSFX;
 
 		public float expireTime = 30f;
 

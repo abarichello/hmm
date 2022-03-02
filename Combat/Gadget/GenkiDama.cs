@@ -84,7 +84,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			return !this.ActiveEffectsIds.Contains(destroy.TargetEventId) || string.IsNullOrEmpty(this.MyInfo.DestroyOnHitPlayerUpgrade) || this.DestroyOnHitPlayer.BoolGet() || destroy.SrvWasScenery || !destroy.SrvOtherCollider;
 		}
 
-		protected override void InnerOnDestroyEffect(DestroyEffect evt)
+		protected override void InnerOnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (!this.ActiveEffectsIds.Contains(evt.RemoveData.TargetEventId))
 			{
@@ -99,7 +99,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			this.FireOnDestroyEffect(evt);
 		}
 
-		protected virtual void FireOnDestroyEffect(DestroyEffect evt)
+		protected virtual void FireOnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (string.IsNullOrEmpty(this.MyInfo.OnDestroyEffect.Effect))
 			{

@@ -17,10 +17,6 @@ namespace HeavyMetalMachines.Car
 
 		public bool GirosFlingHelper = true;
 
-		public float MinimumTurningRate;
-
-		public float SpeedToMaximumTurningRate = 1f;
-
 		public float DriftDifferenceForRecovery;
 
 		public AnimationCurve DriftDrag;

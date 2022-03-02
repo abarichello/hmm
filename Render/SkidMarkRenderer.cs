@@ -1,4 +1,6 @@
 ﻿using System;
+using HeavyMetalMachines.GameCamera;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
 using HeavyMetalMachines.Utils;
 using Pocketverse;
 using UnityEngine;
@@ -9,7 +11,7 @@ namespace HeavyMetalMachines.Render
 	{
 		private void Awake()
 		{
-			UnityEngine.Object.Destroy(this);
+			Object.Destroy(this);
 		}
 
 		private void Start()
@@ -45,10 +47,6 @@ namespace HeavyMetalMachines.Render
 			}
 			for (int k = 1; k < this.emitters.Length; k++)
 			{
-				if (this.emitters[k] == null)
-				{
-					return;
-				}
 				int num3 = (k * this.emitterStride - 1) * 6;
 				this.indices[num3] = 0;
 				this.indices[num3 + 1] = 0;
@@ -69,11 +67,11 @@ namespace HeavyMetalMachines.Render
 			{
 				return;
 			}
-			if (CarCamera.SingletonInstanceId == -1 || this._trans == null)
+			if (this._gameCameraEngine == null || this._trans == null)
 			{
 				return;
 			}
-			float num2 = Vector3.SqrMagnitude(CarCamera.Singleton.GetComponent<Camera>().transform.position - this._trans.position);
+			float num2 = Vector3.SqrMagnitude(this._gameCameraEngine.CameraTransform.position - this._trans.position);
 			if (num2 > this.maxDistanceToCam * this.maxDistanceToCam)
 			{
 				return;
@@ -97,35 +95,35 @@ namespace HeavyMetalMachines.Render
 						}
 						flag = true;
 						flag3 = (flag3 || skidMarkEmitter.hasChanged);
-						Vector3 a = skidMarkEmitter.transform.position - new Vector3(0f, skidMarkEmitter.wheelRadius, 0f);
+						Vector3 vector = skidMarkEmitter.transform.position - new Vector3(0f, skidMarkEmitter.wheelRadius, 0f);
 						skidMarkEmitter.offsetDebug = num;
 						if (skidMarkEmitter.numOfPoints >= 1)
 						{
 							int num3 = 0;
-							Vector3 vector = skidMarkEmitter.points[0].position - skidMarkEmitter.points[1].position;
-							Vector3 b = Vector3.zero;
+							Vector3 vector2 = skidMarkEmitter.points[0].position - skidMarkEmitter.points[1].position;
+							Vector3 vector3 = Vector3.zero;
 							for (int j = skidMarkEmitter.firstPoint + 1; j <= skidMarkEmitter.firstPoint + skidMarkEmitter.numOfPoints; j++)
 							{
 								int num4 = j % skidMarkEmitter.maxPoints;
-								b = skidMarkEmitter.points[num4].cross;
+								vector3 = skidMarkEmitter.points[num4].cross;
 								int num5 = num3 + num;
 								int num6 = num3 + 1 + num;
 								this.vertices[num5] = skidMarkEmitter.points[num4].precomputedPointA;
 								this.vertices[num6] = skidMarkEmitter.points[num4].precomputedPointB;
 								this.uvs[num5].y = skidMarkEmitter.points[num4].textureU * this.texCoordScale;
 								this.uvs[num6].y = skidMarkEmitter.points[num4].textureU * this.texCoordScale;
-								Color c = skidMarkEmitter.points[num4].color;
-								c.a *= skidMarkEmitter.points[num4].alpha;
-								this.colors[num5] = (this.colors[num6] = c);
+								Color color = skidMarkEmitter.points[num4].color;
+								color.a *= skidMarkEmitter.points[num4].alpha;
+								this.colors[num5] = (this.colors[num6] = color);
 								num3 += 2;
 							}
-							vector = a - skidMarkEmitter.points[skidMarkEmitter.lastPoint].position;
+							vector2 = vector - skidMarkEmitter.points[skidMarkEmitter.lastPoint].position;
 							Vector3 up = base.transform.up;
-							ReallyFastMath.FastCross(ref vector, ref up, ref b);
-							ReallyFastMath.FastNormalize(ref b);
-							b.x *= skidMarkEmitter.width;
-							b.y *= skidMarkEmitter.width;
-							b.z *= skidMarkEmitter.width;
+							ReallyFastMath.FastCross(ref vector2, ref up, ref vector3);
+							ReallyFastMath.FastNormalize(ref vector3);
+							vector3.x *= skidMarkEmitter.width;
+							vector3.y *= skidMarkEmitter.width;
+							vector3.z *= skidMarkEmitter.width;
 							int num7 = skidMarkEmitter.maxPoints * 2;
 							this.colors[num3 % num7 + num] = new Color32(0, 0, 0, 0);
 							this.colors[(num3 + 1) % num7 + num] = new Color32(0, 0, 0, 0);
@@ -133,8 +131,8 @@ namespace HeavyMetalMachines.Render
 							this.colors[(num3 + 3) % num7 + num] = new Color32(0, 0, 0, 0);
 							if (skidMarkEmitter.doEmission)
 							{
-								this.vertices[num3 % num7 + num] = a - b;
-								this.vertices[(num3 + 1) % num7 + num] = a + b;
+								this.vertices[num3 % num7 + num] = vector - vector3;
+								this.vertices[(num3 + 1) % num7 + num] = vector + vector3;
 							}
 							num += this.emitterStride * 2;
 						}
@@ -153,6 +151,9 @@ namespace HeavyMetalMachines.Render
 			this.skidMarkMesh.bounds = this.bounds;
 			Graphics.DrawMesh(this.skidMarkMesh, Vector3.zero, Quaternion.identity, this.skidMarkMaterial, base.gameObject.layer);
 		}
+
+		[InjectOnClient]
+		private IGameCameraEngine _gameCameraEngine;
 
 		private SkidMarkEmitter[] emitters;
 

@@ -3,8 +3,8 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Frontend
 {
-	[AddComponentMenu("NGUI/Interaction/HMM Play Tween")]
 	[ExecuteInEditMode]
+	[AddComponentMenu("NGUI/Interaction/HMM Play Tween")]
 	public class HMMUIPlayTween : UIPlayTween
 	{
 		public void Play()

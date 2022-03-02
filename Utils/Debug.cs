@@ -27,7 +27,8 @@ namespace HeavyMetalMachines.Utils
 			Hpl,
 			Art,
 			TechnicalArtist,
-			GUI
+			GUI,
+			GD
 		}
 	}
 }

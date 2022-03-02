@@ -12,7 +12,7 @@ namespace HeavyMetalMachines.Frontend
 		{
 			if (!GameHubBehaviour.Hub.Net.IsClient() || !SpectatorController.IsSpectating)
 			{
-				UnityEngine.Object.Destroy(base.gameObject);
+				Object.Destroy(base.gameObject);
 				return;
 			}
 			this._widget = base.GetComponent<UIWidget>();

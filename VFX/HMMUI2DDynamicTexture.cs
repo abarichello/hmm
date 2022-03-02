@@ -1,4 +1,5 @@
 ﻿using System;
+using Hoplon.Unity.Loading;
 using SharedUtils.Loading;
 using UnityEngine;
 
@@ -29,7 +30,7 @@ namespace HeavyMetalMachines.VFX
 					return;
 				}
 				this._textureName = value;
-				SingletonMonoBehaviour<LoadingManager>.Instance.TextureManager.GetAssetAsync(this._textureName, this);
+				Loading.TextureManager.GetAssetAsync(this._textureName, this);
 			}
 		}
 
@@ -38,7 +39,7 @@ namespace HeavyMetalMachines.VFX
 			return this.TextureName;
 		}
 
-		public void OnAssetLoaded(string textureName, Texture2D texture)
+		public virtual void OnAssetLoaded(string textureName, Texture2D texture)
 		{
 			this.mainTexture = texture;
 		}

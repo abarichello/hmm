@@ -1,21 +1,45 @@
 ﻿using System;
 using System.Collections.Generic;
 using HeavyMetalMachines.Combat.Gadget;
+using HeavyMetalMachines.Combat.Gadget.GadgetScript;
 using HeavyMetalMachines.Combat.GadgetScript.Block;
 using HeavyMetalMachines.Event;
 using HeavyMetalMachines.Frontend;
 using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Playback;
+using HeavyMetalMachines.VFX;
+using Hoplon.DependencyInjection;
 using Hoplon.GadgetScript;
 using Pocketverse;
-using Pocketverse.Util;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace HeavyMetalMachines.Combat.GadgetScript
 {
 	[CreateAssetMenu(menuName = "GadgetScript/CombatGadget")]
-	public class CombatGadget : BaseGadget
+	public class CombatGadget : BaseGadget, IHMMCombatGadgetContext, CombatLayer.ILayerChanger, IHMMGadgetContext, IGadgetContext, IGadgetInput
 	{
+		public IGadgetHudElement GadgetHudElement { get; private set; }
+
+		public IHudEmotePresenter HudEmoteView
+		{
+			get
+			{
+				return this._hmmContext.GetHudEmote(this._combat);
+			}
+		}
+
+		public IGadgetHudElement GetGadgetHudElement(GadgetSlot slot)
+		{
+			return this._hmmContext.GadgetHud.GetElement(slot);
+		}
+
+		public IHudIconBar GetHudIconBar(ICombatObject combat)
+		{
+			return this._hmmContext.GetHudIconBar(combat);
+		}
+
 		public GadgetSlot Slot
 		{
 			get
@@ -32,9 +56,35 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 			}
 		}
 
-		public override IHMMGadgetContext CreateGadgetContext(int id, Identifiable owner, GadgetEventParser eventParser, IHMMContext context)
+		public CombatGadget.GadgetEventConfig Events
 		{
-			CombatGadget combatGadget = (CombatGadget)base.CreateGadgetContext(id, owner, eventParser, context);
+			get
+			{
+				return this._events;
+			}
+		}
+
+		private void OnEnable()
+		{
+			if (null == this._originalScriptable)
+			{
+				this.PopulateSubgadgetEvents();
+			}
+		}
+
+		public override void PrecacheAssets(IHMMContext context)
+		{
+			base.PrecacheAssets(context);
+			for (int i = 0; i < this._precacheObjects.Count; i++)
+			{
+				MasterVFX masterVFX = this._precacheObjects[i];
+				ResourceLoader.Instance.PreCache(masterVFX.name, null, 1);
+			}
+		}
+
+		public override IHMMGadgetContext CreateGadgetContext(int id, IGadgetOwner owner, IGadgetEventDispatcher eventParser, IHMMContext context, IServerPlaybackDispatcher dispatcher, IInjectionResolver injectionResolver)
+		{
+			CombatGadget combatGadget = (CombatGadget)base.CreateGadgetContext(id, owner, eventParser, context, dispatcher, injectionResolver);
 			combatGadget._combat = (CombatObject)combatGadget.Owner;
 			combatGadget._events = this._events;
 			if (this._ownerParameter != null)
@@ -45,14 +95,18 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 			{
 				combatGadget.SubscribeEvents(this._events);
 			}
-			combatGadget.InitializeModifiableParameters();
+			else if (combatGadget._combat.IsLocalPlayer)
+			{
+				combatGadget.GadgetHudElement = context.GadgetHud.GetElement(this._slot);
+			}
+			combatGadget._subGadgetEvents = this._subGadgetEvents;
 			combatGadget.InitializeCooldownParameters();
 			return combatGadget;
 		}
 
 		private void InitializeCooldownParameters()
 		{
-			this._cooldownEndTime = this.GetUIParameter<int>("CooldownEndTime");
+			this._cooldownEndTime = this.GetUIParameter<float>("CooldownEndTime");
 			this._cooldownTotalTime = this.GetUIParameter<float>("CooldownDuration");
 		}
 
@@ -63,17 +117,12 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 
 		public int GetCooldownEndTime()
 		{
-			return (this._cooldownEndTime != null) ? this._cooldownEndTime.GetValue(this) : 0;
+			return (this._cooldownEndTime != null) ? ((int)((BaseParameter)this._cooldownEndTime).GetValue<float>(this)) : 0;
 		}
 
 		public float GetCooldownTotalTime()
 		{
 			return (this._cooldownTotalTime != null) ? this._cooldownTotalTime.GetValue(this) : 0f;
-		}
-
-		public INumericParameter GetModifiableParameter(string parameterName)
-		{
-			return this._modifiableParametersDict[parameterName];
 		}
 
 		public bool Pressed
@@ -84,19 +133,32 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 			}
 			set
 			{
-				if (value && !this.CheckGadgetCanBePressed())
-				{
-					return;
-				}
+				bool pressed = this._pressed;
 				this._pressed = value;
-				if (this._pressed && this._events.OnPressedBlock != null)
+				if (value && !pressed)
 				{
-					base.TriggerEvent(this._events.OnPressedBlock.Id);
+					this.TriggerPressed();
 				}
-				else if (!this._pressed && this._events.OnReleasedBlock != null)
+				else if (!value && pressed)
 				{
-					base.TriggerEvent(this._events.OnReleasedBlock.Id);
+					this.TriggerReleased();
 				}
+			}
+		}
+
+		private void TriggerPressed()
+		{
+			if (this._events.OnPressedBlock != null)
+			{
+				base.TriggerEvent(this._events.OnPressedBlock.Id);
+			}
+		}
+
+		private void TriggerReleased()
+		{
+			if (this._events.OnReleasedBlock != null)
+			{
+				base.TriggerEvent(this._events.OnReleasedBlock.Id);
 			}
 		}
 
@@ -112,6 +174,7 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 		private void SubscribeEvents(CombatGadget.GadgetEventConfig events)
 		{
 			GameHubScriptableObject.Hub.BombManager.ListenToPhaseChange += this.OnPhaseChange;
+			this._onPlayerStatusParameters.Initialize();
 			if (events.OnCombatDeathBlock != null)
 			{
 				GameHubScriptableObject.Hub.Events.Bots.ListenToObjectDeath += this.OnCombatDeath;
@@ -122,129 +185,131 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 				GameHubScriptableObject.Hub.Events.Bots.ListenToObjectSpawn += this.OnCombatSpawn;
 				GameHubScriptableObject.Hub.Events.Players.ListenToObjectSpawn += this.OnCombatSpawn;
 			}
+			this._onModifierEventParameters.Initialize();
 			if (events.OnModifierAppliedBlock != null)
 			{
-				if (this._onModifierAppliedEventParameters.Modifier != null)
-				{
-					this._onModifierAppliedEventParameters.HasModifierParameter = true;
-				}
-				if (this._onModifierAppliedEventParameters.Target != null)
-				{
-					this._onModifierAppliedEventParameters.HasTargetParameter = true;
-				}
-				if (this._onModifierAppliedEventParameters.Amount != null)
-				{
-					this._onModifierAppliedEventParameters.HasAmountParameter = true;
-				}
-				if (this._onModifierAppliedEventParameters.Causer != null)
-				{
-					this._onModifierAppliedEventParameters.HasCauserParameter = true;
-				}
-				CombatController.OnInstantModifierApplied += this.OnModifierApplied;
+				CombatController.OnInstantModifierApplied += new CombatController.OnInstantModifierAppliedDelegate(this.OnModifierApplied);
+				CombatController.OnStatusModifierApplied += this.OnStatusApplied;
+			}
+			if (events.OnModifierRemovedBlock != null)
+			{
+				CombatController.OnModifierRemoved += this.OnModifierRemoved;
 			}
 		}
 
 		private void UnsubscribeEvents(CombatGadget.GadgetEventConfig events)
 		{
 			GameHubScriptableObject.Hub.BombManager.ListenToPhaseChange -= this.OnPhaseChange;
-			if (events.OnCombatDeathBlock != null)
-			{
-				GameHubScriptableObject.Hub.Events.Bots.ListenToObjectDeath -= this.OnCombatDeath;
-				GameHubScriptableObject.Hub.Events.Players.ListenToObjectDeath -= this.OnCombatDeath;
-			}
-			if (events.OnCombatSpawnBlock != null)
-			{
-				GameHubScriptableObject.Hub.Events.Bots.ListenToObjectSpawn -= this.OnCombatSpawn;
-				GameHubScriptableObject.Hub.Events.Players.ListenToObjectSpawn -= this.OnCombatSpawn;
-			}
-			if (events.OnModifierAppliedBlock != null)
-			{
-				CombatController.OnInstantModifierApplied -= this.OnModifierApplied;
-			}
+			GameHubScriptableObject.Hub.Events.Bots.ListenToObjectDeath -= this.OnCombatDeath;
+			GameHubScriptableObject.Hub.Events.Players.ListenToObjectDeath -= this.OnCombatDeath;
+			GameHubScriptableObject.Hub.Events.Bots.ListenToObjectSpawn -= this.OnCombatSpawn;
+			GameHubScriptableObject.Hub.Events.Players.ListenToObjectSpawn -= this.OnCombatSpawn;
+			CombatController.OnInstantModifierApplied -= new CombatController.OnInstantModifierAppliedDelegate(this.OnModifierApplied);
+			CombatController.OnStatusModifierApplied -= this.OnStatusApplied;
+			CombatController.OnModifierRemoved -= this.OnModifierRemoved;
 		}
 
-		private void OnModifierApplied(ModifierInstance mod, CombatObject causer, CombatObject target, float amount, int eventId)
+		private void OnModifierRemoved(ModifierInstance modInstance, ICombatObject causer, ICombatObject target, int eventId)
 		{
-			if (this._modiferFilter.FilterModifierApplication(mod, causer, target, this._combat))
-			{
-				return;
-			}
 			CombatGadget._eventsParameters.Clear();
-			if (this._onModifierAppliedEventParameters.HasModifierParameter)
+			if (this._onModifierEventParameters.HasModifierParameter)
 			{
-				CombatGadget._eventsParameters.Add(this._onModifierAppliedEventParameters.Modifier);
-				this._onModifierAppliedEventParameters.Modifier.SetValue(this, mod.Data);
+				CombatGadget._eventsParameters.Add(this._onModifierEventParameters.Modifier);
+				this._onModifierEventParameters.Modifier.SetValue(this, modInstance.Data);
 			}
-			if (this._onModifierAppliedEventParameters.HasTargetParameter)
+			if (this._onModifierEventParameters.HasTargetParameter)
 			{
-				CombatGadget._eventsParameters.Add(this._onModifierAppliedEventParameters.Target);
-				this._onModifierAppliedEventParameters.Target.SetValue(this, target);
+				CombatGadget._eventsParameters.Add(this._onModifierEventParameters.Target);
+				this._onModifierEventParameters.Target.SetValue(this, target);
 			}
-			if (this._onModifierAppliedEventParameters.HasAmountParameter)
+			if (this._onModifierEventParameters.HasCauserParameter)
 			{
-				CombatGadget._eventsParameters.Add(this._onModifierAppliedEventParameters.Amount);
-				this._onModifierAppliedEventParameters.Amount.SetValue(this, amount);
+				CombatGadget._eventsParameters.Add(this._onModifierEventParameters.Causer);
+				this._onModifierEventParameters.Causer.SetValue(this, causer);
 			}
-			if (this._onModifierAppliedEventParameters.HasCauserParameter)
+			base.TriggerEvent(GadgetEvent.GetInstance(this._events.OnModifierRemovedBlock.Id, this, CombatGadget._eventsParameters));
+		}
+
+		private void OnStatusApplied(ModifierInstance mod, ICombatObject causer, ICombatObject target, int eventId)
+		{
+			this.OnModifierApplied(mod, causer, target, 0f, eventId);
+		}
+
+		private void OnModifierApplied(ModifierInstance mod, ICombatObject causer, ICombatObject target, float amount, int eventId)
+		{
+			CombatGadget._eventsParameters.Clear();
+			if (this._onModifierEventParameters.HasModifierParameter)
 			{
-				CombatGadget._eventsParameters.Add(this._onModifierAppliedEventParameters.Causer);
-				this._onModifierAppliedEventParameters.Causer.SetValue(this, causer);
+				CombatGadget._eventsParameters.Add(this._onModifierEventParameters.Modifier);
+				this._onModifierEventParameters.Modifier.SetValue(this, mod.Data);
 			}
-			base.TriggerEvent(new GadgetEvent(this._events.OnModifierAppliedBlock.Id, this, CombatGadget._eventsParameters));
+			if (this._onModifierEventParameters.HasTargetParameter)
+			{
+				CombatGadget._eventsParameters.Add(this._onModifierEventParameters.Target);
+				this._onModifierEventParameters.Target.SetValue(this, target);
+			}
+			if (this._onModifierEventParameters.HasAmountParameter)
+			{
+				CombatGadget._eventsParameters.Add(this._onModifierEventParameters.Amount);
+				IParameterTomate<float> parameterTomate = this._onModifierEventParameters.Amount.ParameterTomate as IParameterTomate<float>;
+				parameterTomate.SetValue(this, amount);
+			}
+			if (this._onModifierEventParameters.HasCauserParameter)
+			{
+				CombatGadget._eventsParameters.Add(this._onModifierEventParameters.Causer);
+				this._onModifierEventParameters.Causer.SetValue(this, causer);
+			}
+			base.TriggerEvent(GadgetEvent.GetInstance(this._events.OnModifierAppliedBlock.Id, this, CombatGadget._eventsParameters));
 		}
 
 		private void OnCombatDeath(PlayerEvent data)
 		{
+			if (data.Reason != SpawnReason.Death)
+			{
+				return;
+			}
 			CombatGadget._eventsParameters.Clear();
-			CombatGadget._eventsParameters.Add(this._onPlayerStatusParameters.Combat);
-			this._onPlayerStatusParameters.Combat.SetValue(this, (CombatObject)base.GetCombatObject(data.TargetId));
-			base.TriggerEvent(new GadgetEvent(this._events.OnCombatDeathBlock.Id, this, CombatGadget._eventsParameters));
+			if (this._onPlayerStatusParameters.HasCombatParameter)
+			{
+				CombatGadget._eventsParameters.Add(this._onPlayerStatusParameters.Combat);
+				this._onPlayerStatusParameters.Combat.SetValue(this, (CombatObject)base.GetCombatObject(data.TargetId));
+			}
+			if (this._onPlayerStatusParameters.HasCauserParameter)
+			{
+				CombatGadget._eventsParameters.Add(this._onPlayerStatusParameters.Causer);
+				this._onPlayerStatusParameters.Causer.SetValue(this, (CombatObject)base.GetCombatObject(data.CauserId));
+			}
+			base.TriggerEvent(GadgetEvent.GetInstance(this._events.OnCombatDeathBlock.Id, this, CombatGadget._eventsParameters));
 		}
 
 		private void OnCombatSpawn(PlayerEvent data)
 		{
 			CombatGadget._eventsParameters.Clear();
-			CombatGadget._eventsParameters.Add(this._onPlayerStatusParameters.Combat);
-			this._onPlayerStatusParameters.Combat.SetValue(this, (CombatObject)base.GetCombatObject(data.TargetId));
-			base.TriggerEvent(new GadgetEvent(this._events.OnCombatSpawnBlock.Id, this, CombatGadget._eventsParameters));
+			if (this._onPlayerStatusParameters.HasCombatParameter)
+			{
+				CombatGadget._eventsParameters.Add(this._onPlayerStatusParameters.Combat);
+				this._onPlayerStatusParameters.Combat.SetValue(this, (CombatObject)base.GetCombatObject(data.TargetId));
+			}
+			base.TriggerEvent(GadgetEvent.GetInstance(this._events.OnCombatSpawnBlock.Id, this, CombatGadget._eventsParameters));
 		}
 
-		private void OnPhaseChange(BombScoreBoard.State state)
+		private void OnPhaseChange(BombScoreboardState state)
 		{
-			if (state == BombScoreBoard.State.BombDelivery && this._events.OnRoundStartBlock != null)
+			if (state == BombScoreboardState.PreBomb && this._events.OnRoundPreStartBlock != null)
+			{
+				base.TriggerEvent(this._events.OnRoundPreStartBlock.Id);
+			}
+			if (state == BombScoreboardState.BombDelivery && this._events.OnRoundStartBlock != null)
 			{
 				base.TriggerEvent(this._events.OnRoundStartBlock.Id);
 			}
-			if (state == BombScoreBoard.State.Replay && this._events.OnRoundEndBlock != null)
+			if (state == BombScoreboardState.Replay && this._events.OnRoundEndBlock != null)
 			{
 				base.TriggerEvent(this._events.OnRoundEndBlock.Id);
 			}
-			if (state == BombScoreBoard.State.EndGame)
+			if (state == BombScoreboardState.EndGame)
 			{
 				this.UnsubscribeEvents(this._events);
-			}
-		}
-
-		private void InitializeModifiableParameters()
-		{
-			this._modifiableParametersDict = new Dictionary<string, INumericParameter>();
-			for (int i = 0; i < this._modifiableParameters.Count; i++)
-			{
-				if (this._modifiableParameters[i] != null && !(this._modifiableParameters[i].Parameter == null) && !string.IsNullOrEmpty(this._modifiableParameters[i].Name))
-				{
-					INumericParameter numericParameter = this._modifiableParameters[i].Parameter as INumericParameter;
-					if (numericParameter == null)
-					{
-						Debug.LogErrorFormat("Modifiable parameter {0} is not Numeric!", new object[]
-						{
-							this._modifiableParameters[i].Name
-						});
-					}
-					else
-					{
-						this._modifiableParametersDict.Add(this._modifiableParameters[i].Name, numericParameter);
-					}
-				}
 			}
 		}
 
@@ -299,6 +364,16 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 			return list;
 		}
 
+		public override void ForcePressed()
+		{
+			this.TriggerPressed();
+		}
+
+		public override void ForceReleased()
+		{
+			this.TriggerReleased();
+		}
+
 		public override IParameter<T> GetUIParameter<T>(string param)
 		{
 			for (int i = 0; i < this._UIParameters.Count; i++)
@@ -312,19 +387,45 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 			return null;
 		}
 
-		public bool CheckGadgetCanBePressed()
+		public void PopulateSubgadgetEvents()
 		{
-			if (this.GetCooldownEndTime() > GameHubScriptableObject.Hub.Clock.GetPlaybackTime())
+			this._subGadgetEvents = new Dictionary<int, IList<IBlock>>();
+			if (this._subgadgets == null || this._subgadgets.Length == 0)
 			{
-				return false;
+				return;
 			}
-			if (!this._canBeUsedWhileDead && !this._combat.Data.IsAlive())
+			List<KeyValuePair<IBlock, IBlock>> list = new List<KeyValuePair<IBlock, IBlock>>();
+			for (int i = 0; i < this._subgadgets.Length; i++)
 			{
-				return false;
+				list.AddRange(this._subgadgets[i].Events);
 			}
-			BombScoreBoard.State roundState = (BombScoreBoard.State)this._hmmContext.ScoreBoard.RoundState;
-			bool flag = roundState == BombScoreBoard.State.BombDelivery;
-			return this._canBeUsedBeforeRoundStart || flag;
+			for (int j = 0; j < list.Count; j++)
+			{
+				IList<IBlock> list2;
+				if (!this._subGadgetEvents.TryGetValue(list[j].Key.Id, out list2))
+				{
+					list2 = new List<IBlock>();
+					this._subGadgetEvents.Add(list[j].Key.Id, list2);
+				}
+				list2.Add(list[j].Value);
+			}
+		}
+
+		protected override Queue<BaseBlock> _blocksToInitialize
+		{
+			get
+			{
+				Queue<BaseBlock> queue = new Queue<BaseBlock>();
+				queue.Enqueue(this._events.OnPressedBlock);
+				queue.Enqueue(this._events.OnCombatDeathBlock);
+				queue.Enqueue(this._events.OnReleasedBlock);
+				queue.Enqueue(this._events.OnCombatSpawnBlock);
+				queue.Enqueue(this._events.OnRoundEndBlock);
+				queue.Enqueue(this._events.OnRoundStartBlock);
+				queue.Enqueue(this._events.OnModifierAppliedBlock);
+				queue.Enqueue(this._events.OnModifierRemovedBlock);
+				return queue;
+			}
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(CombatGadget));
@@ -340,25 +441,17 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 		private CombatObjectParameter _ownerParameter;
 
 		[SerializeField]
-		private bool _canBeUsedBeforeRoundStart;
-
-		[SerializeField]
-		private bool _canBeUsedWhileDead;
-
-		[SerializeField]
 		private CombatGadget.GadgetEventConfig _events;
 
 		[SerializeField]
 		private CombatGadget.OnPlayerStatusParameters _onPlayerStatusParameters;
 
+		[FormerlySerializedAs("_onModifierAppliedEventParameters")]
 		[SerializeField]
-		private CombatGadget.OnModifierAppliedParameters _onModifierAppliedEventParameters;
+		private CombatGadget.OnModifierEventParameters _onModifierEventParameters;
 
 		[SerializeField]
-		private CombatGadget.ModifierAppliedFilter _modiferFilter;
-
-		[SerializeField]
-		private List<CombatGadget.NamedParameter> _modifiableParameters;
+		private SubGadget[] _subgadgets;
 
 		[SerializeField]
 		private List<CombatGadget.ParameterGadgetContextRoute> _parametersFromOtherGadgets;
@@ -366,15 +459,16 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 		[SerializeField]
 		private List<CombatGadget.NamedParameter> _UIParameters;
 
-		private IParameter<int> _cooldownEndTime;
+		[SerializeField]
+		private List<MasterVFX> _precacheObjects;
+
+		private IParameter<float> _cooldownEndTime;
 
 		private IParameter<float> _cooldownTotalTime;
 
 		private CombatObject _combat;
 
 		private bool _pressed;
-
-		private Dictionary<string, INumericParameter> _modifiableParametersDict;
 
 		private static List<BaseParameter> _eventsParameters = new List<BaseParameter>(8);
 
@@ -397,41 +491,61 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 
 			public BaseBlock OnCombatSpawnBlock;
 
+			public BaseBlock OnRoundPreStartBlock;
+
 			public BaseBlock OnRoundStartBlock;
 
 			public BaseBlock OnRoundEndBlock;
 
 			public BaseBlock OnModifierAppliedBlock;
+
+			public BaseBlock OnModifierRemovedBlock;
 		}
 
 		[Serializable]
 		private class OnPlayerStatusParameters
 		{
+			public bool HasCombatParameter { get; private set; }
+
+			public bool HasCauserParameter { get; private set; }
+
+			public void Initialize()
+			{
+				this.HasCombatParameter = (this.Combat != null);
+				this.HasCauserParameter = (this.Causer != null);
+			}
+
 			public CombatObjectParameter Combat;
+
+			public CombatObjectParameter Causer;
 		}
 
 		[Serializable]
-		private class OnModifierAppliedParameters
+		private class OnModifierEventParameters
 		{
+			public bool HasModifierParameter { get; private set; }
+
+			public bool HasCauserParameter { get; private set; }
+
+			public bool HasTargetParameter { get; private set; }
+
+			public bool HasAmountParameter { get; private set; }
+
+			public void Initialize()
+			{
+				this.HasModifierParameter = (this.Modifier != null);
+				this.HasCauserParameter = (this.Causer != null);
+				this.HasTargetParameter = (this.Target != null);
+				this.HasAmountParameter = (this.Amount != null);
+			}
+
 			public ModifierDataParameter Modifier;
 
 			public CombatObjectParameter Causer;
 
 			public CombatObjectParameter Target;
 
-			public FloatParameter Amount;
-
-			[HideInInspector]
-			public bool HasModifierParameter;
-
-			[HideInInspector]
-			public bool HasCauserParameter;
-
-			[HideInInspector]
-			public bool HasTargetParameter;
-
-			[HideInInspector]
-			public bool HasAmountParameter;
+			public BaseParameter Amount;
 		}
 
 		[Serializable]
@@ -440,88 +554,6 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 			public string Name;
 
 			public BaseParameter Parameter;
-		}
-
-		[Serializable]
-		private class ModifierAppliedFilter
-		{
-			public override string ToString()
-			{
-				return string.Format("T=[{0}] C=[{1}] Eff=[{2}]", this.Target, this.Causer, (!this.AnyEffect) ? Arrays.ToStringWithComma(this.ValidEffects) : "Any");
-			}
-
-			public bool FilterModifierApplication(ModifierInstance mod, CombatObject causer, CombatObject target, CombatObject self)
-			{
-				return this.FilterCombat(causer, self, this.Causer) || this.FilterCombat(target, self, this.Target) || this.FilterModifier(mod);
-			}
-
-			private bool FilterCombat(CombatObject combat, CombatObject self, CombatGadget.ModifierAppliedFilter.Filter filter)
-			{
-				if (combat == null)
-				{
-					return !filter.Scenery;
-				}
-				if (combat == self)
-				{
-					return !filter.Self;
-				}
-				TeamKind team = self.Team;
-				TeamKind team2 = combat.Team;
-				if (team2 == team)
-				{
-					return !filter.Allies;
-				}
-				return team2 != team && !filter.Enemies;
-			}
-
-			private bool FilterModifier(ModifierInstance mod)
-			{
-				if (this.AnyEffect)
-				{
-					return false;
-				}
-				EffectKind effect = mod.Info.Effect;
-				for (int i = 0; i < this.ValidEffects.Length; i++)
-				{
-					EffectKind effectKind = this.ValidEffects[i];
-					if (effect == effectKind)
-					{
-						return false;
-					}
-				}
-				return true;
-			}
-
-			public CombatGadget.ModifierAppliedFilter.Filter Target;
-
-			public CombatGadget.ModifierAppliedFilter.Filter Causer;
-
-			public bool AnyEffect;
-
-			public EffectKind[] ValidEffects;
-
-			[Serializable]
-			public class Filter
-			{
-				public override string ToString()
-				{
-					return string.Format("S={0} A={1} E={2} H={3}", new object[]
-					{
-						this.Self,
-						this.Allies,
-						this.Enemies,
-						this.Scenery
-					});
-				}
-
-				public bool Self;
-
-				public bool Allies;
-
-				public bool Enemies;
-
-				public bool Scenery;
-			}
 		}
 	}
 }

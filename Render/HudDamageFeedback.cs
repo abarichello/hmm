@@ -61,7 +61,7 @@ namespace HeavyMetalMachines.Render
 		private void UpdateMaterialColor()
 		{
 			this._alphaCache = this._alpha;
-			this.HudMaterial.SetColor("_TintColor", new Color(this.MaterialDefaultColor.r, this.MaterialDefaultColor.g, this.MaterialDefaultColor.b, this.MaterialDefaultColor.a * this._alpha));
+			this.HudMaterial.SetColor(HudDamageFeedback.TintColor, new Color(this.MaterialDefaultColor.r, this.MaterialDefaultColor.g, this.MaterialDefaultColor.b, this.MaterialDefaultColor.a * this._alpha));
 		}
 
 		private void ResetUvs()
@@ -175,5 +175,7 @@ namespace HeavyMetalMachines.Render
 		private int _screenWidthCache;
 
 		private int _screenHeightCache;
+
+		private static readonly int TintColor = Shader.PropertyToID("_TintColor");
 	}
 }

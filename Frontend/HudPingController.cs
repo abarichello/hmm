@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.Localization;
 using Pocketverse;
 using UnityEngine;
 using UnityEngine.UI;
@@ -135,8 +136,8 @@ namespace HeavyMetalMachines.Frontend
 		private float UpdateFrequencyInSec;
 
 		[Header("[Test Only]")]
-		[Range(0f, 2000f)]
 		[SerializeField]
+		[Range(0f, 2000f)]
 		private int _testPingInMillis;
 
 		private int _lastPingInMillis;

@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.DriverHelper;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Frontend
@@ -19,11 +20,7 @@ namespace HeavyMetalMachines.Frontend
 
 		public TooltipController TooltipController;
 
-		public JoystickSchemeController JoystickScheme;
-
 		public SharedPreGameGui SharedPreGameWindow;
-
-		public TopMenuController TopMenu;
 
 		public TopRightButtonsController TopRightButtonsMenu;
 
@@ -32,7 +29,5 @@ namespace HeavyMetalMachines.Frontend
 		public GUIValuesInfo GUIValues;
 
 		public DriverHelperController DriverHelper;
-
-		public GUIJoystickShortcutIcons JoystickShortcutIcons;
 	}
 }

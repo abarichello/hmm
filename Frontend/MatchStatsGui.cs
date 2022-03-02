@@ -1,22 +1,48 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids.Infra;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids.Social;
-using HeavyMetalMachines.Audio;
-using HeavyMetalMachines.Match;
+using HeavyMetalMachines.BI;
+using HeavyMetalMachines.Localization;
+using HeavyMetalMachines.Presenting;
+using HeavyMetalMachines.Presenting.NGui;
 using HeavyMetalMachines.Swordfish;
+using HeavyMetalMachines.Tournaments;
+using HeavyMetalMachines.Tournaments.API;
 using HeavyMetalMachines.Utils;
 using HeavyMetalMachines.VFX.PlotKids;
+using Hoplon.Input;
+using Hoplon.Localization.TranslationTable;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
 	public class MatchStatsGui : GameHubBehaviour
 	{
+		public MatchStatsGui.MatchmakingInterfaceState MMInterfaceState
+		{
+			get
+			{
+				return this._mmInterfaceState;
+			}
+			set
+			{
+				if (this._mmInterfaceState != value)
+				{
+					this.ChangeState(value);
+					this._mmInterfaceState = value;
+				}
+			}
+		}
+
 		private void Awake()
 		{
-			this.NetClient = (NetworkClient)GameHubBehaviour.Hub.Net;
-			this._cachedPlayBtnLocalized = Language.Get("SELECTION_MODE_START", TranslationSheets.MainMenuGui);
+			this._mainMenuGui = GameHubBehaviour.Hub.State.Current.GetStateGuiController<MainMenuGui>();
+			this._netClient = (NetworkClient)GameHubBehaviour.Hub.Net;
 		}
 
 		private void Start()
@@ -24,6 +50,7 @@ namespace HeavyMetalMachines.Frontend
 			ManagerController.Get<GroupManager>().EvtInviteHandled += this.EvtInviteHandled;
 			this.MMInterfaceState = MatchStatsGui.MatchmakingInterfaceState.None;
 			this.ChangeState(MatchStatsGui.MatchmakingInterfaceState.None);
+			SingletonMonoBehaviour<RegionController>.Instance.OnRegionServerChanged += this.OnOnRegionServerChanged;
 		}
 
 		private void EvtInviteHandled(bool inviteAccepted)
@@ -38,6 +65,38 @@ namespace HeavyMetalMachines.Frontend
 		private void OnEnable()
 		{
 			GameHubBehaviour.Hub.Swordfish.Msg.Matchmaking.OnTimePredict += this.TimeToPlayPredictUpdated;
+			this.UpdateQueueKindIcon();
+			IInputActiveDeviceChangeNotifier inputActiveDeviceChangeNotifier = this._diContainer.Resolve<IInputActiveDeviceChangeNotifier>();
+			this._activeDeviceDisposable = ObservableExtensions.Subscribe<InputDevice>(Observable.Do<InputDevice>(inputActiveDeviceChangeNotifier.GetAndObserveActiveDeviceChange(), delegate(InputDevice device)
+			{
+				this.SetActiveCancelSearchButton(device != 3);
+			}));
+		}
+
+		private void SetActiveCancelSearchButton(bool active)
+		{
+			this._cancelSearchButton.SetActive(active);
+		}
+
+		private void UpdateQueueKindIcon()
+		{
+			string currentQueueName = GameHubBehaviour.Hub.MatchmakingService.GetCurrentQueueName();
+			string imageName;
+			switch (currentQueueName)
+			{
+			case "RankedPSN":
+			case "RankedXboxLive":
+			case "Ranked":
+				imageName = "search_ranked_icon";
+				goto IL_CB;
+			case "ProTournament":
+			case "BeginnerTournament":
+				imageName = "search_tournament_icon";
+				goto IL_CB;
+			}
+			imageName = "search_pvp_icon";
+			IL_CB:
+			this._queueKindDynamicImage.SetImageName(imageName);
 		}
 
 		private void OnDestroy()
@@ -47,10 +106,16 @@ namespace HeavyMetalMachines.Frontend
 				return;
 			}
 			ManagerController.Get<GroupManager>().EvtInviteHandled -= this.EvtInviteHandled;
+			SingletonMonoBehaviour<RegionController>.Instance.OnRegionServerChanged -= this.OnOnRegionServerChanged;
 		}
 
 		private void OnDisable()
 		{
+			if (this._activeDeviceDisposable != null)
+			{
+				this._activeDeviceDisposable.Dispose();
+				this._activeDeviceDisposable = null;
+			}
 			try
 			{
 				GameHubBehaviour.Hub.Swordfish.Msg.Matchmaking.OnTimePredict -= this.TimeToPlayPredictUpdated;
@@ -70,7 +135,7 @@ namespace HeavyMetalMachines.Frontend
 
 		private void TimeToPlayPredictUpdated(double obj)
 		{
-			string arg = Language.Get("QUEUE_AVG_TIME", TranslationSheets.MainMenuGui);
+			string arg = Language.Get("QUEUE_AVG_TIME", TranslationContext.MainMenuGui);
 			if (obj < 0.0 || obj > 10.0)
 			{
 				this.TopAveargeTimeLabel.text = string.Format("{0}{1}", "+10", arg);
@@ -127,69 +192,6 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
-		[Obsolete]
-		public void OnReconnectClick()
-		{
-			MatchStatsGui.Log.Warn("Called  obsolete OnReconnectClick!");
-			Guid confirmWindowGuid = Guid.NewGuid();
-			ConfirmWindowProperties properties = new ConfirmWindowProperties
-			{
-				Guid = confirmWindowGuid,
-				QuestionText = Language.Get("RECONNECT_QUESTION", TranslationSheets.MainMenuGui),
-				ConfirmButtonText = Language.Get("Accept", "GUI"),
-				OnConfirm = delegate()
-				{
-					GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.HideConfirmWindow(confirmWindowGuid);
-					this.BackToGame();
-				},
-				RefuseButtonText = Language.Get("Refuse", "GUI"),
-				OnRefuse = delegate()
-				{
-					GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.HideConfirmWindow(confirmWindowGuid);
-					this.DisconnectFromMatch();
-				}
-			};
-			GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.OpenConfirmWindow(properties);
-		}
-
-		public void BackToGame()
-		{
-			this.MMInterfaceState = MatchStatsGui.MatchmakingInterfaceState.WaitingServer;
-			GameHubBehaviour.Hub.GuiScripts.Loading.ShowDefaultLoading(false);
-			GameHubBehaviour.Hub.User.ReloadPlayer(new Action(this.GoBackToGame), new Action(this.GoBackToGame));
-		}
-
-		private void GoBackToGame()
-		{
-			if (GameHubBehaviour.Hub.User.Bag.CurrentPort <= 0)
-			{
-				MatchStatsGui.Log.ErrorFormat("Match ended while player was on main menu, no longer valid", new object[0]);
-				GameHubBehaviour.Hub.GuiScripts.Loading.HideLoading();
-				this.MMInterfaceState = MatchStatsGui.MatchmakingInterfaceState.None;
-				Guid confirmWindowGuid = Guid.NewGuid();
-				ConfirmWindowProperties properties = new ConfirmWindowProperties
-				{
-					Guid = confirmWindowGuid,
-					QuestionText = Language.Get("MatchFailedToConnectMatchEnded", TranslationSheets.MainMenuGui),
-					OkButtonText = Language.Get("Ok", TranslationSheets.GUI),
-					OnOk = delegate()
-					{
-						GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.HideConfirmWindow(confirmWindowGuid);
-					}
-				};
-				GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.OpenConfirmWindow(properties);
-				return;
-			}
-			this._lastConnectionState = SessionState.Closed;
-			GameHubBehaviour.Hub.Server.ServerIp = GameHubBehaviour.Hub.User.Bag.CurrentServerIp;
-			GameHubBehaviour.Hub.Server.ServerPort = GameHubBehaviour.Hub.User.Bag.CurrentPort;
-			GameHubBehaviour.Hub.Swordfish.Msg.ClientMatchId = new Guid(GameHubBehaviour.Hub.User.Bag.CurrentMatchId);
-			GameHubBehaviour.Hub.User.ConnectToServer(true, delegate
-			{
-				GameHubBehaviour.Hub.State.GotoState(MatchStatsGui.MainMenuGui.Main, false);
-			}, null);
-		}
-
 		private void CheckAndChangeState()
 		{
 			SwordfishMatchmaking matchmaking = GameHubBehaviour.Hub.Swordfish.Msg.Matchmaking;
@@ -199,49 +201,42 @@ namespace HeavyMetalMachines.Frontend
 				this.MMInterfaceState = MatchStatsGui.MatchmakingInterfaceState.Play;
 				break;
 			case MatchStatsGui.MatchmakingInterfaceState.WaitingServer:
-				if (this._lastConnectionState != this.NetClient.State)
+				if (this._lastConnectionState != this._netClient.State)
 				{
 					string text = string.Empty;
-					SessionState state = this.NetClient.State;
-					if (state != SessionState.Opening)
+					switch (this._netClient.State)
 					{
-						if (state != SessionState.Established)
-						{
-							if (state == SessionState.Closed)
-							{
-								text = Language.Get("MatchClosed", "MainMenuGui");
-								this.MMInterfaceState = ((!matchmaking.Connected) ? MatchStatsGui.MatchmakingInterfaceState.Play : MatchStatsGui.MatchmakingInterfaceState.OnTheLine);
-								if (GameHubBehaviour.Hub.User.IsReconnecting)
-								{
-									GameHubBehaviour.Hub.User.IsReconnecting = false;
-									MatchStatsGui.MainMenuGui.ClearCurrentServer();
-								}
-							}
-						}
-						else
-						{
-							text = Language.Get("MatchEstablished", "MainMenuGui");
-						}
-					}
-					else
-					{
-						text = Language.Get("MatchOpening", "MainMenuGui");
+					case SessionState.Closed:
+					case SessionState.Lost:
+						text = Language.Get("MatchClosed", TranslationContext.MainMenuGui);
+						this.AnimateHideMatchSearchingPanel();
+						this._waitingWindow.Hide(typeof(MatchStatsGui));
+						this.MMInterfaceState = MatchStatsGui.MatchmakingInterfaceState.Play;
+						break;
+					case SessionState.Opening:
+						text = Language.Get("MatchOpening", TranslationContext.MainMenuGui);
+						break;
+					case SessionState.Established:
+						text = Language.Get("MatchEstablished", TranslationContext.MainMenuGui);
+						break;
 					}
 					if (!string.IsNullOrEmpty(text))
 					{
 						this.UpdateStatusTxt(text);
-						MatchStatsGui.MainMenuGui.MatchAccept.SetTitleText(text);
+						this._mainMenuGui.MatchAccept.SetTitleText(text);
 					}
-					this._lastConnectionState = this.NetClient.State;
+					this._lastConnectionState = this._netClient.State;
 				}
 				if (matchmaking.State == SwordfishMatchmaking.MatchmakingState.None && !matchmaking.Undefined)
 				{
+					this._waitingWindow.Hide(typeof(MatchStatsGui));
 					this.MMInterfaceState = MatchStatsGui.MatchmakingInterfaceState.Play;
 				}
 				else if (matchmaking.State != SwordfishMatchmaking.MatchmakingState.Started && !GameHubBehaviour.Hub.User.IsReconnecting)
 				{
 					if (!matchmaking.Undefined)
 					{
+						this._waitingWindow.Hide(typeof(MatchStatsGui));
 						this.MMInterfaceState = ((!matchmaking.Connected) ? MatchStatsGui.MatchmakingInterfaceState.Play : MatchStatsGui.MatchmakingInterfaceState.OnTheLine);
 						if (matchmaking.LastFailed)
 						{
@@ -249,23 +244,15 @@ namespace HeavyMetalMachines.Frontend
 							ConfirmWindowProperties properties = new ConfirmWindowProperties
 							{
 								Guid = confirmWindowGuid,
-								QuestionText = Language.Get("MatchFailedToConnect", "MainMenuGui"),
-								OkButtonText = Language.Get("Ok", "GUI"),
+								QuestionText = Language.Get("MatchFailedToConnect", TranslationContext.MainMenuGui),
+								OkButtonText = Language.Get("Ok", TranslationContext.GUI),
 								OnOk = delegate()
 								{
 									GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.HideConfirmWindow(confirmWindowGuid);
+									GameHubBehaviour.Hub.EndSession("MatchFailedToConnect");
 								}
 							};
 							GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.OpenConfirmWindow(properties);
-							GameHubBehaviour.Hub.User.ReloadPlayer(delegate
-							{
-								this.enabled = false;
-								this.enabled = true;
-							}, delegate
-							{
-								this.enabled = false;
-								this.enabled = true;
-							});
 						}
 					}
 				}
@@ -278,21 +265,82 @@ namespace HeavyMetalMachines.Frontend
 				}
 				break;
 			case MatchStatsGui.MatchmakingInterfaceState.OnTheLine:
-				MatchStatsGui.MainMenuGui.MatchAccept.HideAcceptanceWindow(false);
+				if (this._mainMenuGui.MatchAccept.Visible)
+				{
+					this._mainMenuGui.MatchAccept.HideAcceptanceWindow(false);
+				}
 				if (!matchmaking.Connected)
 				{
 					this.MMInterfaceState = MatchStatsGui.MatchmakingInterfaceState.Play;
 				}
 				else if (matchmaking.State == SwordfishMatchmaking.MatchmakingState.Made)
 				{
-					this.MMInterfaceState = MatchStatsGui.MatchmakingInterfaceState.MatchMadeAsk;
+					if (GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.IgnoreAutoTournamentJoin))
+					{
+						this.MMInterfaceState = MatchStatsGui.MatchmakingInterfaceState.MatchMadeAsk;
+					}
+					else
+					{
+						string currentQueueName = GameHubBehaviour.Hub.MatchmakingService.GetCurrentQueueName();
+						if (currentQueueName != null)
+						{
+							if (MatchStatsGui.<>f__switch$map7 == null)
+							{
+								MatchStatsGui.<>f__switch$map7 = new Dictionary<string, int>(7)
+								{
+									{
+										"Normal",
+										0
+									},
+									{
+										"Ranked",
+										0
+									},
+									{
+										"Novice",
+										0
+									},
+									{
+										"NormalPSN",
+										0
+									},
+									{
+										"NormalXboxLive",
+										0
+									},
+									{
+										"RankedPSN",
+										0
+									},
+									{
+										"RankedXboxLive",
+										0
+									}
+								};
+							}
+							int num;
+							if (MatchStatsGui.<>f__switch$map7.TryGetValue(currentQueueName, out num))
+							{
+								if (num == 0)
+								{
+									this.MMInterfaceState = MatchStatsGui.MatchmakingInterfaceState.MatchMadeAsk;
+									break;
+								}
+							}
+						}
+						if (this.IsTournamentQueue(currentQueueName))
+						{
+							this._waitingWindow.Show(typeof(MatchStatsGui));
+							this.MMInterfaceState = MatchStatsGui.MatchmakingInterfaceState.MatchMadeWaiting;
+						}
+					}
 				}
 				break;
 			case MatchStatsGui.MatchmakingInterfaceState.MatchMadeAsk:
 				if (!matchmaking.Connected)
 				{
 					this.MMInterfaceState = MatchStatsGui.MatchmakingInterfaceState.Play;
-					MatchStatsGui.MainMenuGui.MatchMakingCanceled();
+					this._mainMenuGui.OnClientDisconnectedFromMatchMaking();
 				}
 				else if (matchmaking.State == SwordfishMatchmaking.MatchmakingState.None)
 				{
@@ -302,15 +350,17 @@ namespace HeavyMetalMachines.Frontend
 			case MatchStatsGui.MatchmakingInterfaceState.MatchMadeWaiting:
 				if (matchmaking.State == SwordfishMatchmaking.MatchmakingState.Started)
 				{
-					GameHubBehaviour.Hub.Swordfish.Msg.ConnectToMatch(MatchStatsGui.MainMenuGui.Main, new Action(this.FailedToConnect));
+					GameHubBehaviour.Hub.Swordfish.Msg.ConnectToMatch();
 					this.MMInterfaceState = MatchStatsGui.MatchmakingInterfaceState.WaitingServer;
 				}
 				else if (!matchmaking.Connected && !matchmaking.WaitingForMatchResult)
 				{
+					this._waitingWindow.Hide(typeof(MatchStatsGui));
 					this.MMInterfaceState = MatchStatsGui.MatchmakingInterfaceState.Play;
 				}
 				else if (matchmaking.State == SwordfishMatchmaking.MatchmakingState.None)
 				{
+					this._waitingWindow.Hide(typeof(MatchStatsGui));
 					this.MMInterfaceState = MatchStatsGui.MatchmakingInterfaceState.OnTheLine;
 				}
 				break;
@@ -320,43 +370,38 @@ namespace HeavyMetalMachines.Frontend
 		private void FailedToConnect()
 		{
 			this.AnimateHideMatchSearchingPanel();
-			this.MMInterfaceState = MatchStatsGui.MatchmakingInterfaceState.None;
-			MatchStatsGui.MainMenuGui.MatchAccept.HideAcceptanceWindow(false);
-			MatchStatsGui.MainMenuGui.UpdateMainMenuButtons();
+			this._waitingWindow.Hide(typeof(MatchStatsGui));
+			this.MMInterfaceState = MatchStatsGui.MatchmakingInterfaceState.Play;
+			this._mainMenuGui.MatchAccept.HideAcceptanceWindow(false);
 		}
 
 		public void DisconnectFromMatch()
 		{
-			MatchStatsGui.MainMenuGui.ClearCurrentServer();
+			this._mainMenuGui.ClearCurrentServer();
 			this.MMInterfaceState = MatchStatsGui.MatchmakingInterfaceState.Play;
-		}
-
-		private static MainMenuGui MainMenuGui
-		{
-			get
-			{
-				return GameHubBehaviour.Hub.State.Current.GetStateGuiController<MainMenuGui>();
-			}
 		}
 
 		public void AnimateShowMatchSearchingPanel()
 		{
-			if (GameHubBehaviour.Hub.Match.Kind == MatchData.MatchKind.Custom && (!ManagerController.Get<GroupManager>().IsUserInGroupOrIsOwner || ManagerController.Get<GroupManager>().GetSelfGroupStatus() == GroupStatus.Owner))
+			if (GameHubBehaviour.Hub.Match.Kind == 4 && (!ManagerController.Get<GroupManager>().IsUserInGroupOrIsOwner || ManagerController.Get<GroupManager>().GetSelfGroupStatus() == GroupStatus.Owner))
 			{
 				return;
 			}
+			MatchStatsGui.Log.Info(string.Format("Showing match search panel. MatchKind={0}", GameHubBehaviour.Hub.Match.Kind));
 			this.ExitButtonCollider.enabled = true;
 			this.Visible = true;
 			this.TopPlayTimerLabel.gameObject.SetActive(true);
 			GUIUtils.PlayAnimation(this.WindowAnimation, false, 1f, string.Empty);
+			this.UpdateQueueKindIcon();
 		}
 
 		public void AnimateHideMatchSearchingPanel()
 		{
-			if (GameHubBehaviour.Hub.Match.Kind == MatchData.MatchKind.Custom && (!ManagerController.Get<GroupManager>().IsUserInGroupOrIsOwner || ManagerController.Get<GroupManager>().GetSelfGroupStatus() == GroupStatus.Owner))
+			if (GameHubBehaviour.Hub.Match.Kind == 4 && (!ManagerController.Get<GroupManager>().IsUserInGroupOrIsOwner || ManagerController.Get<GroupManager>().GetSelfGroupStatus() == GroupStatus.Owner))
 			{
 				return;
 			}
+			SingletonMonoBehaviour<RegionController>.Instance.UpdateCurrentRegionOnSFServer(false);
 			if (!this.Visible)
 			{
 				return;
@@ -369,97 +414,72 @@ namespace HeavyMetalMachines.Frontend
 
 		public void OnClickedCancelBtn()
 		{
+			this._clientButtonBiLogger.LogButtonClick(ButtonName.MatchmakingCancelTopGui);
+			MatchStatsGui.Log.DebugFormat("OnClickedCancelBtn MatchMaking state interface {0}", new object[]
+			{
+				this.MMInterfaceState
+			});
 			if (!this.Visible)
 			{
+				MatchStatsGui.Log.Debug("OnClickedCancelBtn is not visible");
 				return;
 			}
 			if (this.MatchFound())
 			{
 				return;
 			}
-			MatchStatsGui.MainMenuGui.CancelMatchMaking();
-			this.AnimateHideMatchSearchingPanel();
-		}
-
-		public void UpdateGameModePingLabel(GameModeTabs gameMode)
-		{
-			if (gameMode != GameModeTabs.CoopVsBots)
+			IDialogPresenter dialogPresenter = this._diContainer.Resolve<IDialogPresenter>();
+			ObservableExtensions.Subscribe<bool>(Observable.Do<bool>(Observable.Where<bool>(dialogPresenter.ShowQuestionWindow(this.GetCancelSearchQuestionConfig()), (bool accept) => accept), delegate(bool _)
 			{
-				if (gameMode == GameModeTabs.Normal)
-				{
-					this.GameModeLabel.text = Language.Get("SELECTION_MODE_NORMAL", TranslationSheets.MainMenuGui);
-				}
-			}
-			else
+				this._mainMenuGui.CancelMatchMaking();
+				this.AnimateHideMatchSearchingPanel();
+			}));
+		}
+
+		private QuestionConfiguration GetCancelSearchQuestionConfig()
+		{
+			ILocalizeKey localizeKey = this._diContainer.Resolve<ILocalizeKey>();
+			return new QuestionConfiguration
 			{
-				this.GameModeLabel.text = Language.Get("SELECTION_MODE_COOP", TranslationSheets.MainMenuGui);
-			}
+				AcceptMessage = Language.Get("Yes", TranslationContext.GUI),
+				DeclineMessage = Language.Get("No", TranslationContext.GUI),
+				Message = localizeKey.Get("MAINMENU_EXIT_MATCH_QUESTION", TranslationContext.MainMenuGui)
+			};
 		}
 
-		public void UpdateGameModePingSprite(RegionServerPing region)
-		{
-			switch (RegionPingUtils.GetPingStatus(region.Ping, GameHubBehaviour.Hub))
-			{
-			case RegionPingUtils.PingStatus.None:
-				this.PingSprite.sprite2D = this.NoPing;
-				break;
-			case RegionPingUtils.PingStatus.High:
-				this.PingSprite.sprite2D = this.HighPing;
-				break;
-			case RegionPingUtils.PingStatus.Average:
-				this.PingSprite.sprite2D = this.MediumPing;
-				break;
-			case RegionPingUtils.PingStatus.Low:
-				this.PingSprite.sprite2D = this.LowPing;
-				break;
-			}
-		}
-
-		public void OnClickedPlayBtn(GameModeTabs gameMode)
-		{
-			this.UpdateGameModePingLabel(gameMode);
-			this.UpdateGameModePingSprite(SingletonMonoBehaviour<RegionController>.Instance.GetBestServerSaved());
-		}
-
-		private void RefreshOnlineStats()
-		{
-			this.NumberOfPlayers.text = Math.Max(0, this._NumberOfPlayers).ToString();
-		}
-
-		private void UpdateOnlinePlayers(int count)
-		{
-			this._NumberOfPlayers = count;
-			this.RefreshOnlineStats();
-		}
-
-		public void SetStatusText(string status)
+		private void SetStatusText(string status)
 		{
 			this._currentStatus = status;
 		}
 
-		public void UpdateRealTimeTxt(string status)
+		private void UpdateRealTimeTxt(string status)
 		{
 			this.SetStatusText(status);
 		}
 
-		public void UpdateStatusTxt(string status)
+		private void UpdateStatusTxt(string status)
 		{
 			this.SetStatusText(status);
 		}
 
-		public string GetStatus()
+		private void OnOnRegionServerChanged(RegionServerPing regionServerPing)
+		{
+			this.CurrentRegionLabel.text = Language.Get(regionServerPing.Region.RegionNameI18N, TranslationContext.Region);
+		}
+
+		private string GetStatus()
 		{
 			return this._currentStatus;
 		}
 
-		public void SetupPlaybutton()
+		private void SetupPlaybutton()
 		{
-			this.UpdateStatusTxt(Language.Get("MatchSearching", "MainMenuGui"));
+			this.UpdateStatusTxt(Language.Get("MatchSearching", TranslationContext.MainMenuGui));
 		}
 
 		private bool IsInQueue()
 		{
-			return this.MMInterfaceState != MatchStatsGui.MatchmakingInterfaceState.None && this.MMInterfaceState != MatchStatsGui.MatchmakingInterfaceState.Play && !string.IsNullOrEmpty(MatchStatsGui.MainMenuGui.GetQueueName());
+			return this.MMInterfaceState != MatchStatsGui.MatchmakingInterfaceState.None && this.MMInterfaceState != MatchStatsGui.MatchmakingInterfaceState.Play && !string.IsNullOrEmpty(this._mainMenuGui.GetQueueName());
 		}
 
 		private bool ShouldClose(MatchStatsGui.MatchmakingInterfaceState newState)
@@ -470,89 +490,143 @@ namespace HeavyMetalMachines.Frontend
 		private void ChangeState(MatchStatsGui.MatchmakingInterfaceState newState)
 		{
 			SwordfishMatchmaking matchmaking = GameHubBehaviour.Hub.Swordfish.Msg.Matchmaking;
-			if ((this.MMInterfaceState == MatchStatsGui.MatchmakingInterfaceState.MatchMadeAsk || this.MMInterfaceState == MatchStatsGui.MatchmakingInterfaceState.OnTheLine) && newState == MatchStatsGui.MatchmakingInterfaceState.Play && !matchmaking.Connected && !matchmaking.WaitingForMatchResult && !matchmaking.LastFailed && MatchStatsGui.MainMenuGui.MatchAccept.acceptPanel.gameObject.activeSelf)
+			MatchStatsGui.Log.DebugFormat("Changing state from={0} to={1} mmConnected={2} mmUndefiend={3} mmState={4} mmWaitingForMatchResult={5} mmGroup={6} mmGroupId={7} mmLastFailed={8} mmMatchId={9}", new object[]
 			{
-				GameModesGUI.MatchBlocker.BlockPlayer();
+				this.MMInterfaceState,
+				newState,
+				matchmaking.Connected,
+				matchmaking.Undefined,
+				matchmaking.State,
+				matchmaking.WaitingForMatchResult,
+				matchmaking.Group,
+				matchmaking.GroupId,
+				matchmaking.LastFailed,
+				matchmaking.MatchId
+			});
+			if ((this.MMInterfaceState == MatchStatsGui.MatchmakingInterfaceState.MatchMadeAsk || this.MMInterfaceState == MatchStatsGui.MatchmakingInterfaceState.OnTheLine) && newState == MatchStatsGui.MatchmakingInterfaceState.Play && !matchmaking.Connected && !matchmaking.WaitingForMatchResult && !matchmaking.LastFailed && this._mainMenuGui.MatchAccept.acceptPanel.gameObject.activeSelf)
+			{
+				this._mainMenuGui.GameModesGui.BlockPlayer();
 			}
 			switch (newState)
 			{
 			case MatchStatsGui.MatchmakingInterfaceState.None:
-				MatchStatsGui.MainMenuGui.MatchAccept.HideAcceptanceWindow(false);
+				this._mainMenuGui.MatchAccept.HideAcceptanceWindow(false);
 				this.TopPlayTimerGameObject.SetActive(false);
-				this.TopPlayStatusGameObject.SetActive(false);
-				this.TopPlayButtonStatusLabel.text = string.Empty;
 				break;
 			case MatchStatsGui.MatchmakingInterfaceState.WaitingServer:
-				this.UpdateStatusTxt(Language.Get("MatchWaitingServerResponse", "MainMenuGui"));
-				MatchStatsGui.MainMenuGui.MatchAccept.SetTitleText(this.GetStatus());
-				MatchStatsGui.MainMenuGui.MatchAccept.WaitingServerStart();
+				this.UpdateStatusTxt(Language.Get("MatchWaitingServerResponse", TranslationContext.MainMenuGui));
+				this._mainMenuGui.MatchAccept.SetTitleText(this.GetStatus());
+				this._mainMenuGui.MatchAccept.WaitingServerStart();
 				this.TopPlayTimerGameObject.SetActive(true);
-				this.TopPlayStatusGameObject.SetActive(true);
-				this.TopPlayButtonStatusLabel.text = this.GetStatus();
 				break;
 			case MatchStatsGui.MatchmakingInterfaceState.Play:
 				this.SetupPlaybutton();
-				MatchStatsGui.MainMenuGui.MatchAccept.HideAcceptanceWindow(true);
+				this._mainMenuGui.MatchAccept.HideAcceptanceWindow(true);
 				this.SetStatusText(string.Empty);
-				this.TopPlayButtonStatusLabel.text = this.GetStatus();
 				this.TopPlayTimerLabel.text = string.Empty;
-				this.TopPlayButtonStatusLabel.text = string.Empty;
 				this.TopPlayTimerGameObject.SetActive(false);
-				this.TopPlayStatusGameObject.SetActive(false);
-				this.GameModeStartButton.text = this._cachedPlayBtnLocalized;
 				break;
 			case MatchStatsGui.MatchmakingInterfaceState.OnTheLine:
-				this.SetStatusText(Language.Get("MatchSearching", "MainMenuGui"));
+				this.SetStatusText(Language.Get("MatchSearching", TranslationContext.MainMenuGui));
 				if (this.ShouldClose(newState))
 				{
 					return;
 				}
-				MatchStatsGui.MainMenuGui.MatchAccept.HideAcceptanceWindow(true);
+				this._mainMenuGui.MatchAccept.HideAcceptanceWindow(true);
 				this.TopPlayTimerGameObject.SetActive(true);
-				this.TopPlayStatusGameObject.SetActive(true);
-				this.TopPlayButtonStatusLabel.text = this.GetStatus();
 				break;
 			case MatchStatsGui.MatchmakingInterfaceState.MatchMadeAsk:
-				this.SetStatusText(Language.Get("MatchQuestion", "MainMenuGui"));
-				MatchStatsGui.MainMenuGui.MatchAccept.SetTitleText(this.GetStatus());
-				MatchStatsGui.MainMenuGui.MatchAccept.ShowMatchConfirmation(matchmaking.GetNumBotsInMatchmakingMade(), matchmaking.GetMatchAcceptTimeout());
-				GameHubBehaviour.Hub.GuiScripts.Esc.SetWindowVisibility(false);
-				GameHubBehaviour.Hub.GuiScripts.ScreenResolution.HighlightWindow(true);
-				this.TopPlayTimerGameObject.SetActive(true);
-				this.TopPlayStatusGameObject.SetActive(false);
-				MatchStatsGui.MainMenuGui.OnMatchFound();
-				GameHubBehaviour.Hub.AnnouncerAudio.Play(AnnouncerVoiceOverType.MatchFound);
+				this.OpenMatchStatsAccept(matchmaking);
 				break;
 			case MatchStatsGui.MatchmakingInterfaceState.MatchMadeWaiting:
-				this.SetStatusText(Language.Get("MatchWaitingForOtherPlayers", "MainMenuGui"));
-				MatchStatsGui.MainMenuGui.MatchAccept.SetTitleText(this.GetStatus());
-				MatchStatsGui.MainMenuGui.MatchAccept.WaitingServerStart();
-				this.TopPlayTimerGameObject.SetActive(true);
-				this.TopPlayStatusGameObject.SetActive(true);
-				this.TopPlayButtonStatusLabel.text = this.GetStatus();
+			{
+				string currentQueueName = GameHubBehaviour.Hub.MatchmakingService.GetCurrentQueueName();
+				if (currentQueueName != null)
+				{
+					if (MatchStatsGui.<>f__switch$map8 == null)
+					{
+						MatchStatsGui.<>f__switch$map8 = new Dictionary<string, int>(7)
+						{
+							{
+								"Novice",
+								0
+							},
+							{
+								"Normal",
+								0
+							},
+							{
+								"NormalPSN",
+								0
+							},
+							{
+								"NormalXboxLive",
+								0
+							},
+							{
+								"Ranked",
+								0
+							},
+							{
+								"RankedPSN",
+								0
+							},
+							{
+								"RankedXboxLive",
+								0
+							}
+						};
+					}
+					int num;
+					if (MatchStatsGui.<>f__switch$map8.TryGetValue(currentQueueName, out num))
+					{
+						if (num == 0)
+						{
+							this.SetStatusText(Language.Get("MatchWaitingForOtherPlayers", TranslationContext.MainMenuGui));
+							this._mainMenuGui.MatchAccept.SetTitleText(this.GetStatus());
+							this._mainMenuGui.MatchAccept.WaitingServerStart();
+							this.TopPlayTimerGameObject.SetActive(true);
+							break;
+						}
+					}
+				}
+				this.CheckTournamentQueue(currentQueueName);
 				break;
 			}
-		}
-
-		public MatchStatsGui.MatchmakingInterfaceState MMInterfaceState
-		{
-			get
-			{
-				return this._mmInterfaceState;
-			}
-			set
-			{
-				if (this._mmInterfaceState != value)
-				{
-					this.ChangeState(value);
-					this._mmInterfaceState = value;
-				}
 			}
 		}
 
-		public void OnMatchAccepted()
+		private void CheckTournamentQueue(string queueName)
 		{
-			MatchStatsGui.MainMenuGui.SendMatchAccepted();
+			if (this.IsTournamentQueue(queueName))
+			{
+				GameHubBehaviour.Hub.Swordfish.Msg.Matchmaking.Accept(queueName);
+				this._lastConnectionState = SessionState.Closed;
+				GameHubBehaviour.Hub.AnnouncerAudio.Play(1);
+			}
+		}
+
+		private bool IsTournamentQueue(string queueName)
+		{
+			TournamentTier[] all = this._getTournamentTier.GetAll();
+			return all.Any((TournamentTier tier) => tier.QueuName == queueName);
+		}
+
+		private void OpenMatchStatsAccept(SwordfishMatchmaking mm)
+		{
+			this.SetStatusText(Language.Get("MatchQuestion", TranslationContext.MainMenuGui));
+			this._mainMenuGui.MatchAccept.SetTitleText(this.GetStatus());
+			this._mainMenuGui.MatchAccept.ShowMatchConfirmation(mm.GetNumBotsInMatchmakingMade(), mm.GetMatchAcceptTimeout(), mm.MatchId);
+			GameHubBehaviour.Hub.GuiScripts.Esc.SetWindowVisibility(false);
+			GameHubBehaviour.Hub.GuiScripts.ScreenResolution.HighlightWindow(true);
+			this.TopPlayTimerGameObject.SetActive(true);
+			this._mainMenuGui.OnMatchFound();
+			GameHubBehaviour.Hub.AnnouncerAudio.Play(1);
+		}
+
+		public void OnMatchAccepted(string queueName)
+		{
+			this._mainMenuGui.SendMatchAccepted(queueName);
 			this.MMInterfaceState = MatchStatsGui.MatchmakingInterfaceState.MatchMadeWaiting;
 			this._lastConnectionState = SessionState.Closed;
 		}
@@ -562,63 +636,75 @@ namespace HeavyMetalMachines.Frontend
 			return this.MMInterfaceState == MatchStatsGui.MatchmakingInterfaceState.WaitingServer || this.MMInterfaceState == MatchStatsGui.MatchmakingInterfaceState.MatchMadeAsk || this.MMInterfaceState == MatchStatsGui.MatchmakingInterfaceState.MatchMadeWaiting;
 		}
 
-		public static readonly BitLogger Log = new BitLogger(typeof(MatchStatsGui));
-
-		[Header("External Referencies")]
-		public NetworkClient NetClient;
+		private static readonly BitLogger Log = new BitLogger(typeof(MatchStatsGui));
 
 		[Header("Internal Referencies")]
 		public UILabel NumberOfPlayers;
 
 		public int _NumberOfPlayers;
 
-		public UILabel GameModeStartButton;
+		[SerializeField]
+		private UILabel GameModeStartButton;
 
-		public UILabel TopPlayTimerLabel;
+		[SerializeField]
+		private UILabel TopPlayTimerLabel;
 
-		public UILabel TopAveargeTimeLabel;
+		[SerializeField]
+		private UILabel TopAveargeTimeLabel;
 
-		public UILabel TopPlayButtonStatusLabel;
+		[SerializeField]
+		private GameObject TopPlayTimerGameObject;
 
-		public GameObject TopPlayTimerGameObject;
+		[SerializeField]
+		private BoxCollider ExitButtonCollider;
 
-		public GameObject TopPlayStatusGameObject;
+		[SerializeField]
+		private Animation WindowAnimation;
 
-		public float _matchmakingStartTime = -1f;
+		[SerializeField]
+		private NGuiDynamicImage _queueKindDynamicImage;
 
-		public BoxCollider ExitButtonCollider;
+		[SerializeField]
+		private UILabel CurrentRegionLabel;
 
-		[Header("Ping")]
-		public UILabel GameModeLabel;
+		[SerializeField]
+		private NGuiButton _cancelSearchButton;
 
-		public UI2DSprite PingSprite;
+		[Inject]
+		private IWaitingWindow _waitingWindow;
 
-		public Sprite HighPing;
+		[Inject]
+		private DiContainer _diContainer;
 
-		public Sprite MediumPing;
+		private IDisposable _activeDeviceDisposable;
 
-		public Sprite LowPing;
+		[Inject]
+		private IClientButtonBILogger _clientButtonBiLogger;
 
-		public Sprite NoPing;
-
-		private SessionState _lastConnectionState;
-
-		private string _cachedPlayBtnLocalized;
+		[Inject]
+		private IGetTournamentTier _getTournamentTier;
 
 		[Header("[ANIMATIONS]")]
 		[Range(0.5f, 5f)]
 		public float AnimationHideSpeed = 2f;
 
-		public Animation WindowAnimation;
-
-		[Header("STATUS")]
-		private string _currentStatus;
-
 		public bool Visible;
+
+		private MainMenuGui _mainMenuGui;
+
+		private NetworkClient _netClient;
 
 		private int _lastTextUpdateTimeTotalSeconds = -1;
 
-		public MatchStatsGui.MatchmakingInterfaceState _mmInterfaceState;
+		private float _matchmakingStartTime = -1f;
+
+		private string _currentStatus;
+
+		private SessionState _lastConnectionState;
+
+		private MatchStatsGui.MatchmakingInterfaceState _mmInterfaceState;
+
+		private string _cachedPlayBtnLocalized;
 
 		public enum MatchmakingInterfaceState
 		{

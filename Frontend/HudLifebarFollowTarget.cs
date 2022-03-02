@@ -1,8 +1,10 @@
 ﻿using System;
 using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.GameCamera;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Match;
 using Pocketverse;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace HeavyMetalMachines.Frontend
 {
@@ -45,19 +47,13 @@ namespace HeavyMetalMachines.Frontend
 			Canvas[] componentsInParent = base.GetComponentsInParent<Canvas>();
 			this._mainCanvasRectTransform = componentsInParent[componentsInParent.Length - 1].GetComponent<RectTransform>();
 			this._localTransform = base.GetComponent<RectTransform>();
-			this._gameCamera = ((!(GameHubBehaviour.Hub == null)) ? CarCamera.Singleton.Camera : Camera.main);
+			this._camera = ((!(GameHubBehaviour.Hub == null)) ? this._gameCameraEngine.UnityCamera : Camera.main);
 		}
 
 		public void SetTarget(CombatObject combatObject, Transform targetTransform)
 		{
 			this.TargetTransform = combatObject.transform;
-			if (combatObject.IsCreep)
-			{
-				this._offsetFromCenterX = (int)this.HudLifebarSettings.CreepOffset.x;
-				this._offsetFromCenterY = (int)this.HudLifebarSettings.CreepOffset.y;
-				return;
-			}
-			CharacterTarget character = combatObject.Player.Character.Character;
+			CharacterTarget character = combatObject.Player.GetCharacter();
 			Vector2 characterOffset = this.HudLifebarSettings.GetCharacterOffset(character);
 			this._offsetFromCenterX = (int)characterOffset.x;
 			this._offsetFromCenterY = (int)characterOffset.y;
@@ -69,23 +65,15 @@ namespace HeavyMetalMachines.Frontend
 			{
 				return;
 			}
-			Vector3 vector = this._gameCamera.WorldToViewportPoint(this.TargetTransform.position);
+			Vector3 vector = this._camera.WorldToViewportPoint(this.TargetTransform.position);
 			Vector2 sizeDelta = this._mainCanvasRectTransform.sizeDelta;
 			Vector3 vector2 = new Vector2(vector.x * sizeDelta.x, vector.y * sizeDelta.y);
 			vector2.x = (float)Mathf.RoundToInt(vector2.x + (float)this._offsetFromCenterX);
 			vector2.y = (float)Mathf.RoundToInt(vector2.y + (float)this._offsetFromCenterY);
 			this.IsOutScreen = (vector2.x < -200f || vector2.x > sizeDelta.x + 200f || vector2.y < -200f || vector2.y > sizeDelta.y + 200f);
-			if (!this.IsOutScreen)
+			if (!this.IsOutScreen && this._localTransform.localPosition != vector2)
 			{
-				if (this._localTransform.localPosition != vector2)
-				{
-					this._localTransform.localPosition = vector2;
-					this._movementBlurImage.CrossFadeAlpha(1f, 0.5f, true);
-				}
-				else
-				{
-					this._movementBlurImage.CrossFadeAlpha(0f, 0.5f, true);
-				}
+				this._localTransform.localPosition = vector2;
 			}
 		}
 
@@ -101,12 +89,12 @@ namespace HeavyMetalMachines.Frontend
 
 		public bool IsOutScreen;
 
-		[SerializeField]
-		private Image _movementBlurImage;
+		[InjectOnClient]
+		private IGameCameraEngine _gameCameraEngine;
 
 		private bool _isAlive = true;
 
-		private Camera _gameCamera;
+		private Camera _camera;
 
 		private RectTransform _localTransform;
 

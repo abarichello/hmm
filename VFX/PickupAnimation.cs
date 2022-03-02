@@ -17,8 +17,8 @@ namespace HeavyMetalMachines.VFX
 		private Vector3 Evaluate(Vector3 a, Vector3 b, Vector3 c, float t)
 		{
 			t = Mathf.Pow(t, 0.5f);
-			float d = 1f - t;
-			return a * d + b * d * t + c * (t * t);
+			float num = 1f - t;
+			return a * num + b * num * t + c * (t * t);
 		}
 
 		private void OnEnable()
@@ -37,7 +37,7 @@ namespace HeavyMetalMachines.VFX
 			}
 			float num = Mathf.Pow(this.t / this.animationTime, 3f);
 			Vector3 position = this.Evaluate(this.initialPosition, this.target.position + new Vector3(0f, this.height, 0f), this.target.position, num);
-			position.y += Mathf.Sin(num * 3.14159274f);
+			position.y += Mathf.Sin(num * 3.1415927f);
 			base.transform.position = position;
 			base.transform.localScale = this.initialScale * Mathf.Lerp(1f, this.finalScale, this.t);
 			this.t += Time.deltaTime;
@@ -86,7 +86,7 @@ namespace HeavyMetalMachines.VFX
 
 		private void OnDestroyTime()
 		{
-			UnityEngine.Object.Destroy(base.gameObject);
+			Object.Destroy(base.gameObject);
 		}
 
 		public float animationTime = 1f;

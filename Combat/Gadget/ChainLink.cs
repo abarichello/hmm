@@ -74,7 +74,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			return num;
 		}
 
-		protected override void InnerOnDestroyEffect(DestroyEffect evt)
+		protected override void InnerOnDestroyEffect(DestroyEffectMessage evt)
 		{
 			for (int i = 0; i < this.ChainLinksCount.Count; i++)
 			{

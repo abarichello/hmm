@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using ClientAPI.Objects;
+using HeavyMetalMachines.DataTransferObjects.Tournament;
 using HeavyMetalMachines.Frontend;
 using HeavyMetalMachines.Infra;
 using HeavyMetalMachines.Match;
@@ -19,6 +20,17 @@ namespace HeavyMetalMachines.Utils
 			}
 		}
 
+		public static bool TryToGetTeam(string universalId, out Team team)
+		{
+			return TeamUtils.UserTeams.TryGetValue(universalId, out team);
+		}
+
+		public static void SetTeam(string universalId, Team team)
+		{
+			TeamUtils.UserTeams[universalId] = team;
+			TeamController.ResetTimer();
+		}
+
 		public static void ClearCache()
 		{
 			TeamUtils.UserTeams.Clear();
@@ -28,7 +40,25 @@ namespace HeavyMetalMachines.Utils
 		{
 			if (hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish))
 			{
-				onSuccess(null);
+				if (teamKind != TeamKind.Red)
+				{
+					onSuccess(null);
+				}
+				else
+				{
+					onSuccess(new Team
+					{
+						Bag = new TeamBag
+						{
+							goalsMade = 666,
+							goalsTaken = 3,
+							matchsParticipated = 666
+						}.ToString(),
+						ImageUrl = "team_image_meme_02",
+						Name = "SkipSFName",
+						Id = Guid.NewGuid()
+					});
+				}
 				return;
 			}
 			List<PlayerData> players = hub.Players.Players;
@@ -110,7 +140,7 @@ namespace HeavyMetalMachines.Utils
 					onResult(string.Empty);
 					return;
 				}
-				onResult(TeamUtils.GetTagColoredEncoded(team.Tag, hub.GuiScripts.GUIColors.TeamTagColor));
+				onResult(HudUtils.GetTagColoredEncoded(team.Tag, hub.GuiScripts.GUIColors.TeamTagColor));
 			}, onError);
 		}
 
@@ -156,11 +186,6 @@ namespace HeavyMetalMachines.Utils
 			{
 				onError(exception);
 			});
-		}
-
-		public static string GetTagColoredEncoded(string teamTag, Color textColor)
-		{
-			return string.Format("[{0}][[-][{0}]{1}[-][{0}]][-]", HudUtils.RGBToHex(textColor), NGUIText.EscapeSymbols(teamTag));
 		}
 
 		public static readonly BitLogger Log = new BitLogger(typeof(TeamUtils));

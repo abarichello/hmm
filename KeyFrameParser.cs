@@ -1,5 +1,7 @@
 ﻿using System;
+using HeavyMetalMachines.Playback;
 using Pocketverse;
+using Zenject;
 
 namespace HeavyMetalMachines
 {
@@ -16,16 +18,24 @@ namespace HeavyMetalMachines
 
 		protected virtual void SendKeyframe(byte[] data)
 		{
-			int num = GameHubObject.Hub.PlaybackManager.NextId();
-			GameHubObject.Hub.PlaybackManager.SendKeyFrame(this.Type, true, num, this.LastFrameId, data);
-			this.LastFrameId = num;
+			int nextFrameId = this._dispatcher.GetNextFrameId();
+			this._dispatcher.SendFrame(this.Type.Convert(), true, nextFrameId, this.LastFrameId, data);
+			this.LastFrameId = nextFrameId;
 		}
 
 		protected virtual void SendFullFrame(byte address, byte[] data)
 		{
-			GameHubObject.Hub.PlaybackManager.SendFullKeyFrame(address, this.Type, GameHubObject.Hub.PlaybackManager.NextId(), -1, GameHubObject.Hub.GameTime.GetPlaybackTime(), data);
+			int nextFrameId = this._dispatcher.GetNextFrameId();
+			int playbackTime = this._gameTime.GetPlaybackTime();
+			this._dispatcher.SendSnapshot(address, this.Type.Convert(), nextFrameId, -1, playbackTime, data);
 		}
 
 		protected int LastFrameId = -1;
+
+		[Inject]
+		protected IServerPlaybackDispatcher _dispatcher;
+
+		[Inject]
+		protected IGameTime _gameTime;
 	}
 }

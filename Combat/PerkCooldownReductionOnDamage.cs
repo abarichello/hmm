@@ -3,7 +3,7 @@ using Pocketverse;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkCooldownReductionOnDamage : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkCooldownReductionOnDamage : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		public override void PerkInitialized()
 		{
@@ -16,10 +16,12 @@ namespace HeavyMetalMachines.Combat
 			this._targetCombatObject = base.GetTargetCombat(this.Effect, this.Target);
 			if (this._causerCombatObject == null)
 			{
+				PerkCooldownReductionOnDamage.Log.Debug("Impossible to get From CombatObject");
 				return;
 			}
 			if (this._targetCombatObject == null)
 			{
+				PerkCooldownReductionOnDamage.Log.Debug("Impossible to get From CombatObject");
 				return;
 			}
 			if (!this.Effect.CheckHit(this._causerCombatObject))
@@ -33,7 +35,7 @@ namespace HeavyMetalMachines.Combat
 			this.AddListener(this._targetCombatObject);
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (this._targetCombatObject)
 			{

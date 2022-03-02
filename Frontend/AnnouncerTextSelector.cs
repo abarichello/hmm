@@ -1,5 +1,4 @@
 ﻿using System;
-using HeavyMetalMachines.Options;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Frontend
@@ -14,8 +13,7 @@ namespace HeavyMetalMachines.Frontend
 				this.selectionStrings[i] = GameHubBehaviour.Hub.AudioSettings.AnnouncerVoiceOvers[i].draftName;
 			}
 			this.currentIndex = GameHubBehaviour.Hub.Options.Audio.AnnouncerIndex;
-			AudioOptions audio = GameHubBehaviour.Hub.Options.Audio;
-			audio.OnAnnouncerIndexChanged = (Action)Delegate.Combine(audio.OnAnnouncerIndexChanged, new Action(this.OnOptionsAnnouncerIndexChanged));
+			GameHubBehaviour.Hub.Options.Audio.OnAnnouncerIndexChanged += this.OnOptionsAnnouncerIndexChanged;
 		}
 
 		private void OnOptionsAnnouncerIndexChanged()
@@ -37,8 +35,7 @@ namespace HeavyMetalMachines.Frontend
 
 		private void OnDestroy()
 		{
-			AudioOptions audio = GameHubBehaviour.Hub.Options.Audio;
-			audio.OnAnnouncerIndexChanged = (Action)Delegate.Remove(audio.OnAnnouncerIndexChanged, new Action(this.OnOptionsAnnouncerIndexChanged));
+			GameHubBehaviour.Hub.Options.Audio.OnAnnouncerIndexChanged -= this.OnOptionsAnnouncerIndexChanged;
 		}
 	}
 }

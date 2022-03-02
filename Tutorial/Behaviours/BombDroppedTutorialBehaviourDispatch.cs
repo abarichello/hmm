@@ -11,7 +11,7 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 
 		public void ShowDialogOnClient()
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1010, 4, base.IsReliable, new object[0]);
+			base.Dispatch(base.DispatchDestination(), base.OID, 1011, 4, base.IsReliable, new object[0]);
 		}
 
 		int IDispatch.get_CallbackTimeoutMillis()

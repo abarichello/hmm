@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using HeavyMetalMachines.GameCamera;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
 using Pocketverse;
 using UnityEngine;
 
@@ -55,7 +57,7 @@ namespace HeavyMetalMachines.VFX
 				return;
 			}
 			DayCycleManager._singleton = this;
-			this._cameraLight = CarCamera.Singleton.GetComponentInChildren<Light>();
+			this._cameraLight = this._gameCameraEngine.UnityCamera.GetComponentInChildren<Light>();
 			this._cameraLightTransform = this._cameraLight.transform;
 			this.ApplyCurrentStage(true);
 		}
@@ -83,19 +85,19 @@ namespace HeavyMetalMachines.VFX
 			{
 				return;
 			}
-			if (Input.GetKeyDown(KeyCode.T))
+			if (Input.GetKeyDown(116))
 			{
 				this.GoToNextStage();
 			}
-			if (Input.GetKeyDown(KeyCode.R))
+			if (Input.GetKeyDown(114))
 			{
 				this.GoToPreviousStage();
 			}
-			if (Input.GetKeyDown(KeyCode.G))
+			if (Input.GetKeyDown(103))
 			{
 				this.GoToNextStageInstant();
 			}
-			if (Input.GetKeyDown(KeyCode.F))
+			if (Input.GetKeyDown(102))
 			{
 				this.GoToPreviousStageInstant();
 			}
@@ -184,6 +186,9 @@ namespace HeavyMetalMachines.VFX
 			}
 			DayCycleManager._singleton.FXs.Remove(fx);
 		}
+
+		[InjectOnClient]
+		private IGameCameraEngine _gameCameraEngine;
 
 		public bool IsDebug;
 

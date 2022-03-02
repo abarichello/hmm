@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections;
 using System.Diagnostics;
+using HeavyMetalMachines.Localization;
 using HeavyMetalMachines.Utils;
+using Hoplon.Localization.TranslationTable;
 using Pocketverse;
 using UnityEngine;
 
@@ -14,6 +16,11 @@ namespace HeavyMetalMachines.Frontend
 			this.ShowReadyFeedback = showReadyFeedback;
 		}
 
+		public ShopCashGUILoadFeedbackState GetState()
+		{
+			return this.currState;
+		}
+
 		public void SetState(ShopCashGUILoadFeedbackState state)
 		{
 			this.currState = state;
@@ -21,6 +28,10 @@ namespace HeavyMetalMachines.Frontend
 
 		public void ShowFeedback()
 		{
+			ShopCashGUILoadFeedback.Log.DebugFormat("Show cash shop feedback for state {0}", new object[]
+			{
+				this.currState
+			});
 			this.StopWaitMinimumDisplayingTimeRoutine();
 			if (this.currState == ShopCashGUILoadFeedbackState.Ready)
 			{
@@ -97,7 +108,7 @@ namespace HeavyMetalMachines.Frontend
 		{
 			this._errorIcon.SetActive(false);
 			this._loadingIcon.SetActive(true);
-			this._feedbackText.text = Language.Get("SHOP_CASH_FEEDBACK_WAIT", TranslationSheets.Store);
+			this._feedbackText.text = Language.Get("SHOP_CASH_FEEDBACK_WAIT", ShopCashGUILoadFeedback.feedback_text_sheet);
 			this._feedbackText.gameObject.SetActive(true);
 			base.gameObject.GetComponent<Animation>().Play();
 		}
@@ -106,7 +117,7 @@ namespace HeavyMetalMachines.Frontend
 		{
 			this._loadingIcon.SetActive(false);
 			this._errorIcon.SetActive(true);
-			this._feedbackText.text = Language.Get("SHOP_CASH_FEEDBACK_RETURN_LATER", TranslationSheets.Store);
+			this._feedbackText.text = Language.Get("SHOP_CASH_FEEDBACK_RETURN_LATER", ShopCashGUILoadFeedback.feedback_text_sheet);
 			this._feedbackText.gameObject.SetActive(true);
 			base.gameObject.GetComponent<Animation>().Play();
 		}
@@ -117,7 +128,7 @@ namespace HeavyMetalMachines.Frontend
 
 		private const string return_later_feedback_key = "SHOP_CASH_FEEDBACK_RETURN_LATER";
 
-		private const TranslationSheets feedback_text_sheet = TranslationSheets.Store;
+		private static readonly ContextTag feedback_text_sheet = TranslationContext.Store;
 
 		[SerializeField]
 		[Tooltip("Minimum feedback displaying time in seconds before being allowed to be replaced.")]

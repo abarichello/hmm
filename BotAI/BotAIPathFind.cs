@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using HeavyMetalMachines.BotAI.PathFind;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Match;
 using HeavyMetalMachines.Utils;
+using Hoplon.Math;
 using Pocketverse;
 using UnityEngine;
 
@@ -81,13 +83,25 @@ namespace HeavyMetalMachines.BotAI
 			{
 				BotAIPathFind.nodeCosts = new Dictionary<int, float>((nodes.Count - 1) * (nodes.Count - 1) / 2);
 			}
+			if (BotAIPathFind.routes == null)
+			{
+				BotAIPathFind.routes = new Dictionary<AiPathRoute, int[]>(nodes.Count);
+			}
+			if (BotAIPathFind.nodesByHash == null)
+			{
+				BotAIPathFind.nodesByHash = new Dictionary<int, BotAINode>(nodes.Count);
+				for (int i = 0; i < nodes.Count; i++)
+				{
+					BotAIPathFind.nodesByHash[nodes[i].Hash] = nodes[i];
+				}
+			}
 			if (BotAIPathFind.kdtree == null)
 			{
 				Vector2[] array = new Vector2[nodes.Count];
-				for (int i = 0; i < array.Length; i++)
+				for (int j = 0; j < array.Length; j++)
 				{
-					array[i].x = nodes[i].position.x;
-					array[i].y = nodes[i].position.z;
+					array[j].x = nodes[j].position.x;
+					array[j].y = nodes[j].position.z;
 				}
 				BotAIPathFind.kdtree = new KdTree<BotAINode>();
 				BotAIPathFind.kdtree.Build(array, nodes.ToArray());
@@ -95,6 +109,10 @@ namespace HeavyMetalMachines.BotAI
 			if (BotAIPathFind.kNearestNodes == null)
 			{
 				BotAIPathFind.kNearestNodes = new List<BotAINode>(5);
+			}
+			if (GameHubBehaviour.Hub)
+			{
+				BotAIPathFind._forcePathFind = GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.ForceAlwaysRunPathFind);
 			}
 			BotAIPathFind.refCount++;
 		}
@@ -138,6 +156,16 @@ namespace HeavyMetalMachines.BotAI
 					BotAIPathFind.kNearestNodes.Clear();
 					BotAIPathFind.kNearestNodes = null;
 				}
+				if (BotAIPathFind.routes != null)
+				{
+					BotAIPathFind.routes.Clear();
+					BotAIPathFind.routes = null;
+				}
+				if (BotAIPathFind.nodesByHash != null)
+				{
+					BotAIPathFind.nodesByHash.Clear();
+					BotAIPathFind.nodesByHash = null;
+				}
 			}
 			if (BotAIPathFind.refCount < 0)
 			{
@@ -150,15 +178,26 @@ namespace HeavyMetalMachines.BotAI
 		{
 			BotAINode closestNode = BotAIPathFind.GetClosestNode(path, currentPosition, team, isBombBlocking);
 			finalPath.Clear();
-			if (closestNode.name.Equals(targetNode.name))
+			if (closestNode.Hash == targetNode.Hash)
 			{
 				finalPath.Add(closestNode);
 				return closestNode;
 			}
-			for (int i = 0; i < path.Nodes.Count; i++)
+			float num = Vector2.left[0];
+			AiPathRoute key = new AiPathRoute(closestNode.Hash, targetNode.Hash, isBombBlocking, team);
+			int[] array;
+			if (!BotAIPathFind._forcePathFind && BotAIPathFind.routes.TryGetValue(key, out array))
 			{
-				path.Nodes[i].PreviousNode = null;
-				path.Nodes[i].NextNode = null;
+				for (int i = 0; i < array.Length; i++)
+				{
+					finalPath.Add(BotAIPathFind.nodesByHash[array[i]]);
+				}
+				return closestNode;
+			}
+			for (int j = 0; j < path.Nodes.Count; j++)
+			{
+				path.Nodes[j].PreviousNode = null;
+				path.Nodes[j].NextNode = null;
 			}
 			BotAIPathFind.open.Clear();
 			BotAIPathFind.closed.Clear();
@@ -178,60 +217,62 @@ namespace HeavyMetalMachines.BotAI
 						finalPath.Add(botAINode);
 					}
 					finalPath.Reverse();
+					array = finalPath.ConvertAll<int>((BotAINode x) => x.Hash).ToArray();
+					BotAIPathFind.routes[key] = array;
 					return closestNode;
 				}
 				BotAIPathFind.closed.Add(botAINode);
-				float num = BotAIPathFind.g_scores[botAINode];
-				for (int j = 0; j < botAINode.LinkedNodes.Count; j++)
+				float num2 = BotAIPathFind.g_scores[botAINode];
+				for (int k = 0; k < botAINode.LinkedNodes.Count; k++)
 				{
-					BotAINode botAINode2 = botAINode.LinkedNodes[j];
-					BotAINode.NodeLinkKind nodeLinkKind = botAINode.LinkKinds[j];
+					BotAINode botAINode2 = botAINode.LinkedNodes[k];
+					BotAINode.NodeLinkKind nodeLinkKind = botAINode.LinkKinds[k];
 					if (!BotAIPathFind.closed.Contains(botAINode2))
 					{
-						float num2 = 1f;
+						float num3 = 1f;
 						switch (nodeLinkKind)
 						{
 						case BotAINode.NodeLinkKind.BombBlocked:
 							if (isBombBlocking)
 							{
-								goto IL_2BD;
+								goto IL_379;
 							}
-							num2 = path.BombLinkWeigth;
+							num3 = path.BombLinkWeigth;
 							break;
 						case BotAINode.NodeLinkKind.RedBlock:
 							if (team == TeamKind.Red)
 							{
-								goto IL_2BD;
+								goto IL_379;
 							}
 							break;
 						case BotAINode.NodeLinkKind.BluBlock:
 							if (team == TeamKind.Blue)
 							{
-								goto IL_2BD;
+								goto IL_379;
 							}
 							break;
 						case BotAINode.NodeLinkKind.Hazard:
 							if (GameHubBehaviour.Hub && GameHubBehaviour.Hub.BombManager.ActiveBomb.IsSpawned && GameHubBehaviour.Hub.BombManager.ActiveBomb.BombCarriersIds.Count > 0)
 							{
-								num2 = path.HazardLinkWeigth;
+								num3 = path.HazardLinkWeigth;
 							}
 							break;
 						}
-						float num3 = num + num2 * BotAIPathFind.CostEstimate(path, botAINode, botAINode2);
+						float num4 = num2 + num3 * BotAIPathFind.CostEstimate(path, botAINode, botAINode2);
 						if (!BotAIPathFind.open.Contains(botAINode2))
 						{
 							BotAIPathFind.parent.Add(botAINode2, botAINode);
-							BotAIPathFind.g_scores.Add(botAINode2, num3);
-							BotAIPathFind.open.Push(botAINode2, num3 + BotAIPathFind.CostEstimate(path, botAINode2, targetNode));
+							BotAIPathFind.g_scores.Add(botAINode2, num4);
+							BotAIPathFind.open.Push(botAINode2, num4 + BotAIPathFind.CostEstimate(path, botAINode2, targetNode));
 						}
-						else if (BotAIPathFind.g_scores[botAINode2] > num3)
+						else if (BotAIPathFind.g_scores[botAINode2] > num4)
 						{
 							BotAIPathFind.parent[botAINode2] = botAINode;
-							BotAIPathFind.g_scores[botAINode2] = num3;
-							BotAIPathFind.open.SetPriority(botAINode2, num3 + BotAIPathFind.CostEstimate(path, botAINode2, targetNode));
+							BotAIPathFind.g_scores[botAINode2] = num4;
+							BotAIPathFind.open.SetPriority(botAINode2, num4 + BotAIPathFind.CostEstimate(path, botAINode2, targetNode));
 						}
 					}
-					IL_2BD:;
+					IL_379:;
 				}
 			}
 			return null;
@@ -239,15 +280,15 @@ namespace HeavyMetalMachines.BotAI
 
 		public static BotAINode GetClosestNode(BotAIPath path, Vector3 position, TeamKind team, bool bombBlock)
 		{
-			Vector2 point;
-			point.x = position.x;
-			point.y = position.z;
-			BotAIPathFind.kdtree.KNearestNeighbors(point, 5, ref BotAIPathFind.kNearestNodes);
+			Vector2 vector;
+			vector.x = position.x;
+			vector.y = position.z;
+			BotAIPathFind.kdtree.KNearestNeighbors(vector, 5, ref BotAIPathFind.kNearestNodes);
 			BotAINode botAINode = null;
 			for (int i = 0; i < BotAIPathFind.kNearestNodes.Count; i++)
 			{
-				Vector3 direction = BotAIPathFind.kNearestNodes[i].position - position;
-				if (!Physics.Raycast(position, direction, direction.magnitude, LayerManager.GetBombAndTeamSceneryMask(bombBlock, team)))
+				Vector3 vector2 = BotAIPathFind.kNearestNodes[i].position - position;
+				if (!Physics.Raycast(position, vector2, vector2.magnitude, LayerManager.GetBombAndTeamSceneryMask(bombBlock, team)))
 				{
 					botAINode = BotAIPathFind.kNearestNodes[i];
 					break;
@@ -289,5 +330,11 @@ namespace HeavyMetalMachines.BotAI
 		private const int kNN = 5;
 
 		private static int refCount;
+
+		private static Dictionary<AiPathRoute, int[]> routes;
+
+		private static Dictionary<int, BotAINode> nodesByHash;
+
+		private static bool _forcePathFind;
 	}
 }

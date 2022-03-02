@@ -1,6 +1,6 @@
 ﻿using System;
+using HeavyMetalMachines.AI;
 using HeavyMetalMachines.Audio;
-using HeavyMetalMachines.BotAI;
 using HeavyMetalMachines.Car;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Match;
@@ -41,15 +41,6 @@ namespace HeavyMetalMachines
 		public SpawnController spawnController;
 
 		[NonSerialized]
-		public BotAIGoalManager botAIGoalManager;
-
-		[NonSerialized]
-		public BotAIGadgetShop botAIGadgetShop;
-
-		[NonSerialized]
-		public BotAIPathFind botAIPathFind;
-
-		[NonSerialized]
 		public CombatFeedback combatFeedback;
 
 		[NonSerialized]
@@ -72,5 +63,7 @@ namespace HeavyMetalMachines
 
 		[NonSerialized]
 		public ArtReference ArtReference;
+
+		public IAIAgent AIAgent;
 	}
 }

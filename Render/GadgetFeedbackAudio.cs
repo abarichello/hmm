@@ -17,8 +17,8 @@ namespace HeavyMetalMachines.Render
 			FMODAudioManager.PlayOneShotAt(this.deactivateAudio, base.transform.position, 0);
 		}
 
-		public FMODAsset activateAudio;
+		public AudioEventAsset activateAudio;
 
-		public FMODAsset deactivateAudio;
+		public AudioEventAsset deactivateAudio;
 	}
 }

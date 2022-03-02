@@ -1,89 +1,43 @@
 ﻿using System;
 using HeavyMetalMachines.Car;
-using HeavyMetalMachines.Character;
+using HeavyMetalMachines.Characters;
 using HeavyMetalMachines.Combat;
-using HeavyMetalMachines.Combat.Gadget;
-using HeavyMetalMachines.Fog;
+using HeavyMetalMachines.GameCamera;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Playback;
 using HeavyMetalMachines.Server;
 using Pocketverse;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
-	public class GameTestMode : GameHubBehaviour
+	public sealed class GameTestMode : GameHubBehaviour
 	{
-		public GameTestMode()
+		private static readonly string[] botNames = new string[]
 		{
-			bool[] array = new bool[3];
-			array[0] = true;
-			this._instanceUpgrades = array;
-			this.botNames = new string[]
-			{
-				"Grachinsky",
-				"AlyGattor",
-				"Matador",
-				"Pitcher",
-				"Herald",
-				"Botter",
-				"BotMala",
-				"Will"
-			};
-			this.SceneName = "Arena_Test";
-			this.timescaleWaitingForBomb = 1f;
-			this.timescaleWithActiveBomb = 1f;
-			this._bombPosition = Vector3.zero;
-			base..ctor();
-		}
-
-		private void SwitchInstance()
-		{
-			int num = -1;
-			for (int i = 0; i < this._instanceUpgrades.Length; i++)
-			{
-				if (this._instanceUpgrades[i])
-				{
-					num = i;
-					break;
-				}
-			}
-			if (num >= 0)
-			{
-				GadgetBehaviour customGadget = this.combatObject.CustomGadget0;
-				GadgetBehaviour.UpgradeInstance[] upgrades = this.combatObject.CustomGadget0.Upgrades;
-				string value = string.Format("{0:00}", num + 1);
-				for (int j = 0; j < upgrades.Length; j++)
-				{
-					string name = upgrades[j].Info.Name;
-					if (name.Contains(value))
-					{
-						customGadget.Upgrade(name);
-						this.playerController.SelectedInstance = name;
-						Debug.Log(string.Format("Switched to instance {0}", name));
-					}
-					else
-					{
-						customGadget.Downgrade(name);
-					}
-				}
-			}
-			else
-			{
-				Debug.LogError("No instance was selected!");
-			}
-		}
+			"Grachinsky",
+			"AlyGattor",
+			"Matador",
+			"Pitcher",
+			"Herald",
+			"Botter",
+			"BotMala",
+			"Will"
+		};
 
 		public const string TestModePlayerName = "PlayerBot";
 
-		private bool[] _instanceUpgrades;
+		[Inject]
+		private IPlayback _playback;
 
 		public LoadingState loadingState;
 
 		public ServerGame serverGame;
 
-		public HeavyMetalMachines.Character.CharacterInfo character;
+		public CharacterInfo character;
 
-		public HeavyMetalMachines.Character.CharacterInfo[] botCharacters;
+		public CharacterInfo[] botCharacters;
 
 		private CarInput carInput;
 
@@ -93,28 +47,28 @@ namespace HeavyMetalMachines.Frontend
 
 		private CombatObject combatObject;
 
-		private TRCInterpolator interpolator;
-
 		public int skinIdx;
 
 		public int botCount;
 
 		public CarInput.DrivingStyleKind drivingStyle;
 
-		private string[] botNames;
-
 		private float delay;
 
-		public string SceneName;
+		public string SceneName = "Arena_Test";
 
-		public float timescaleWaitingForBomb;
+		public float timescaleWaitingForBomb = 1f;
 
-		public float timescaleWithActiveBomb;
+		public float timescaleWithActiveBomb = 1f;
 
 		public Vector2 input;
 
 		public static PlayerData playerData;
 
-		private Vector3 _bombPosition;
+		private IGameCamera _gameCamera;
+
+		private IGameCameraEngine _gameCameraEngine;
+
+		private IGameCameraInversion _gameCameraInversion;
 	}
 }

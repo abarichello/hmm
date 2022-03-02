@@ -53,7 +53,7 @@ namespace HeavyMetalMachines.Frontend
 				this._enabledTooltipLines.Push(toolTipRewardFeedbackValues);
 				return toolTipRewardFeedbackValues;
 			}
-			GameObject gameObject = UnityEngine.Object.Instantiate<GameObject>(this.TooltipValuesPrefab);
+			GameObject gameObject = Object.Instantiate<GameObject>(this.TooltipValuesPrefab);
 			gameObject.transform.parent = this.ValuesGrid.transform;
 			gameObject.transform.position = Vector3.zero;
 			gameObject.transform.localScale = Vector3.one;

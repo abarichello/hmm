@@ -8,22 +8,7 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 	[CreateAssetMenu(menuName = "GadgetScript/Block/CombatObject/AttachToCombat")]
 	public class AttachToCombatBlock : BaseAttachBlock
 	{
-		protected override bool CheckSanity(IGadgetContext gadgetContext, IEventContext eventContext)
-		{
-			if (this._guest == null)
-			{
-				base.LogSanitycheckError("'Guest' parameter cannot be null.");
-				return false;
-			}
-			if (this._host == null)
-			{
-				base.LogSanitycheckError("'Host' parameter cannot be null.");
-				return false;
-			}
-			return true;
-		}
-
-		protected override IBlock InnerExecute(IGadgetContext gadgetContext, IEventContext eventContext)
+		public override IBlock Execute(IGadgetContext gadgetContext, IEventContext eventContext)
 		{
 			IHMMGadgetContext ihmmgadgetContext = (IHMMGadgetContext)gadgetContext;
 			IHMMEventContext ihmmeventContext = (IHMMEventContext)eventContext;
@@ -48,6 +33,7 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 			{
 				base.SetBodiesKinematicState(transform, true);
 				base.SetCollidersEnabledState(transform, false);
+				value.PhysicalObject.PauseSimulation();
 				value.PhysicalObject.ResetImpulseAndVelocity();
 				transform.parent = value2.Transform;
 			}
@@ -59,11 +45,6 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 			}
 			transform.gameObject.layer = value2.Transform.gameObject.layer;
 			return this._nextBlock;
-		}
-
-		public override bool UsesParameterWithId(int parameterId)
-		{
-			return base.CheckIsParameterWithId(this._host, parameterId) || base.CheckIsParameterWithId(this._guest, parameterId);
 		}
 
 		[Header("Read")]

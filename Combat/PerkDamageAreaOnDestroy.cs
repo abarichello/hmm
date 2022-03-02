@@ -15,9 +15,9 @@ namespace HeavyMetalMachines.Combat
 			this.Effect.OnPreEffectDestroyed += this.OnPreEffectDestroyed;
 		}
 
-		protected override void OnDestroy()
+		protected override void Destroying()
 		{
-			base.OnDestroy();
+			base.Destroying();
 			this.Effect.OnPreEffectDestroyed -= this.OnPreEffectDestroyed;
 		}
 
@@ -26,7 +26,7 @@ namespace HeavyMetalMachines.Combat
 			this.GetHits(base.transform.position, ref this.HittingCombatObjects);
 		}
 
-		public override void OnDestroyEffect(DestroyEffect evt)
+		public override void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (GameHubBehaviour.Hub.Net.IsClient() || (!this.DoDamageOnSceneryTriggerDestroy && evt.RemoveData.SrvWasScenery) || (!this.DoDamageOnLifetimeDestroy && !evt.RemoveData.SrvOtherCollider) || (!this.DoDamageOnOwnerDeath && !CombatRef.GetCombat(this.Effect.Owner).IsAlive()))
 			{

@@ -1,6 +1,5 @@
 ﻿using System;
 using HeavyMetalMachines.Combat;
-using HeavyMetalMachines.Utils;
 using Pocketverse;
 using UnityEngine;
 
@@ -10,7 +9,6 @@ namespace HeavyMetalMachines.Frontend
 	{
 		protected void Awake()
 		{
-			this._lifebarRectTransform = this.LifebarCanvas.GetComponent<RectTransform>();
 			this._maxAlpha = 1f;
 			if (GameHubBehaviour.Hub == null)
 			{
@@ -23,14 +21,12 @@ namespace HeavyMetalMachines.Frontend
 		{
 			this.uiLifeBar.ShieldColor = this.HudLifebarSettings.ShieldColor;
 			this.uiLifeBar.BleedColor = this.HudLifebarSettings.BleedColor;
-			HeavyMetalMachines.Utils.Debug.Assert(this.LifebarCanvas != null, "Image null, probably you need to click: Assets->Reimport UI Assemblies", HeavyMetalMachines.Utils.Debug.TargetTeam.All);
 		}
 
 		public virtual void Setup(CombatObject combatObject)
 		{
 			this._combatObject = combatObject;
 			this._healthLifebarInterpolator = new HudLifebarObject.LifebarInterpolator(this.HudLifebarSettings.HpTimeInSec);
-			this._lifebarRectTransform = this.LifebarCanvas.GetComponent<RectTransform>();
 			this._isAlive = false;
 			if (this._combatObject != null)
 			{
@@ -64,10 +60,9 @@ namespace HeavyMetalMachines.Frontend
 			this.HudLifebarFollowTarget.IsAlive = false;
 		}
 
-		protected virtual void SetVisibility(bool visible)
+		public virtual void SetVisibility(bool visible)
 		{
-			this._isVisible = visible;
-			this.MainCanvasGroup.alpha = ((!visible) ? 0f : 1f);
+			this._lifebarObject.SetActive(visible);
 		}
 
 		public void SetCanBeVisible(bool can)
@@ -89,7 +84,7 @@ namespace HeavyMetalMachines.Frontend
 			this.uiLifeBar.BleedHp = bleedHp;
 			if (flag)
 			{
-				this.uiLifeBar.SetVerticesDirty();
+				this.uiLifeBar.SetGeometryDirty();
 			}
 		}
 
@@ -109,15 +104,12 @@ namespace HeavyMetalMachines.Frontend
 		{
 			if (this.HudLifebarFollowTarget.IsOutScreen || !this._isAlive || !this._canBeVisible)
 			{
-				if (this._isVisible)
-				{
-					this.SetVisibility(false);
-				}
+				this.SetVisibility(false);
 				this._bleedHp = 0f;
 				this._lastFullHp = 0f;
 				return;
 			}
-			if (!this._isVisible && this._canBeVisible)
+			if (!this._lifebarObject.activeSelf && this._canBeVisible)
 			{
 				this.SetVisibility(true);
 			}
@@ -127,7 +119,6 @@ namespace HeavyMetalMachines.Frontend
 
 		protected virtual void RenderUpdate()
 		{
-			this.RenderVisibilityUpdate();
 			if (this.HackedToEP)
 			{
 				this._maxFullHp = (float)this._combatObject.Data.EPMax;
@@ -203,32 +194,14 @@ namespace HeavyMetalMachines.Frontend
 			this._lastFullHp = num;
 		}
 
-		private void RenderVisibilityUpdate()
-		{
-			if (this.MainCanvasGroup.alpha < this._maxAlpha)
-			{
-				this.MainCanvasGroup.alpha = Mathf.Clamp(this.MainCanvasGroup.alpha + Time.deltaTime * 3f, 0f, this._maxAlpha);
-			}
-			else if (this.MainCanvasGroup.alpha > this._maxAlpha)
-			{
-				this.MainCanvasGroup.alpha = Mathf.Clamp01(this.MainCanvasGroup.alpha - Time.deltaTime * 3f);
-			}
-		}
-
 		protected void SetMaxAlpha(float alpha)
 		{
 			this._maxAlpha = alpha;
 		}
 
-		protected float GetMaxAlpha()
+		protected virtual void OnValidate()
 		{
-			return this._maxAlpha;
-		}
-
-		protected void PoolRelease()
-		{
-			this.Dispose();
-			base.gameObject.SetActive(false);
+			this._lifebarObject = ((!this._lifebarRectTransform) ? null : this._lifebarRectTransform.gameObject);
 		}
 
 		protected virtual void OnDestroy()
@@ -268,18 +241,14 @@ namespace HeavyMetalMachines.Frontend
 
 		public UILifeBar uiLifeBar;
 
-		public CanvasGroup[] allCanvas;
-
-		private bool _isVisible = true;
-
 		private bool _canBeVisible = true;
 
-		[Header("[Canvas]")]
-		public CanvasGroup MainCanvasGroup;
-
-		public CanvasGroup LifebarCanvas;
-
+		[SerializeField]
 		private RectTransform _lifebarRectTransform;
+
+		[SerializeField]
+		[HideInInspector]
+		private GameObject _lifebarObject;
 
 		private float _lifebarWidth;
 
@@ -348,7 +317,7 @@ namespace HeavyMetalMachines.Frontend
 				return this._currentValue;
 			}
 
-			private float _durationInSec;
+			private readonly float _durationInSec;
 
 			private float _startValue;
 

@@ -160,7 +160,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			}
 		}
 
-		public override void OnDestroyEffect(DestroyEffect evt)
+		public override void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (evt.RemoveData.TargetEventId != this._greenEffect)
 			{

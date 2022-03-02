@@ -54,23 +54,17 @@ namespace HeavyMetalMachines.Combat
 
 		private bool CheckGadgetConditions(ModifierData mod)
 		{
-			if (!mod.GadgetInfo)
+			switch (this.TargetGadgetOwner)
 			{
-				return false;
+			case PerkApplyModifiersOnDamageEvent.GadgetOwner.MyGadget:
+				return null != mod.GadgetInfo && mod.GadgetInfo.GadgetId == this.Effect.Gadget.Info.GadgetId;
+			case PerkApplyModifiersOnDamageEvent.GadgetOwner.AnyOtherGadget:
+				return null == mod.GadgetInfo || mod.GadgetInfo.GadgetId != this.Effect.Gadget.Info.GadgetId;
 			}
-			PerkApplyModifiersOnDamageEvent.GadgetOwner targetGadgetOwner = this.TargetGadgetOwner;
-			if (targetGadgetOwner == PerkApplyModifiersOnDamageEvent.GadgetOwner.None)
-			{
-				return true;
-			}
-			if (targetGadgetOwner != PerkApplyModifiersOnDamageEvent.GadgetOwner.AnyOtherGadget)
-			{
-				return targetGadgetOwner != PerkApplyModifiersOnDamageEvent.GadgetOwner.MyGadget || mod.GadgetInfo.GadgetId == this.Effect.Gadget.Info.GadgetId;
-			}
-			return mod.GadgetInfo.GadgetId != this.Effect.Gadget.Info.GadgetId;
+			return true;
 		}
 
-		public override void PerkDestroyed(DestroyEffect destroyEffect)
+		public override void PerkDestroyed(DestroyEffectMessage destroyEffectMessage)
 		{
 			if (GameHubBehaviour.Hub.Net.IsClient())
 			{

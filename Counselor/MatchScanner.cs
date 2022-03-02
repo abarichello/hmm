@@ -1,5 +1,5 @@
 ﻿using System;
-using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Infra.Context;
 using Hoplon.SensorSystem;
 using Pocketverse;
 
@@ -17,9 +17,9 @@ namespace HeavyMetalMachines.Counselor
 			GameHubObject.Hub.BombManager.ListenToPhaseChange += this.BombManagerOnListenToPhaseChange;
 		}
 
-		private void BombManagerOnListenToPhaseChange(BombScoreBoard.State state)
+		private void BombManagerOnListenToPhaseChange(BombScoreboardState state)
 		{
-			if (state == BombScoreBoard.State.BombDelivery)
+			if (state == BombScoreboardState.BombDelivery)
 			{
 				int num = GameHubObject.Hub.BombManager.Rules.BombScoreTarget - 1;
 				bool flag = GameHubObject.Hub.BombManager.ScoreBoard.BombScoreBlue >= num || GameHubObject.Hub.BombManager.ScoreBoard.BombScoreRed >= num;
@@ -33,7 +33,7 @@ namespace HeavyMetalMachines.Counselor
 		public void UpdateContext(SensorController context)
 		{
 			float num;
-			this._context.GetParameter(this._context.MainClockId, out num);
+			this._context.GetParameter(this._context.MainClockId, ref num);
 			this._context.SetParameter(this._bombDeliveryDeltaTimeId, (float)GameHubObject.Hub.GameTime.GetPlaybackTime() - this._bombDeliveryDeltaTime);
 		}
 

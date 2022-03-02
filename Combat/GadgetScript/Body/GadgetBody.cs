@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using HeavyMetalMachines.Combat.GadgetScript.Block;
 using HeavyMetalMachines.Combat.GadgetScript.Body.Filter;
 using HeavyMetalMachines.Infra.Context;
-using HeavyMetalMachines.VFX;
 using Hoplon.GadgetScript;
 using Pocketverse;
 using UnityEngine;
@@ -11,21 +10,9 @@ using UnityEngine.Serialization;
 
 namespace HeavyMetalMachines.Combat.GadgetScript.Body
 {
-	public class GadgetBody : MonoBehaviour, IGadgetBody
+	public class GadgetBody : BaseGadgetBody
 	{
-		public int Id { get; private set; }
-
-		public IEventContext Event { get; private set; }
-
-		public int OwnerId
-		{
-			get
-			{
-				return this._context.OwnerId;
-			}
-		}
-
-		public IHMMGadgetContext Context
+		public override IGadgetContext Context
 		{
 			get
 			{
@@ -33,41 +20,49 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Body
 			}
 		}
 
-		public Vector3 Position
+		public override Identifiable Identifiable
 		{
 			get
 			{
-				return base.transform.position;
+				return this._identifiable;
 			}
 		}
 
-		public Quaternion Rotation
+		public override Transform Transform
 		{
 			get
 			{
-				return base.transform.rotation;
+				return this._transform;
 			}
 		}
 
-		public string Tag
+		public void Initialize(GadgetBody.InitializationParameters parameters)
 		{
-			get
-			{
-				return base.gameObject.tag;
-			}
+			base.Initialize();
+			this._accumulatedDisplacement = 0f;
+			this._lastPosition = base.transform.position;
+			this._displacementInterval = (this._nextEventDisplacement = parameters.DisplacementEventInterval);
+			this._isDisplacementEventBlockAssigned = (null != parameters.EventBlocks.OnDisplacementIntervalBlock);
+			this._nonCombatCollisionLayers = parameters.NonCombatCollisionLayers;
+			this.Initialize(parameters.GadgetContext, parameters.EventBlocks, parameters.EventParameters, parameters.TimedEventInterval, parameters.CollisionCheckTimeInterval, parameters.CollisionCheckCount, parameters.Filters, parameters.EventContext, parameters.Prefab, parameters.HitOverBarrier);
 		}
 
-		public float ReamainingWhatever
-		{
-			get
-			{
-				return 0f;
-			}
-		}
-
-		public void Initialize(IGadgetContext context, GadgetBody.BodyEventsBlocks eventBlocks, GadgetBody.BodyEventsParameters eventParameters, float eventTime, float collisionEventTime, int collisionTestsToPerform, List<ICombatFilter> filters, IEventContext eventContext, Transform prefab)
+		private void Initialize(IGadgetContext context, GadgetBody.BodyEventsBlocks eventBlocks, GadgetBody.BodyEventsParameters eventParameters, float eventTime, float collisionEventTime, int collisionTestsToPerform, List<ICombatFilter> filters, IEventContext eventContext, Transform prefab, bool hitOverBarrier)
 		{
 			this._context = (IHMMGadgetContext)context;
+			if (this._context.IsClient && this._body != null)
+			{
+				Collider[] componentsInChildren = base.gameObject.GetComponentsInChildren<Collider>(true);
+				Object.Destroy(this._body);
+				this._body = null;
+				for (int i = 0; i < componentsInChildren.Length; i++)
+				{
+					if (componentsInChildren[i])
+					{
+						Object.Destroy(componentsInChildren[i]);
+					}
+				}
+			}
 			this._prefab = prefab;
 			this._eventsBlocks = eventBlocks;
 			this._eventsParameters = eventParameters;
@@ -76,46 +71,39 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Body
 			this._eventTimeBlockAssigned = (this._eventsBlocks.OnTimeIntervalBlock != null);
 			this._collisionEventTimeBlockAssigned = (this._eventsBlocks.OnCheckCollisionBlock != null);
 			this._movementFinishedBlockAssigned = (this._eventsBlocks.OnMovementFinishedBlock != null && this._movement != null);
+			this._onEnterBlockAssigned = (this._eventsBlocks.OnEnterBlock != null);
+			this._onStayBlockAssigned = (this._eventsBlocks.OnStayBlock != null);
+			this._onExitBlockAssigned = (this._eventsBlocks.OnExitBlock != null);
 			this._collisionEventInterval = collisionEventTime;
 			this._nextCollisionEventTime = collisionEventTime;
 			this._collisionTestsToPerform = collisionTestsToPerform;
-			this.Id = this._context.GetNewBodyId();
-			this.Event = eventContext;
-			this._attachedVFXs.Clear();
+			base.Id = this._context.GetNewBodyId();
+			base.CreationEventId = eventContext.Id;
+			this._creationTime = eventContext.CreationTime;
+			base.WasSentToClient = ((IHMMEventContext)eventContext).ShouldBeSent;
 			this._destroyReason = BaseFX.EDestroyReason.Default;
 			this._filters = filters;
-			if (this._movement != null)
-			{
-				this._movement.Initialize(this, context, eventContext);
-			}
-			this.UpdatePositionAndDirection();
-			this._parameters = new List<BaseParameter>();
+			this._hitOverBarrier = hitOverBarrier;
+			this._numOfCollision = 0;
+			this._movement.Initialize(this, context, eventContext);
+			this._transform.position = this._movement.GetPosition(this._lastTime);
+			this.SetBasicEventParameters(this._elapsedTime);
+			this._parameters.Clear();
 			this._eventsParameters.AddParametersToList(this._parameters);
-			this._isAlive = true;
+			this._hitObjects.Clear();
+			base.IsAlive = true;
 			this.CheckCollisionAndDecrementCounter();
+			base.RaiseBodyInitialized();
 		}
 
-		public void AttachVFX(MasterVFX vfx)
+		public override void Destroy()
 		{
-			this._attachedVFXs.Add(vfx);
-		}
-
-		public bool IsAlive
-		{
-			get
-			{
-				return this._isAlive;
-			}
-		}
-
-		public void Destroy()
-		{
-			this._isAlive = false;
-			if (this._movement != null)
-			{
-				this._movement.Destroy();
-			}
-			this._elapsedTime = 0f;
+			base.Destroy();
+			this.TestCollision(this._eventsBlocks.OnExitBlock);
+			base.IsAlive = false;
+			base.RaiseBodyDestroyed();
+			this._movement.Destroy();
+			this._elapsedTime = (this._lastTime = 0f);
 			if (this._collisionTestsToPerform > 0 && this._context.IsServer)
 			{
 				GadgetBody.Log.WarnFormat("Body {0} destroyed before all collision tests were performed ({1} remaining).", new object[]
@@ -124,12 +112,13 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Body
 					this._collisionTestsToPerform
 				});
 			}
-			for (int i = 0; i < this._attachedVFXs.Count; i++)
-			{
-				this._attachedVFXs[i].Destroy(this._destroyReason);
-			}
-			this.TestCollision(this._eventsBlocks.OnExitBlock);
+			this._collidersCollided.Clear();
+			this._combatCollisionIsBarrier.Clear();
 			ResourceLoader.Instance.ReturnToPrefabCache(this._prefab, this);
+			if (this._context.IsServer && this._eventsBlocks.OnDestroyed != null)
+			{
+				this._context.TriggerEvent(GadgetEvent.GetInstance(this._eventsBlocks.OnDestroyed.Id, this._context, this._parameters));
+			}
 		}
 
 		public float GetRemainingTime()
@@ -137,41 +126,66 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Body
 			return this._nextEventTime - this._elapsedTime;
 		}
 
+		public List<BaseParameter> GetEventParameters()
+		{
+			this.SetBasicEventParameters(this._elapsedTime);
+			return this._parameters;
+		}
+
 		private void Awake()
 		{
 			this._transform = base.transform;
 			this._body = base.GetComponent<Rigidbody>();
+			this._identifiable = base.GetComponent<Identifiable>();
 			this._movement = base.GetComponent<IGadgetBodyMovement>();
+			if (this._movement == null)
+			{
+				this._movement = new NullBodyMovement(base.transform);
+			}
+			this._gadgetBoomerangMovement = (this._movement as GadgetBodyBoomerangMovement);
 		}
 
 		private void Update()
 		{
-			if (this._context.IsServer || this._movement == null)
+			if (this._context == null)
 			{
 				return;
 			}
-			this._transform.position = this._movement.GetPosition(this._elapsedTime);
-			this._elapsedTime = (float)(this._context.CurrentTime - this.Event.CreationTime) * 0.001f;
+			this._transform.LookAt(this._transform.position + this._movement.GetDirection());
+			if (this._context.IsServer)
+			{
+				this.ProcessCollisionEvents();
+				this.TestEventTime();
+				this.TestMovementFinished();
+				this.CheckDisplacement();
+				return;
+			}
+			this.UpdateElapsedTime((float)(this._context.CurrentTime - this._creationTime) * 0.001f);
+			this._transform.position = this._movement.GetPosition(this._lastTime);
+			if (this._gadgetBoomerangMovement && this._gadgetBoomerangMovement.isReturning)
+			{
+				this._transform.Rotate(0f, 180f, 0f);
+			}
 		}
 
 		private void FixedUpdate()
 		{
-			if (this._context.IsClient || !this._isAlive)
+			if (!base.IsAlive || this._context == null || this._context.IsClient)
 			{
 				return;
 			}
-			if (this._movement != null)
-			{
-				this.UpdateVelocity(this._movement.GetPosition(this._elapsedTime));
-			}
-			this._elapsedTime = (this._elapsedTime = (float)(this._context.CurrentTime - this.Event.CreationTime) * 0.001f);
-			if (!this._isAlive)
-			{
-				return;
-			}
+			this.UpdateElapsedTime((float)(this._context.CurrentTime - this._creationTime) * 0.001f);
+			this.UpdateVelocity(this._movement.GetPosition(this._elapsedTime));
 			this.TestCollisionEventTime();
-			this.TestEventTime();
-			this.TestMovementFinished();
+		}
+
+		private void UpdateElapsedTime(float newElapsedTime)
+		{
+			if (!Mathf.Approximately(this._elapsedTime, newElapsedTime))
+			{
+				this._lastTime = this._elapsedTime;
+				this._elapsedTime = newElapsedTime;
+			}
 		}
 
 		private void TestMovementFinished()
@@ -180,11 +194,10 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Body
 			{
 				return;
 			}
-			this.UpdatePositionAndDirection();
+			this.SetBasicEventParameters(this._elapsedTime);
+			this._transform.position = this._movement.GetPosition(this._elapsedTime);
 			this._destroyReason = BaseFX.EDestroyReason.Lifetime;
-			this._eventsParameters.SetParameter<GadgetBody>(this._context, this._eventsParameters.Body, this);
-			this._eventsParameters.SetParameter<float>(this._context, this._eventsParameters.ElapsedTime, this._elapsedTime);
-			this._context.TriggerEvent(new GadgetEvent(this._eventsBlocks.OnMovementFinishedBlock.Id, this._context, this._parameters));
+			this._context.TriggerEvent(GadgetEvent.GetInstance(this._eventsBlocks.OnMovementFinishedBlock.Id, this._context, this._parameters));
 		}
 
 		private void TestEventTime()
@@ -193,12 +206,10 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Body
 			{
 				return;
 			}
-			this.UpdatePositionAndDirection();
+			this.SetBasicEventParameters(this._elapsedTime);
 			this._destroyReason = BaseFX.EDestroyReason.Lifetime;
-			this._eventsParameters.SetParameter<GadgetBody>(this._context, this._eventsParameters.Body, this);
-			this._eventsParameters.SetParameter<float>(this._context, this._eventsParameters.ElapsedTime, this._elapsedTime);
-			this._context.TriggerEvent(new GadgetEvent(this._eventsBlocks.OnTimeIntervalBlock.Id, this._context, this._parameters));
 			this._nextEventTime += this._eventInterval;
+			this._context.TriggerEvent(GadgetEvent.GetInstance(this._eventsBlocks.OnTimeIntervalBlock.Id, this._context, this._parameters));
 		}
 
 		private void TestCollisionEventTime()
@@ -219,84 +230,142 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Body
 
 		private void UpdateVelocity(Vector3 newPos)
 		{
+			this._body.velocity = Vector3.zero;
 			if (Time.deltaTime > 0f)
 			{
 				this._body.velocity = (newPos - this._body.position) / Time.deltaTime;
 			}
-			else
-			{
-				this._body.velocity = Vector3.zero;
-			}
 		}
 
-		private void UpdatePositionAndDirection()
+		private void SetBasicEventParameters(float eventTime)
 		{
-			if (this._movement != null)
-			{
-				this._eventsParameters.SetParameter<Vector3>(this._context, this._eventsParameters.Direction, this._movement.GetDirection());
-			}
-			this._eventsParameters.SetParameter<Vector3>(this._context, this._eventsParameters.Position, this._transform.position);
-		}
-
-		private void OnCollisionEvent(IBlock block, Collider other)
-		{
-			if (block == null || this._context.IsClient)
-			{
-				return;
-			}
-			CombatObject combatObject = this._context.GetCombatObject(other) as CombatObject;
-			if (BarrierUtils.IsBarrier(other))
-			{
-				return;
-			}
-			bool flag = this._filters.Count == 0;
-			for (int i = 0; i < this._filters.Count; i++)
-			{
-				flag |= this._filters[i].Match(combatObject, this._context.GetCombatObject(this.OwnerId), other);
-			}
-			if (!flag)
-			{
-				return;
-			}
-			int id = block.Id;
-			this.UpdatePositionAndDirection();
 			this._eventsParameters.SetParameter<GadgetBody>(this._context, this._eventsParameters.Body, this);
-			this._eventsParameters.SetParameter<Vector3>(this._context, this._eventsParameters.TargetPosition, other.transform.position);
-			this._eventsParameters.SetParameter<float>(this._context, this._eventsParameters.ElapsedTime, this._elapsedTime);
-			if (combatObject != null)
+			if (null != this._eventsParameters.ElapsedTime)
 			{
-				this._destroyReason = BaseFX.EDestroyReason.HitIdentifiable;
-				this._eventsParameters.SetParameter<ICombatObject>(this._context, this._eventsParameters.Target, combatObject);
-				this._context.TriggerEvent(new GadgetEvent(id, this._context, this._parameters));
+				IParameterTomate<float> parameterTomate = this._eventsParameters.ElapsedTime.ParameterTomate as IParameterTomate<float>;
+				parameterTomate.SetValue(this._context, eventTime);
 			}
-			else if (other.gameObject.layer == 9)
+			this._eventsParameters.SetParameter<Vector3>(this._context, this._eventsParameters.Direction, this._movement.GetDirection());
+			this._eventsParameters.SetParameter<Vector3>(this._context, this._eventsParameters.Position, this._movement.GetPosition(eventTime));
+		}
+
+		private void ProcessCollisionEvents()
+		{
+			for (int i = 0; i < this._numOfCollision; i++)
 			{
-				this._destroyReason = BaseFX.EDestroyReason.HitScenery;
-				this._eventsParameters.SetParameter<ICombatObject>(this._context, this._eventsParameters.Target, null);
-				this._context.TriggerEvent(new GadgetEvent(id, this._context, this._parameters));
+				if (!base.IsAlive)
+				{
+					break;
+				}
+				Collider collider = this._collisions[i].collider;
+				IBlock block = this._collisions[i].block;
+				Vector3 normal = this._collisions[i].normal;
+				Vector3 position = this._collisions[i].position;
+				float time = this._collisions[i].time;
+				ICombatObject combat = this._collisions[i].combat;
+				bool isCombat = this._collisions[i].isCombat;
+				Vector3 targetPosition = this._collisions[i].targetPosition;
+				if (!isCombat || this._combatCollisionIsBarrier.ContainsKey(combat))
+				{
+					bool flag = this._filters.Count == 0;
+					for (int j = 0; j < this._filters.Count; j++)
+					{
+						flag |= this._filters[j].Match(combat, this._context.Owner as ICombatObject, collider);
+					}
+					if (flag)
+					{
+						int id = block.Id;
+						this.SetBasicEventParameters(time);
+						if (isCombat)
+						{
+							this._eventsParameters.SetParameter<bool>(this._context, this._eventsParameters.IsBarrier, this._combatCollisionIsBarrier[combat]);
+						}
+						this._eventsParameters.SetParameter<Vector3>(this._context, this._eventsParameters.Position, this._body.position);
+						this._eventsParameters.SetParameter<Vector3>(this._context, this._eventsParameters.CollisionNormal, normal);
+						this._eventsParameters.SetParameter<Vector3>(this._context, this._eventsParameters.TargetPosition, targetPosition);
+						this._eventsParameters.SetParameter<Vector3>(this._context, this._eventsParameters.CollisionPosition, position);
+						if (isCombat)
+						{
+							this._combatCollisionIsBarrier.Remove(combat);
+						}
+						if (combat != null)
+						{
+							this._destroyReason = BaseFX.EDestroyReason.HitIdentifiable;
+							this._eventsParameters.SetParameter<ICombatObject>(this._context, this._eventsParameters.Target, combat);
+							if (!this._hitObjects.Contains(combat))
+							{
+								this._eventsParameters.SetParameter<ICombatObject>(this._context, this._eventsParameters.UniqueCombatCollision, combat);
+							}
+							this._hitObjects.Add(combat);
+							this._context.TriggerEvent(GadgetEvent.GetInstance(id, this._context, this._parameters));
+						}
+						else if (this.IsOnExpectedNonCombatCollisionLayer(collider))
+						{
+							this._destroyReason = BaseFX.EDestroyReason.HitScenery;
+							this._eventsParameters.SetParameter<ICombatObject>(this._context, this._eventsParameters.Target, null);
+							this._context.TriggerEvent(GadgetEvent.GetInstance(id, this._context, this._parameters));
+						}
+					}
+				}
 			}
+			this._numOfCollision = 0;
+			this._collidersCollided.Clear();
+		}
+
+		private bool IsOnExpectedNonCombatCollisionLayer(Collider col)
+		{
+			int num = 1 << col.gameObject.layer;
+			return (this._nonCombatCollisionLayers & num) > 0;
+		}
+
+		private void OnCollisionEvent(IBlock block, Collider col, Vector3 normal, Vector3 position)
+		{
+			if (!base.IsAlive || this._context.IsClient || this._collidersCollided.Contains(col))
+			{
+				return;
+			}
+			this._collidersCollided.Add(col);
+			ICombatObject combatObject = this._context.GetCombatObject(col);
+			bool flag = combatObject != null;
+			if (flag && combatObject.NoHit)
+			{
+				return;
+			}
+			if (flag && (!this._combatCollisionIsBarrier.ContainsKey(combatObject) || (!this._combatCollisionIsBarrier[combatObject] && !this._hitOverBarrier) || (this._combatCollisionIsBarrier[combatObject] && this._hitOverBarrier)))
+			{
+				this._combatCollisionIsBarrier[combatObject] = BarrierUtils.IsBarrier(col);
+			}
+			Vector3 position2 = col.transform.position;
+			float lastTime = this._lastTime;
+			this._collisions[this._numOfCollision].block = block;
+			this._collisions[this._numOfCollision].collider = col;
+			this._collisions[this._numOfCollision].normal = normal;
+			this._collisions[this._numOfCollision].position = position;
+			this._collisions[this._numOfCollision].combat = combatObject;
+			this._collisions[this._numOfCollision].isCombat = flag;
+			this._collisions[this._numOfCollision].targetPosition = position2;
+			this._numOfCollision++;
 		}
 
 		private void TestCollision(IBlock eventBlock)
 		{
-			if (eventBlock == null)
+			if (eventBlock == null || this._body == null)
 			{
 				return;
 			}
 			this._body.position += GadgetBody.Translation;
-			RaycastHit[] array = this._body.SweepTestAll(Vector3.down, 100f, QueryTriggerInteraction.Collide);
+			RaycastHit[] array = this._body.SweepTestAll(Vector3.down, 100f, 2);
 			Array.Sort<RaycastHit>(array, new Comparison<RaycastHit>(this.SortHitsByCenter));
+			this._body.position -= GadgetBody.Translation;
 			for (int i = 0; i < array.Length; i++)
 			{
-				if (this._eventsParameters.CollisionNormal != null)
-				{
-					Vector3 normal = array[i].normal;
-					normal.y = 0f;
-					this._eventsParameters.SetParameter<Vector3>(this._context, this._eventsParameters.CollisionNormal, -normal.normalized);
-				}
-				this.OnCollisionEvent(eventBlock, array[i].collider);
+				Vector3 normal = array[i].normal;
+				Vector3 point = array[i].point;
+				normal.y = 0f;
+				normal = -normal.normalized;
+				this.OnCollisionEvent(eventBlock, array[i].collider, normal, point);
 			}
-			this._body.position -= GadgetBody.Translation;
+			this.ProcessCollisionEvents();
 		}
 
 		private int SortHitsByCenter(RaycastHit x, RaycastHit y)
@@ -309,62 +378,81 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Body
 
 		private void OnTriggerStay(Collider other)
 		{
-			if (!this._isAlive)
+			if (!this._onStayBlockAssigned)
 			{
 				return;
 			}
-			this._eventsParameters.SetParameter<Vector3>(this._context, this._eventsParameters.CollisionNormal, (other.transform.position - this._body.position).normalized);
-			this.OnCollisionEvent(this._eventsBlocks.OnStayBlock, other);
+			this.OnCollisionEvent(this._eventsBlocks.OnStayBlock, other, Vector3.zero, Vector3.zero);
 		}
 
 		private void OnTriggerEnter(Collider other)
 		{
-			if (!this._isAlive)
+			if (!this._onEnterBlockAssigned)
 			{
 				return;
 			}
-			this._eventsParameters.SetParameter<Vector3>(this._context, this._eventsParameters.CollisionNormal, (other.transform.position - this._body.position).normalized);
-			this.OnCollisionEvent(this._eventsBlocks.OnEnterBlock, other);
+			this.OnCollisionEvent(this._eventsBlocks.OnEnterBlock, other, Vector3.zero, Vector3.zero);
 		}
 
 		private void OnTriggerExit(Collider other)
 		{
-			if (!this._isAlive)
+			if (!this._onExitBlockAssigned)
 			{
 				return;
 			}
-			this._eventsParameters.SetParameter<Vector3>(this._context, this._eventsParameters.CollisionNormal, Vector3.zero);
-			this.OnCollisionEvent(this._eventsBlocks.OnExitBlock, other);
+			this.OnCollisionEvent(this._eventsBlocks.OnExitBlock, other, Vector3.zero, Vector3.zero);
 		}
 
 		private void OnCollisionStay(Collision collisionInfo)
 		{
-			if (!this._isAlive)
+			if (!this._onStayBlockAssigned)
 			{
 				return;
 			}
-			this._eventsParameters.SetParameter<Vector3>(this._context, this._eventsParameters.CollisionNormal, -collisionInfo.contacts[0].normal);
-			this.OnCollisionEvent(this._eventsBlocks.OnStayBlock, collisionInfo.collider);
+			ContactPoint contactPoint = collisionInfo.contacts[0];
+			this.OnCollisionEvent(this._eventsBlocks.OnStayBlock, collisionInfo.collider, contactPoint.normal, contactPoint.point);
 		}
 
 		private void OnCollisionEnter(Collision collisionInfo)
 		{
-			if (!this._isAlive)
+			if (!this._onEnterBlockAssigned)
 			{
 				return;
 			}
-			this._eventsParameters.SetParameter<Vector3>(this._context, this._eventsParameters.CollisionNormal, -collisionInfo.contacts[0].normal);
-			this.OnCollisionEvent(this._eventsBlocks.OnEnterBlock, collisionInfo.collider);
+			ContactPoint contactPoint = collisionInfo.contacts[0];
+			this.OnCollisionEvent(this._eventsBlocks.OnEnterBlock, collisionInfo.collider, contactPoint.normal, contactPoint.point);
 		}
 
 		private void OnCollisionExit(Collision collisionInfo)
 		{
-			if (!this._isAlive)
+			if (!this._onExitBlockAssigned)
 			{
 				return;
 			}
-			this._eventsParameters.SetParameter<Vector3>(this._context, this._eventsParameters.CollisionNormal, Vector3.zero);
-			this.OnCollisionEvent(this._eventsBlocks.OnExitBlock, collisionInfo.collider);
+			ContactPoint contactPoint = collisionInfo.contacts[0];
+			this.OnCollisionEvent(this._eventsBlocks.OnExitBlock, collisionInfo.collider, contactPoint.normal, contactPoint.point);
+		}
+
+		private void CheckDisplacement()
+		{
+			if (!this._isDisplacementEventBlockAssigned || !base.IsAlive)
+			{
+				return;
+			}
+			Vector3 position = this._movement.GetPosition(this._elapsedTime);
+			Vector3 vector = position - this._lastPosition;
+			this._lastPosition = position;
+			float magnitude = vector.magnitude;
+			float accumulatedDisplacement = this._accumulatedDisplacement;
+			this._accumulatedDisplacement += magnitude;
+			while (this._accumulatedDisplacement >= this._nextEventDisplacement)
+			{
+				float num = (this._nextEventDisplacement - accumulatedDisplacement) / magnitude;
+				float basicEventParameters = Mathf.Lerp(this._lastTime, this._elapsedTime, num);
+				this.SetBasicEventParameters(basicEventParameters);
+				this._nextEventDisplacement += this._displacementInterval;
+				this._context.TriggerEvent(GadgetEvent.GetInstance(this._eventsBlocks.OnDisplacementIntervalBlock.Id, this._context, this._parameters));
+			}
 		}
 
 		public static readonly BitLogger Log = new BitLogger(typeof(GadgetBody));
@@ -375,9 +463,21 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Body
 
 		private bool _eventTimeBlockAssigned;
 
+		private bool _isDisplacementEventBlockAssigned;
+
 		private bool _collisionEventTimeBlockAssigned;
 
 		private bool _movementFinishedBlockAssigned;
+
+		private bool _onEnterBlockAssigned;
+
+		private bool _onStayBlockAssigned;
+
+		private bool _onExitBlockAssigned;
+
+		private int _creationTime;
+
+		private float _lastTime;
 
 		private float _elapsedTime;
 
@@ -391,26 +491,45 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Body
 
 		private int _collisionTestsToPerform;
 
+		private float _accumulatedDisplacement;
+
+		private float _displacementInterval;
+
+		private float _nextEventDisplacement;
+
+		private Vector3 _lastPosition;
+
 		private Transform _prefab;
 
-		private List<MasterVFX> _attachedVFXs = new List<MasterVFX>();
+		private LayerMask _nonCombatCollisionLayers;
 
 		private Transform _transform;
 
 		private Rigidbody _body;
 
+		private Identifiable _identifiable;
+
 		private GadgetBody.BodyEventsBlocks _eventsBlocks;
 
 		private GadgetBody.BodyEventsParameters _eventsParameters;
 
-		private List<BaseParameter> _parameters;
-
-		private bool _isAlive;
+		private List<BaseParameter> _parameters = new List<BaseParameter>(32);
 
 		private List<ICombatFilter> _filters;
 
-		[Obsolete]
-		private BaseFX.EDestroyReason _destroyReason;
+		private readonly Dictionary<ICombatObject, bool> _combatCollisionIsBarrier = new Dictionary<ICombatObject, bool>();
+
+		private bool _hitOverBarrier;
+
+		private HashSet<ICombatObject> _hitObjects = new HashSet<ICombatObject>();
+
+		private GadgetBodyBoomerangMovement _gadgetBoomerangMovement;
+
+		private readonly HashSet<Collider> _collidersCollided = new HashSet<Collider>();
+
+		private readonly GadgetBody.GadgetBodyCollision[] _collisions = new GadgetBody.GadgetBodyCollision[128];
+
+		private int _numOfCollision;
 
 		private const float TranslationDistance = 100f;
 
@@ -425,8 +544,8 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Body
 
 			public BaseBlock OnExitBlock;
 
-			[FormerlySerializedAs("OnInstantCollisionBlock")]
 			[Tooltip("Event called if is colliding the moment this body is created and on Collision Interval")]
+			[FormerlySerializedAs("OnInstantCollisionBlock")]
 			public BaseBlock OnCheckCollisionBlock;
 
 			[Tooltip("Event called every Interval of Time")]
@@ -434,16 +553,22 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Body
 
 			[Tooltip("Event called when the Movement is finished")]
 			public BaseBlock OnMovementFinishedBlock;
+
+			[Tooltip("Event called every Interval of Movement")]
+			public BaseBlock OnDisplacementIntervalBlock;
+
+			[Tooltip("Called when the gadget body is detroyed.")]
+			public BaseBlock OnDestroyed;
 		}
 
 		[Serializable]
 		public class BodyEventsParameters
 		{
-			public void SetParameter<T>(IParameterContext context, IParameter<T> parameter, T value)
+			public void SetParameter<T>(object context, BaseParameter parameter, T value)
 			{
 				if (parameter != null)
 				{
-					parameter.SetValue(context, value);
+					parameter.SetValue<T>(context, value);
 				}
 			}
 
@@ -465,6 +590,10 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Body
 				{
 					parameters.Add(this.CollisionNormal);
 				}
+				if (this.CollisionPosition != null)
+				{
+					parameters.Add(this.CollisionPosition);
+				}
 				if (this.Body != null)
 				{
 					parameters.Add(this.Body);
@@ -477,23 +606,125 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Body
 				{
 					parameters.Add(this.ElapsedTime);
 				}
+				if (this.IsBarrier != null)
+				{
+					parameters.Add(this.IsBarrier);
+				}
 			}
 
-			public Vector3Parameter Position;
+			[Restrict(false, new Type[]
+			{
+				typeof(Vector3)
+			})]
+			public BaseParameter Position;
 
-			public Vector3Parameter TargetPosition;
+			[Restrict(false, new Type[]
+			{
+				typeof(Vector3)
+			})]
+			public BaseParameter TargetPosition;
 
-			public Vector3Parameter Direction;
+			[Restrict(false, new Type[]
+			{
+				typeof(Vector3)
+			})]
+			public BaseParameter Direction;
 
-			public CombatObjectParameter Target;
+			[Restrict(false, new Type[]
+			{
+				typeof(bool)
+			})]
+			public BaseParameter IsBarrier;
 
-			public Vector3Parameter CollisionNormal;
+			[Restrict(false, new Type[]
+			{
+				typeof(ICombatObject)
+			})]
+			public BaseParameter Target;
 
-			public FloatParameter ElapsedTime;
+			[Restrict(false, new Type[]
+			{
+				typeof(float)
+			})]
+			public BaseParameter ElapsedTime;
 
-			public GadgetBodyParameter Body;
+			[Restrict(false, new Type[]
+			{
+				typeof(IGadgetBody)
+			})]
+			public BaseParameter Body;
 
-			public GadgetBodyParameter TargetBody;
+			[Restrict(false, new Type[]
+			{
+				typeof(IGadgetBody)
+			})]
+			public BaseParameter TargetBody;
+
+			[Restrict(false, new Type[]
+			{
+				typeof(bool)
+			})]
+			[Tooltip("First time colliding with a given Combat")]
+			public BaseParameter UniqueCombatCollision;
+
+			[Header("Only work with Non trigger collider")]
+			[Restrict(false, new Type[]
+			{
+				typeof(Vector3)
+			})]
+			public BaseParameter CollisionNormal;
+
+			[Restrict(false, new Type[]
+			{
+				typeof(Vector3)
+			})]
+			public BaseParameter CollisionPosition;
+		}
+
+		private struct GadgetBodyCollision
+		{
+			public Collider collider;
+
+			public IBlock block;
+
+			public Vector3 normal;
+
+			public Vector3 position;
+
+			public float time;
+
+			public ICombatObject combat;
+
+			public bool isCombat;
+
+			public Vector3 targetPosition;
+		}
+
+		public struct InitializationParameters
+		{
+			public IGadgetContext GadgetContext;
+
+			public GadgetBody.BodyEventsBlocks EventBlocks;
+
+			public GadgetBody.BodyEventsParameters EventParameters;
+
+			public float TimedEventInterval;
+
+			public float CollisionCheckTimeInterval;
+
+			public int CollisionCheckCount;
+
+			public float DisplacementEventInterval;
+
+			public List<ICombatFilter> Filters;
+
+			public IEventContext EventContext;
+
+			public bool HitOverBarrier;
+
+			public Transform Prefab;
+
+			public LayerMask NonCombatCollisionLayers;
 		}
 	}
 }

@@ -12,7 +12,7 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 		public IFuture UpdatePickupInterfaceOnClient(int pickupsCounts)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1013, 3, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1014, 3, new object[]
 			{
 				pickupsCounts
 			});

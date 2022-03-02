@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Collections;
-using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.Match;
 using Pocketverse;
 using Pocketverse.MuralContext;
+using UniRx;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Frontend
@@ -12,29 +13,34 @@ namespace HeavyMetalMachines.Frontend
 	{
 		public bool Running { get; set; }
 
-		internal void Init(HORTAComponent comp, HORTAStatePlayback statePlayback, HORTAState state, MatchData.MatchState finalState)
+		internal void Init(HORTAComponent comp, HORTAStatePlayback statePlayback, HORTAState state, MatchData.MatchState finalState, HORTATime time)
 		{
 			this.Component = comp;
 			this.StatePlayback = statePlayback;
 			this.State = state;
 			this.FinalState = finalState;
 			this._quitPressedTime = -1f;
+			this._time = time;
+			this._availabilityDisposable = ObservableExtensions.Subscribe<bool>(this.Component.TimeControl.ObserveAvailability(), delegate(bool available)
+			{
+				this._timelineAvailable = available;
+			});
 		}
 
 		private void Awake()
 		{
 			this.Running = false;
-			this._ended = false;
 		}
 
 		private void Update()
 		{
-			this.ProccessInputs();
+			this._time.Update();
+			this.ProcessInputs();
 			if (!this.Running)
 			{
 				return;
 			}
-			if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreBoard.State.Replay && Mathf.Max(GameHubBehaviour.Hub.BombManager.ScoreBoard.BombScoreBlue, GameHubBehaviour.Hub.BombManager.ScoreBoard.BombScoreRed) >= GameHubBehaviour.Hub.BombManager.Rules.BombScoreTarget)
+			if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreboardState.Replay && Mathf.Max(GameHubBehaviour.Hub.BombManager.ScoreBoard.BombScoreBlue, GameHubBehaviour.Hub.BombManager.ScoreBoard.BombScoreRed) >= GameHubBehaviour.Hub.BombManager.Rules.BombScoreTarget)
 			{
 				this.CallEndGame();
 			}
@@ -48,63 +54,55 @@ namespace HeavyMetalMachines.Frontend
 		private IEnumerator EndGame()
 		{
 			yield return new WaitForSeconds(GameHubBehaviour.Hub.BombManager.Rules.ReplayTimeSeconds);
+			HORTABehaviour.Log.DebugFormat("Match OVER={0}", new object[]
+			{
+				GameHubBehaviour.Hub.GameTime.MatchTimer.GetTimeSeconds()
+			});
 			GameHubBehaviour.Hub.Match.State = this.FinalState;
 			GameHubBehaviour.Hub.Server.ClientSetInfo(GameHubBehaviour.Hub.Match);
 			this.Running = false;
-			this._ended = true;
 			yield break;
 		}
 
-		private void QuitPlayback()
+		public void QuitPlayback()
 		{
+			HORTABehaviour.Log.Debug("Back to HORTA");
 			this.Component.CleanUp();
+			base.StopAllCoroutines();
 			Mural.PostAll(default(CleanupMessage), typeof(ICleanupListener));
 			GameHubBehaviour.Hub.State.GotoState(this.State, false);
 		}
 
-		private void ProccessInputs()
+		private void ProcessInputs()
 		{
-			if (this._ended)
+			if (this._timelineAvailable)
 			{
-				if (Input.GetKeyDown(KeyCode.Q))
+				if (Input.GetKeyDown(102))
 				{
-					this.QuitPlayback();
-					return;
+					HORTABehaviour.Log.DebugFormat("Toggle FastForward", new object[0]);
+					this.Component.TimeControl.IncreaseSpeed();
 				}
-				return;
+				if (Input.GetKeyDown(122))
+				{
+					HORTABehaviour.Log.DebugFormat("Toggle SlowMotion", new object[0]);
+					this.Component.TimeControl.DecreaseSpeed();
+				}
+				if (Input.GetKeyDown(120))
+				{
+					HORTABehaviour.Log.DebugFormat("Restore time/Pause", new object[0]);
+					if (this.Component.TimeControl.IsPlaying)
+					{
+						this.Component.TimeControl.Pause();
+					}
+					else
+					{
+						this.Component.TimeControl.Play();
+					}
+				}
 			}
-			else
+			if (Input.GetKeyDown(116))
 			{
-				if (Input.GetKeyDown(KeyCode.Q))
-				{
-					this._quitPressedTime = Time.realtimeSinceStartup;
-				}
-				if (this._quitPressedTime > 0f && Time.realtimeSinceStartup - this._quitPressedTime > 5f)
-				{
-					this.QuitPlayback();
-					return;
-				}
-				if (Input.GetKeyUp(KeyCode.Q))
-				{
-					this._quitPressedTime = -1f;
-				}
-				if (Input.GetKeyDown(KeyCode.P))
-				{
-					this.Component.HORTAClock.TogglePause();
-				}
-				if (Input.GetKeyDown(KeyCode.F))
-				{
-					this.Component.HORTAClock.ToggleFastForward();
-				}
-				if (Input.GetKeyDown(KeyCode.S))
-				{
-					this.Component.HORTAClock.ToggleSlowMotion();
-				}
-				if (Input.GetKeyDown(KeyCode.D))
-				{
-					this.Component.HORTAClock.ToggleOffAny();
-				}
-				return;
+				this.Component.ToggleTimelinePresenterVisibility();
 			}
 		}
 
@@ -118,8 +116,12 @@ namespace HeavyMetalMachines.Frontend
 
 		private MatchData.MatchState FinalState;
 
-		private bool _ended;
+		private HORTATime _time;
 
 		private float _quitPressedTime;
+
+		private bool _timelineAvailable;
+
+		private IDisposable _availabilityDisposable;
 	}
 }

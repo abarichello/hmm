@@ -1,22 +1,88 @@
 ﻿using System;
 using System.Collections;
 using HeavyMetalMachines.Frontend;
+using HeavyMetalMachines.Presenting;
+using HeavyMetalMachines.Presenting.Unity;
 using HeavyMetalMachines.Utils;
+using Hoplon.Input.UiNavigation;
+using UniRx;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace HeavyMetalMachines.Battlepass
 {
 	public class UnityUiBattlepassInfoView : MonoBehaviour, IBattlepassInfoView
 	{
-		protected void Start()
+		public IUiNavigationGroupHolder UiNavigationGroupHolder
 		{
-			this._battlepassInfoComponent.RegisterInfoView(this);
+			get
+			{
+				return this._uiNavigationGroupHolder;
+			}
+		}
+
+		public IButton PrevPageButton
+		{
+			get
+			{
+				return this._prevPageButton;
+			}
+		}
+
+		public IButton NextPageButton
+		{
+			get
+			{
+				return this._nextPageButton;
+			}
+		}
+
+		public IButton BackButton
+		{
+			get
+			{
+				return this._backButton;
+			}
+		}
+
+		private void OnDestroy()
+		{
+			if (this._previousPageButtonClickDisposable != null)
+			{
+				this._previousPageButtonClickDisposable.Dispose();
+			}
+			if (this._nextPageButtonClickDisposable != null)
+			{
+				this._nextPageButtonClickDisposable.Dispose();
+			}
 		}
 
 		public void SetVisibility(bool isVisible)
 		{
 			base.StartCoroutine(this.SetVisibilityCoroutine(isVisible));
+		}
+
+		public bool IsVisible()
+		{
+			return this._isVisible;
+		}
+
+		protected void Start()
+		{
+			this._battlepassInfoComponent.RegisterInfoView(this);
+			this._previousPageButtonClickDisposable = ObservableExtensions.Subscribe<Unit>(this._prevPageButton.OnClick(), delegate(Unit _)
+			{
+				this.OnPreviousPageButtonClick();
+			});
+			this._nextPageButtonClickDisposable = ObservableExtensions.Subscribe<Unit>(this._nextPageButton.OnClick(), delegate(Unit _)
+			{
+				this.OnNextPageButtonClick();
+			});
+			ObservableExtensions.Subscribe<Unit>(this.BackButton.OnClick(), delegate(Unit _)
+			{
+				this._battlepassInfoComponent.HideInfoWindow();
+			});
+			this._logoMetalPassGroup.SetImageName("event_logo_season_current_large");
+			this._logoRewardGroup.SetImageName("event_logo_season_current_large");
 		}
 
 		private IEnumerator SetVisibilityCoroutine(bool isVisible)
@@ -28,11 +94,13 @@ namespace HeavyMetalMachines.Battlepass
 				this._mainWindowCanvasGroup.interactable = true;
 				this._isVisible = true;
 				GUIUtils.PlayAnimation(this._mainWindowAnimation, false, 1f, "BattlePassInfoInAnimation");
+				this.UiNavigationGroupHolder.AddHighPriorityGroup();
 			}
 			else
 			{
 				this._mainWindowCanvasGroup.interactable = false;
 				GUIUtils.PlayAnimation(this._mainWindowAnimation, false, 1f, "BattlePassInfoOutAnimation");
+				this.UiNavigationGroupHolder.RemoveHighPriorityGroup();
 			}
 			yield return new WaitForSeconds(this._mainWindowAnimation.clip.length);
 			if (!isVisible)
@@ -42,11 +110,6 @@ namespace HeavyMetalMachines.Battlepass
 				this._battlepassInfoComponent.OnInfoWindowHideAnimationEnded();
 			}
 			yield break;
-		}
-
-		public bool IsVisible()
-		{
-			return this._isVisible;
 		}
 
 		private void ShowPage(int pageIndex)
@@ -62,18 +125,16 @@ namespace HeavyMetalMachines.Battlepass
 
 		private void RefreshNavigationButtons()
 		{
-			this._prevPageButton.interactable = (this._currentPage == 1);
-			this._nextPageButton.interactable = (this._currentPage == 0);
+			this.PrevPageButton.IsInteractable = (this._currentPage == 1);
+			this.NextPageButton.IsInteractable = (this._currentPage == 0);
 		}
 
-		[UnityUiComponentCall]
-		public void OnPreviousPageButtonClick()
+		private void OnPreviousPageButtonClick()
 		{
 			this.ShowPage(0);
 		}
 
-		[UnityUiComponentCall]
-		public void OnNextPageButtonClick()
+		private void OnNextPageButtonClick()
 		{
 			this.ShowPage(1);
 		}
@@ -97,13 +158,31 @@ namespace HeavyMetalMachines.Battlepass
 		private Animation _mainWindowAnimation;
 
 		[SerializeField]
-		private Button _prevPageButton;
+		private UnityButton _prevPageButton;
 
 		[SerializeField]
-		private Button _nextPageButton;
+		private UnityButton _nextPageButton;
+
+		[SerializeField]
+		private UnityButton _backButton;
+
+		[SerializeField]
+		private UnityDynamicImage _logoRewardGroup;
+
+		[SerializeField]
+		private UnityDynamicImage _logoMetalPassGroup;
+
+		[SerializeField]
+		private UiNavigationGroupHolder _uiNavigationGroupHolder;
+
+		private const string LogoImageName = "event_logo_season_current_large";
 
 		private bool _isVisible;
 
 		private int _currentPage;
+
+		private IDisposable _previousPageButtonClickDisposable;
+
+		private IDisposable _nextPageButtonClickDisposable;
 	}
 }

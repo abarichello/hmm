@@ -20,7 +20,7 @@ namespace HeavyMetalMachines.Battlepass
 			}
 			if (this._battlepassInfoView == null)
 			{
-				SceneManager.LoadSceneAsync("UI_ADD_BattlepassInfo", LoadSceneMode.Additive);
+				SceneManager.LoadSceneAsync("UI_ADD_BattlepassInfo", 1);
 				this._onInfoWindowCloseAction = onWindowCloseAction;
 				return;
 			}

@@ -1,6 +1,5 @@
 ﻿using System;
 using HeavyMetalMachines.Combat;
-using HeavyMetalMachines.Options;
 using HeavyMetalMachines.VFX;
 using Pocketverse;
 using UnityEngine;
@@ -78,8 +77,6 @@ namespace HeavyMetalMachines.Frontend
 		}
 
 		public float SpriteAnimationTime = 0.5f;
-
-		public ControlAction ControlAction;
 
 		public UILabel KeyLabel;
 

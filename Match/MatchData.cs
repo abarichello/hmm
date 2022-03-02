@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Diagnostics;
+using HeavyMetalMachines.Matches.DataTransferObjects;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Match
@@ -14,12 +16,12 @@ namespace HeavyMetalMachines.Match
 			}
 		}
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
+		public event Action<MatchKind> OnKindChange;
+
 		public virtual bool LevelIsTutorial()
 		{
-			HMMHub hub = GameHubBehaviour.Hub;
-			string tutorialSceneName = hub.SharedConfigs.TutorialConfig.TutorialSceneName;
-			string sceneName = hub.ArenaConfig.GetSceneName(this.ArenaIndex);
-			return tutorialSceneName.Equals(sceneName);
+			return this.Kind == 2;
 		}
 
 		public void WriteToBitStream(BitStream bs)
@@ -29,7 +31,7 @@ namespace HeavyMetalMachines.Match
 			bs.WriteCompressedInt(this.ArenaIndex);
 			bs.WriteByte((byte)this.Pick);
 			bs.WriteByte((byte)this.State);
-			bs.WriteByte((byte)this.Kind);
+			bs.WriteByte(this.Kind);
 		}
 
 		public void ReadFromBitStream(BitStream bs)
@@ -39,10 +41,10 @@ namespace HeavyMetalMachines.Match
 			this.ArenaIndex = bs.ReadCompressedInt();
 			this.Pick = (PickMode)bs.ReadByte();
 			this.State = (MatchData.MatchState)bs.ReadByte();
-			this.Kind = (MatchData.MatchKind)bs.ReadByte();
+			this.Kind = bs.ReadByte();
 		}
 
-		public MatchData.MatchKind Kind
+		public MatchKind Kind
 		{
 			get
 			{
@@ -78,6 +80,14 @@ namespace HeavyMetalMachines.Match
 			this.ArenaIndex = arenaIndex;
 		}
 
+		public bool MatchOver
+		{
+			get
+			{
+				return this.State == MatchData.MatchState.MatchOverTie || this.State == MatchData.MatchState.MatchOverBluWins || this.State == MatchData.MatchState.MatchOverRedWins;
+			}
+		}
+
 		public static BitLogger Log = new BitLogger(typeof(MatchData));
 
 		public int Serial;
@@ -92,9 +102,7 @@ namespace HeavyMetalMachines.Match
 
 		public MatchData.MatchState State;
 
-		private MatchData.MatchKind kind;
-
-		public Action<MatchData.MatchKind> OnKindChange;
+		private MatchKind kind;
 
 		public enum MatchState : byte
 		{
@@ -113,15 +121,6 @@ namespace HeavyMetalMachines.Match
 		{
 			Defeat,
 			Victory
-		}
-
-		public enum MatchKind : byte
-		{
-			PvP,
-			PvE,
-			Tutorial,
-			Ranked,
-			Custom
 		}
 	}
 }

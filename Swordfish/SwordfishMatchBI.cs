@@ -4,16 +4,20 @@ using System.Text;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids;
 using HeavyMetalMachines.Bank;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Swordfish.API;
+using Hoplon.Input.Business;
+using Hoplon.Metrics.Data;
 using Pocketverse;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Swordfish
 {
-	public class SwordfishMatchBI : GameHubObject
+	public class SwordfishMatchBI : GameHubObject, ISwordfishMatchBI
 	{
-		public SwordfishMatchBI()
+		public SwordfishMatchBI(IInputBI inputBI)
 		{
 			this._disabled = GameHubObject.Hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish, false);
+			this._inputBI = inputBI;
 		}
 
 		private string ServerHeartbeatLog
@@ -108,6 +112,10 @@ namespace HeavyMetalMachines.Swordfish
 			{
 				return;
 			}
+			SwordfishMatchBI.Log.DebugFormat("OnGameOver state={0}", new object[]
+			{
+				msg.State
+			});
 			if (msg.State == MatchData.MatchState.Nothing)
 			{
 				return;
@@ -119,16 +127,21 @@ namespace HeavyMetalMachines.Swordfish
 			});
 		}
 
-		public void ClientOnMatchLoaded()
+		public void OnMatchLoaded()
 		{
-			if (!GameHubObject.Hub.Net.IsClient())
+			if (GameHubObject.Hub.Net.IsClient())
 			{
+				this.ClientOnMatchLoaded();
 				return;
 			}
+			this._serverFpsHistogramData.Reset();
+		}
+
+		private void ClientOnMatchLoaded()
+		{
 			this._clientPerfStatsIndex = 0;
 			this.ResetFrameTimeCount();
 			this.ResetPingCount();
-			this._clientPerfStatsAccum = 0f;
 			this._clientPingUpdater.Reset();
 			this._clientPingUpdater.ShouldHalt();
 			if (!this._bombDeliveryListenerReady)
@@ -138,6 +151,7 @@ namespace HeavyMetalMachines.Swordfish
 			}
 			this._clientStatsReady = true;
 			this._clientLogRunning = true;
+			this._inputBI.InGameInputDevicesUsageStart();
 		}
 
 		private void ListenToBombDelivery(int causerid, TeamKind scoredteam, Vector3 deliveryPosition)
@@ -150,6 +164,7 @@ namespace HeavyMetalMachines.Swordfish
 			GameHubObject.Hub.BombManager.ListenToBombDelivery -= this.ListenToBombDelivery;
 			this._bombDeliveryListenerReady = false;
 			this._clientStatsReady = false;
+			this._inputBI.LogInGameInputDevicesUsage();
 		}
 
 		private void SendPerformanceLogs()
@@ -168,7 +183,7 @@ namespace HeavyMetalMachines.Swordfish
 			{
 				this._biStringBuilder[this._biStringBuilder.Length - 1] = ']';
 			}
-			GameHubObject.Hub.Swordfish.Log.BILogClientMatchMsg(ClientBITags.ClientFrameTimeV3, this._biStringBuilder.ToString(), false);
+			GameHubObject.Hub.Swordfish.Log.BILogClientMatchMsg(26, this._biStringBuilder.ToString(), false);
 			this._biStringBuilder.Length = length;
 			this._biStringBuilder.AppendFormat("PingMax={0} Ping=[", this._clientMaxPing);
 			for (int j = 0; j < this._clientPingCount.Length; j++)
@@ -179,7 +194,7 @@ namespace HeavyMetalMachines.Swordfish
 			{
 				this._biStringBuilder[this._biStringBuilder.Length - 1] = ']';
 			}
-			GameHubObject.Hub.Swordfish.Log.BILogClientMatchMsg(ClientBITags.ClientPingV2, this._biStringBuilder.ToString(), false);
+			GameHubObject.Hub.Swordfish.Log.BILogClientMatchMsg(27, this._biStringBuilder.ToString(), false);
 		}
 
 		public void Update()
@@ -243,14 +258,14 @@ namespace HeavyMetalMachines.Swordfish
 			}
 			this._avgFpsCount = (float)this._currentFpsCount / this._fpsCountTime;
 			this.ServerUpdateHeartbeatData();
-			GameHubObject.Hub.Swordfish.Log.BILogServerMsg(ServerBITags.ServerHeartbeat, this.ServerHeartbeatLog, false);
+			GameHubObject.Hub.Swordfish.Log.BILogServerMsg(1, this.ServerHeartbeatLog, false);
 			this.ResetFpsCount();
 		}
 
 		public void ClientAnnouncerConfigured(int isChange)
 		{
 			string msg = string.Format("UserID={0} AnnouncerIndex={1} isChange={2}", GameHubObject.Hub.User.UniversalId, GameHubObject.Hub.Options.Audio.AnnouncerIndex, isChange);
-			GameHubObject.Hub.Swordfish.Log.BILogClientMsg(ClientBITags.AnnouncerConfigured, msg, false);
+			GameHubObject.Hub.Swordfish.Log.BILogClientMsg(37, msg, false);
 		}
 
 		private void ClientFrameTimeUpdate()
@@ -292,7 +307,7 @@ namespace HeavyMetalMachines.Swordfish
 			{
 				num2 = this._clientPingCount.Length - 1;
 			}
-			this._clientPingCount[num2] += 1u;
+			this._clientPingCount[num2] += 1U;
 		}
 
 		private void FpsUpdate()
@@ -311,6 +326,83 @@ namespace HeavyMetalMachines.Swordfish
 				this._lastFpsCount = 0;
 				this._lastFpsCountTime = 0f;
 			}
+			int num2 = this._serverFpsHistogramData.Update(Time.unscaledDeltaTime);
+			if (num2 < 30)
+			{
+				this.TryLogFpsBelowLimit(num2);
+			}
+			else
+			{
+				this.TryLogFpsAboveLimit(num2);
+			}
+			if (this._serverFpsHistogramData.Accumulated > 60f)
+			{
+				this.LogHistogramAndReset();
+			}
+		}
+
+		private void TryLogFpsBelowLimit(int fps)
+		{
+			if (!this._isOnLowFps || this._lowestBadFps > fps)
+			{
+				this._lowestBadFps = fps;
+			}
+			float realtimeSinceStartup = Time.realtimeSinceStartup;
+			if (this._isOnLowFps && realtimeSinceStartup < this._lastLogBelowLimit + 5f)
+			{
+				return;
+			}
+			this._isOnLowFps = true;
+			SwordfishMatchBI.Log.InfoFormat("Fps below limit current={0} lowest={1} matchTime={2}", new object[]
+			{
+				fps,
+				this._lowestBadFps,
+				GameHubObject.Hub.GameTime.MatchTimer.GetTimeSeconds()
+			});
+			this._lastLogBelowLimit = realtimeSinceStartup;
+		}
+
+		private void TryLogFpsAboveLimit(int fps)
+		{
+			if (this._isOnLowFps || this._lowestGoodFps > fps)
+			{
+				this._lowestGoodFps = fps;
+			}
+			float realtimeSinceStartup = Time.realtimeSinceStartup;
+			if (!this._isOnLowFps && realtimeSinceStartup < this._lastLogAboveLimit + 30f)
+			{
+				return;
+			}
+			this._isOnLowFps = false;
+			SwordfishMatchBI.Log.InfoFormat("Fps good above limit current={0} lowest={1} matchTime={2}", new object[]
+			{
+				fps,
+				this._lowestGoodFps,
+				GameHubObject.Hub.GameTime.MatchTimer.GetTimeSeconds()
+			});
+			this._lastLogAboveLimit = realtimeSinceStartup;
+		}
+
+		private void LogHistogramAndReset()
+		{
+			this._biStringBuilder.Length = 0;
+			this._biStringBuilder.AppendFormat("MatchId={0} ", GameHubObject.Hub.Swordfish.Connection.ServerMatchId);
+			this._biStringBuilder.AppendFormat("CurrentGameState={0} CurrentRound={1} ", GameHubObject.Hub.BombManager.CurrentBombGameState, GameHubObject.Hub.BombManager.Round);
+			this._biStringBuilder.Append("Fps=[");
+			for (int i = 0; i < this._serverFpsHistogramData.Data.Length; i++)
+			{
+				this._biStringBuilder.Append(this._serverFpsHistogramData.Data[i].ToString(CultureInfo.InvariantCulture));
+				if (i == this._serverFpsHistogramData.Data.Length - 1)
+				{
+					this._biStringBuilder.Append("]");
+				}
+				else
+				{
+					this._biStringBuilder.Append(",");
+				}
+			}
+			GameHubObject.Hub.Swordfish.Log.BILogServerMsg(16, this._biStringBuilder.ToString(), false);
+			this._serverFpsHistogramData.Reset();
 		}
 
 		private void ResetPingCount()
@@ -323,7 +415,7 @@ namespace HeavyMetalMachines.Swordfish
 		{
 			this._lastFpsCount = 0;
 			this._currentFpsCount = 0;
-			this._minFpsCount = 2.14748365E+09f;
+			this._minFpsCount = 2.1474836E+09f;
 			this._avgFpsCount = 0f;
 			this._lastFpsCountTime = 0f;
 			this._fpsCountTime = 0f;
@@ -332,6 +424,8 @@ namespace HeavyMetalMachines.Swordfish
 		private static readonly BitLogger Log = new BitLogger(typeof(SwordfishMatchBI));
 
 		private bool _disabled;
+
+		private IInputBI _inputBI;
 
 		private Guid _activityId;
 
@@ -345,42 +439,6 @@ namespace HeavyMetalMachines.Swordfish
 
 		private int _mapId;
 
-		private int _team1Tower1DownSeconds;
-
-		private int _team1Tower2DownSeconds;
-
-		private int _team1Tower3DownSeconds;
-
-		private int _team1Tower4DownSeconds;
-
-		private int _team1Tower5DownSeconds;
-
-		private int _team1Tower6DownSeconds;
-
-		private int _team1Tower7DownSeconds;
-
-		private int _team1Tower8DownSeconds;
-
-		private int _team1Tower9DownSeconds;
-
-		private int _team2Tower1DownSeconds;
-
-		private int _team2Tower2DownSeconds;
-
-		private int _team2Tower3DownSeconds;
-
-		private int _team2Tower4DownSeconds;
-
-		private int _team2Tower5DownSeconds;
-
-		private int _team2Tower6DownSeconds;
-
-		private int _team2Tower7DownSeconds;
-
-		private int _team2Tower8DownSeconds;
-
-		private int _team2Tower9DownSeconds;
-
 		private int _currentConnectedPlayers;
 
 		private TimedUpdater _serverHeartbeatTimedUpdater = new TimedUpdater(15000, true, true);
@@ -390,6 +448,8 @@ namespace HeavyMetalMachines.Swordfish
 		private TeamKind _bombDeliveryTeamKind;
 
 		private readonly StringBuilder _biStringBuilder = new StringBuilder();
+
+		private FpsHistogramData _serverFpsHistogramData = new FpsHistogramData(60);
 
 		private int _lastFpsCount;
 
@@ -428,5 +488,25 @@ namespace HeavyMetalMachines.Swordfish
 		private const float FPS_SAMPLE_SECONDS = 60f;
 
 		private bool _clientLogRunning;
+
+		private const int FpsLimit = 30;
+
+		private float _lastFpsLog;
+
+		private const float HistogramFrequency = 60f;
+
+		private const float BelowLimitLogFrequency = 5f;
+
+		private const float AboveLimitLogFrequency = 30f;
+
+		private float _lastLogBelowLimit;
+
+		private float _lastLogAboveLimit;
+
+		private int _lowestBadFps = int.MaxValue;
+
+		private int _lowestGoodFps = int.MaxValue;
+
+		private bool _isOnLowFps;
 	}
 }

@@ -1,14 +1,16 @@
 ﻿using System;
-using System.Collections;
 using ClientAPI.Objects;
-using FMod;
-using HeavyMetalMachines.Audio.Music;
-using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Arena;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.ParentalControl.Restrictions;
+using HeavyMetalMachines.Publishing.Presenting;
 using HeavyMetalMachines.Utils;
 using HeavyMetalMachines.VFX;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
@@ -16,20 +18,8 @@ namespace HeavyMetalMachines.Frontend
 	{
 		public void Awake()
 		{
-			this.TimerLabel.text = "00:00";
-			this._overtimeCountdownWidgetAlpha = this.OvertimeCountdownAnimation.GetComponent<NGUIWidgetAlpha>();
 			base.SetWindowVisibility(false);
 			this.ApplyArenaConfig();
-		}
-
-		private void OnEnable()
-		{
-			GameHubBehaviour.Hub.BombManager.ListenToOvertimeStarted += this.OnOvertimeStarted;
-		}
-
-		private void OnDisable()
-		{
-			GameHubBehaviour.Hub.BombManager.ListenToOvertimeStarted -= this.OnOvertimeStarted;
 		}
 
 		public void Start()
@@ -39,36 +29,17 @@ namespace HeavyMetalMachines.Frontend
 			this.UpdateMatchScore();
 			this.LeftTeamGameObject.SetActive(false);
 			this.RightTeamGameObject.SetActive(false);
-			TeamUtils.GetGroupTeamAsync(GameHubBehaviour.Hub, TeamKind.Blue, delegate(Team team)
-			{
-				this.SetGroupTeamInfo(TeamKind.Blue, team);
-			}, delegate(Exception exception)
-			{
-				HudScoreController.Log.Error(string.Format("Error on GetGroupTeamAsync [{0}]. Exception:{1}", TeamKind.Blue, exception));
-			});
-			TeamUtils.GetGroupTeamAsync(GameHubBehaviour.Hub, TeamKind.Red, delegate(Team team)
-			{
-				this.SetGroupTeamInfo(TeamKind.Red, team);
-			}, delegate(Exception exception)
-			{
-				HudScoreController.Log.Error(string.Format("Error on GetGroupTeamAsync [{0}]. Exception:{1}", TeamKind.Red, exception));
-			});
-			this._isTutorial = GameHubBehaviour.Hub.Match.LevelIsTutorial();
-			if (this._isTutorial)
-			{
-				this._timeTutorialIcon.SetActive(true);
-				this.TimerLabel.gameObject.SetActive(false);
-			}
+			this.SetGroupTeamInfo(TeamKind.Blue);
+			this.SetGroupTeamInfo(TeamKind.Red);
 		}
 
 		private void ApplyArenaConfig()
 		{
 			TeamKind currentPlayerTeam = GameHubBehaviour.Hub.Players.CurrentPlayerTeam;
-			GameArenaInfo gameArenaInfo = GameHubBehaviour.Hub.ArenaConfig.Arenas[GameHubBehaviour.Hub.Match.ArenaIndex];
-			this._roundDurationMillis = (int)(gameArenaInfo.RoundTimeSeconds * 1000f);
+			IGameArenaInfo currentArena = GameHubBehaviour.Hub.ArenaConfig.GetCurrentArena();
+			this._roundDurationMillis = (int)(currentArena.RoundTimeSeconds * 1000f);
 			TimeSpan timeSpan = new TimeSpan(0, 0, 0, 0, this._roundDurationMillis);
-			this._roundDurationString = TimeUtils.FormatTime(timeSpan);
-			bool flag = currentPlayerTeam == gameArenaInfo.TugOfWarFlipTeam;
+			bool flag = currentPlayerTeam == currentArena.TugOfWarFlipTeam;
 			this.SetAllyAndEnemySides(flag);
 			if (flag)
 			{
@@ -131,7 +102,8 @@ namespace HeavyMetalMachines.Frontend
 					TeamGlowSprite = this.RightTeamGlowSprite,
 					TeamIconBase = this.RightTeamIconBase,
 					TeamIconSprite = this.RightTeamIconSprite,
-					TeamTagLabel = this.RightTeamTagLabel
+					TeamTagLabel = this.RightTeamTagLabel,
+					TeamCurrentUgcOwnerPublisherUserNameLabel = this.RightTeamCurrentUgcOwnerPublisherUserNameLabel
 				};
 				this._enemyHudComponents = new HudScoreController.HudScoreTeamComponents
 				{
@@ -143,7 +115,8 @@ namespace HeavyMetalMachines.Frontend
 					TeamGlowSprite = this.LeftTeamGlowSprite,
 					TeamIconBase = this.LeftTeamIconBase,
 					TeamIconSprite = this.LeftTeamIconSprite,
-					TeamTagLabel = this.LeftTeamTagLabel
+					TeamTagLabel = this.LeftTeamTagLabel,
+					TeamCurrentUgcOwnerPublisherUserNameLabel = this.LeftTeamCurrentUgcOwnerPublisherUserNameLabel
 				};
 			}
 			else
@@ -158,7 +131,8 @@ namespace HeavyMetalMachines.Frontend
 					TeamGlowSprite = this.LeftTeamGlowSprite,
 					TeamIconBase = this.LeftTeamIconBase,
 					TeamIconSprite = this.LeftTeamIconSprite,
-					TeamTagLabel = this.LeftTeamTagLabel
+					TeamTagLabel = this.LeftTeamTagLabel,
+					TeamCurrentUgcOwnerPublisherUserNameLabel = this.LeftTeamCurrentUgcOwnerPublisherUserNameLabel
 				};
 				this._enemyHudComponents = new HudScoreController.HudScoreTeamComponents
 				{
@@ -170,28 +144,33 @@ namespace HeavyMetalMachines.Frontend
 					TeamGlowSprite = this.RightTeamGlowSprite,
 					TeamIconBase = this.RightTeamIconBase,
 					TeamIconSprite = this.RightTeamIconSprite,
-					TeamTagLabel = this.RightTeamTagLabel
+					TeamTagLabel = this.RightTeamTagLabel,
+					TeamCurrentUgcOwnerPublisherUserNameLabel = this.RightTeamCurrentUgcOwnerPublisherUserNameLabel
 				};
 			}
 		}
 
-		private void SetGroupTeamInfo(TeamKind teamKind, Team team)
+		private void SetGroupTeamInfo(TeamKind teamKind)
 		{
-			if (team == null)
+			Team groupTeam = this._teams.GetGroupTeam(teamKind);
+			if (groupTeam == null)
 			{
 				return;
 			}
+			string anyTeamTagRestriction = this._teamNameRestriction.GetAnyTeamTagRestriction(groupTeam.CurrentUgmUserPlayerId, groupTeam.Tag);
 			if (GameHubBehaviour.Hub.Players.CurrentPlayerData.Team == teamKind)
 			{
-				this._allyHudComponents.TeamIconSprite.SpriteName = team.ImageUrl;
-				this._allyHudComponents.TeamTagLabel.text = string.Format("[{0}]", team.Tag);
+				this._allyHudComponents.TeamIconSprite.SpriteName = groupTeam.ImageUrl;
+				this._allyHudComponents.TeamTagLabel.text = string.Format("[{0}]", anyTeamTagRestriction);
 				this._allyHudComponents.TeamGameObject.SetActive(true);
+				this.FetchAndFillTeamUserGeneratedContentPublisherUserName(groupTeam, this._allyHudComponents.TeamCurrentUgcOwnerPublisherUserNameLabel);
 			}
 			else
 			{
-				this._enemyHudComponents.TeamIconSprite.SpriteName = team.ImageUrl;
-				this._enemyHudComponents.TeamTagLabel.text = string.Format("[{0}]", team.Tag);
+				this._enemyHudComponents.TeamIconSprite.SpriteName = groupTeam.ImageUrl;
+				this._enemyHudComponents.TeamTagLabel.text = string.Format("[{0}]", anyTeamTagRestriction);
 				this._enemyHudComponents.TeamGameObject.SetActive(true);
+				this.FetchAndFillTeamUserGeneratedContentPublisherUserName(groupTeam, this._enemyHudComponents.TeamCurrentUgcOwnerPublisherUserNameLabel);
 			}
 		}
 
@@ -199,46 +178,13 @@ namespace HeavyMetalMachines.Frontend
 		{
 			base.OnDestroy();
 			GameHubBehaviour.Hub.BombManager.ListenToPhaseChange -= this.BombManagerOnPhaseChange;
+			this._disposables.Dispose();
 		}
 
-		public void Update()
-		{
-			if (GameHubBehaviour.Hub == null || GameHubBehaviour.Hub.MatchMan == null)
-			{
-				return;
-			}
-			this.TimerUpdate();
-		}
-
-		private void BombManagerOnPhaseChange(BombScoreBoard.State bombScoreBoardState)
+		private void BombManagerOnPhaseChange(BombScoreboardState bombScoreBoardState)
 		{
 			this._currentMatchState = bombScoreBoardState;
 			this.UpdateMatchScore();
-			BombScoreBoard.State currentMatchState = this._currentMatchState;
-			if (currentMatchState != BombScoreBoard.State.PreReplay)
-			{
-				if (currentMatchState != BombScoreBoard.State.Replay)
-				{
-					if (currentMatchState == BombScoreBoard.State.PreBomb)
-					{
-						this._isInOvertime = false;
-						this.TimerLabel.text = this._roundDurationString;
-					}
-				}
-				else
-				{
-					this._overtimeCountdownWidgetAlpha.alpha = 1f;
-					this.TimerLabel.text = "00:00";
-				}
-			}
-			else
-			{
-				this.UpdateMatchScore();
-				if (!this._hideFillAnimationScheduled)
-				{
-					this.HideOvertimeFillAnimation();
-				}
-			}
 		}
 
 		private void UpdateMatchScore()
@@ -250,8 +196,8 @@ namespace HeavyMetalMachines.Frontend
 				num = GameHubBehaviour.Hub.BombManager.ScoreBoard.BombScoreBlue;
 				num2 = GameHubBehaviour.Hub.BombManager.ScoreBoard.BombScoreRed;
 			}
-			this._allyHudComponents.ScoreLabel.text = num.ToString();
-			this._enemyHudComponents.ScoreLabel.text = num2.ToString();
+			this._allyHudComponents.ScoreLabel.text = StringCaches.NonPaddedIntegers.Get(num);
+			this._enemyHudComponents.ScoreLabel.text = StringCaches.NonPaddedIntegers.Get(num2);
 			for (int i = 0; i < this._allyHudComponents.ScoreSprites.Length; i++)
 			{
 				this._allyHudComponents.ScoreSprites[i].alpha = ((num <= i) ? 0f : 1f);
@@ -259,86 +205,27 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
-		private void TimerUpdate()
+		private void FetchAndFillTeamUserGeneratedContentPublisherUserName(Team team, UILabel label)
 		{
-			if (this._isInOvertime || this._currentMatchState != BombScoreBoard.State.BombDelivery || this._isTutorial)
+			label.text = string.Empty;
+			ObservableExtensions.Subscribe<string>(Observable.Do<string>(this._getDisplayablePublisherUserName.GetAsTeamUgcOwner(team.CurrentUgmUserUniversalId), delegate(string displayablePublisherUserName)
 			{
-				return;
-			}
-			int num = GameHubBehaviour.Hub.GameTime.MatchTimer.GetTime();
-			int num2 = num - GameHubBehaviour.Hub.BombManager.ScoreBoard.RoundStartTimeMillis;
-			if (num2 >= this._roundDurationMillis)
-			{
-				num = 0;
-			}
-			else
-			{
-				num = this._roundDurationMillis - num2;
-			}
-			this._time = TimeSpan.FromMilliseconds((double)num);
-			if (this._seconds != this._time.Seconds)
-			{
-				this._seconds = this._time.Seconds;
-				this.TimerLabel.text = TimeUtils.FormatTime(this._time);
-				if (this._time.Minutes == 0 && this._seconds >= 0 && this._seconds < 10 && this._countdownAudioAsset != null)
-				{
-					FMODAudioManager.PlayOneShotAt(this._countdownAudioAsset, Vector3.zero, 0);
-				}
-			}
-			GameArenaInfo currentArena = GameHubBehaviour.Hub.ArenaConfig.GetCurrentArena();
-			if (num < currentArena.TimeBeforeOvertime && num > 0)
-			{
-				if (this.OvertimeFillAnimation.gameObject.activeSelf)
-				{
-					float x = Mathf.Clamp01((float)num / 10000f);
-					this.OvertimeFillSprite.transform.localScale = new Vector3(x, 1f, 1f);
-				}
-				else
-				{
-					this._hideFillAnimationScheduled = false;
-					this.OvertimeFillAnimation.gameObject.SetActive(true);
-					this.OvertimeFillSprite.transform.localScale = Vector3.one;
-					this.OvertimeFillAnimation.Play("PreOvertimeInAnimation");
-					this.OvertimeCountdownAnimation.Play();
-					MusicManager.PlayMusic(MusicManager.State.PreOvertime);
-				}
-			}
-		}
-
-		private void HideOvertimeFillAnimation()
-		{
-			if (this._hideFillAnimationScheduled)
-			{
-				return;
-			}
-			this._hideFillAnimationScheduled = true;
-			this.OvertimeFillAnimation.Stop();
-			this.OvertimeFillAnimation.Play("PreOvertimeOutAnimation");
-			float length = this.OvertimeFillAnimation["PreOvertimeOutAnimation"].length;
-			this.OvertimeCountdownAnimation.Stop();
-			this.OvertimeCountdownAnimation.transform.localScale = Vector3.one;
-			this._overtimeCountdownWidgetAlpha.alpha = 0f;
-			base.StartCoroutine(this.HideOvertimeFillAnimationCoroutine(length));
-		}
-
-		private IEnumerator HideOvertimeFillAnimationCoroutine(float delay)
-		{
-			yield return new WaitForSeconds(delay);
-			this.OvertimeFillAnimation.gameObject.SetActive(false);
-			yield break;
-		}
-
-		private void OnOvertimeStarted()
-		{
-			this._isInOvertime = true;
-			this.HideOvertimeFillAnimation();
+				label.Text = displayablePublisherUserName;
+			}));
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(HudScoreController));
 
-		[Header("[GUI components]")]
-		public UILabel TimerLabel;
+		[Inject]
+		private IMatchTeams _teams;
 
+		[Inject]
+		private ITeamNameRestriction _teamNameRestriction;
+
+		[Inject]
+		private IGetDisplayablePublisherUserName _getDisplayablePublisherUserName;
+
+		[Header("[GUI components]")]
 		public UI2DSprite[] LeftColorSprites;
 
 		public UI2DSprite[] LeftColorFrames;
@@ -365,6 +252,8 @@ namespace HeavyMetalMachines.Frontend
 
 		public UILabel LeftTeamTagLabel;
 
+		public UILabel LeftTeamCurrentUgcOwnerPublisherUserNameLabel;
+
 		public GameObject RightTeamGameObject;
 
 		public HMMUI2DDynamicSprite RightTeamIconSprite;
@@ -375,15 +264,7 @@ namespace HeavyMetalMachines.Frontend
 
 		public UILabel RightTeamTagLabel;
 
-		public UI2DSprite OvertimeFillSprite;
-
-		public Animation OvertimeFillAnimation;
-
-		public Animation OvertimeCountdownAnimation;
-
-		private NGUIWidgetAlpha _overtimeCountdownWidgetAlpha;
-
-		private bool _hideFillAnimationScheduled;
+		public UILabel RightTeamCurrentUgcOwnerPublisherUserNameLabel;
 
 		private TimeSpan _time;
 
@@ -391,25 +272,13 @@ namespace HeavyMetalMachines.Frontend
 
 		private int _roundDurationMillis;
 
-		private string _roundDurationString;
-
-		private bool _isInOvertime;
-
-		private BombScoreBoard.State _currentMatchState;
-
-		private bool _isTutorial;
-
-		[SerializeField]
-		private GameObject _timeTutorialIcon;
-
-		[SerializeField]
-		private FMODAsset _countdownAudioAsset;
+		private BombScoreboardState _currentMatchState;
 
 		private HudScoreController.HudScoreTeamComponents _allyHudComponents;
 
 		private HudScoreController.HudScoreTeamComponents _enemyHudComponents;
 
-		private const string TIME_ZERO = "00:00";
+		private readonly CompositeDisposable _disposables = new CompositeDisposable();
 
 		public struct HudScoreTeamComponents
 		{
@@ -430,6 +299,8 @@ namespace HeavyMetalMachines.Frontend
 			public UI2DSprite TeamIconBase;
 
 			public HMMUI2DDynamicSprite TeamIconSprite;
+
+			public UILabel TeamCurrentUgcOwnerPublisherUserNameLabel;
 		}
 	}
 }

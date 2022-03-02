@@ -1,9 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Swordfish.API;
 using Pocketverse;
 using Pocketverse.MuralContext;
+using Zenject;
 
 namespace HeavyMetalMachines.BI
 {
@@ -86,8 +89,17 @@ namespace HeavyMetalMachines.BI
 		{
 			this._clientData.FreezeAcc = this._clientData.FreezeAcc + millis;
 			this._clientData.FreezeCount = this._clientData.FreezeCount + 1;
-			if (this._clientData.FreezeCount % 10 == 0)
+			if (this._clientData.FreezeCount % 10 == 1)
 			{
+				PlayerTechnicalExperienceManager.Log.DebugFormat("Current fcount={0} facc={1}", new object[]
+				{
+					this._clientData.FreezeCount,
+					this._clientData.FreezeAcc
+				});
+			}
+			if (this._clientData.FreezeCount <= this._configLoader.GetIntValue(ConfigAccess.FreezeLogCount))
+			{
+				this._swordfishLogProvider.GetSwordfishLog().BILogClientMsg(92, string.Format("MatchTime={0} FreezeTime={1}", this._gameTime.MatchTimer.GetTimeSeconds(), millis), false);
 			}
 		}
 
@@ -95,19 +107,31 @@ namespace HeavyMetalMachines.BI
 		{
 			if (this._clientData.FreezeCount > 0)
 			{
+				PlayerTechnicalExperienceManager.Log.InfoFormat("Last fcount={0} facc={1}", new object[]
+				{
+					this._clientData.FreezeCount,
+					this._clientData.FreezeAcc
+				});
 			}
+			this._wasPreviouslyFrozen = false;
+			this._isFrozenThisFrame = false;
 			this._clientData = default(ExperienceDataSet);
 			this._freezeTimer.Reset();
 		}
 
 		private void Update()
 		{
-			if (GameHubBehaviour.Hub.Net.IsServer() || !GameHubBehaviour.Hub.Net.IsConnected())
+			if (GameHubBehaviour.Hub.Net.IsServer() || !GameHubBehaviour.Hub.Net.IsConnected() || GameHubBehaviour.Hub.User.IsNarrator)
 			{
 				return;
 			}
-			if (!GameHubBehaviour.Hub.Match.State.IsGame() || GameHubBehaviour.Hub.User.IsNarrator)
+			if (this._scoreBoard.CurrentState != BombScoreboardState.BombDelivery && this._scoreBoard.CurrentState != BombScoreboardState.PreReplay)
 			{
+				if (this._wasPreviouslyFrozen)
+				{
+					this._isFrozenThisFrame = false;
+					this.DetectFreeze();
+				}
 				return;
 			}
 			this.DetectFreeze();
@@ -195,12 +219,8 @@ namespace HeavyMetalMachines.BI
 			this._delayed = future;
 		}
 
-		public object Invoke(int classId, short methodId, object[] args)
+		public object Invoke(int classId, short methodId, object[] args, BitStream bitstream = null)
 		{
-			if (classId != 1054)
-			{
-				throw new Exception("Hierarchy in RemoteClass is not allowed!!! " + classId);
-			}
 			this._delayed = null;
 			if (methodId != 12)
 			{
@@ -211,6 +231,18 @@ namespace HeavyMetalMachines.BI
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(PlayerTechnicalExperienceManager));
+
+		[Inject]
+		private ISwordfishLogProvider _swordfishLogProvider;
+
+		[Inject]
+		private IGameTime _gameTime;
+
+		[Inject]
+		private IConfigLoader _configLoader;
+
+		[Inject]
+		private IScoreBoard _scoreBoard;
 
 		public Dictionary<byte, PlayerTechnicalExperienceManager.PlayerExperienceData> ExperienceDatas = new Dictionary<byte, PlayerTechnicalExperienceManager.PlayerExperienceData>();
 
@@ -224,7 +256,7 @@ namespace HeavyMetalMachines.BI
 
 		private TimedUpdater _updater;
 
-		public const int StaticClassId = 1054;
+		public const int StaticClassId = 1079;
 
 		private Identifiable _identifiable;
 

@@ -20,6 +20,10 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 
 		private void OnBombDelivered(CombatObject carrier)
 		{
+			GrabBombTutorialBehaviour.Log.DebugFormat("OnbombCarrierChange Carrier {0}", new object[]
+			{
+				carrier
+			});
 			if (!carrier || carrier.Id.ObjId != GameHubBehaviour.Hub.Players.Players[0].CharacterInstance.ObjId)
 			{
 				return;

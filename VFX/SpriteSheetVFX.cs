@@ -11,7 +11,7 @@ namespace HeavyMetalMachines.VFX
 		{
 			if (GameHubBehaviour.Hub && GameHubBehaviour.Hub.Net.IsServer() && !GameHubBehaviour.Hub.Net.IsTest())
 			{
-				UnityEngine.Object.Destroy(this);
+				Object.Destroy(this);
 				return;
 			}
 			this._mainTexId = Shader.PropertyToID("_MainTex");
@@ -70,23 +70,23 @@ namespace HeavyMetalMachines.VFX
 		[Tooltip("Duration in seconds")]
 		private float _duration = 10f;
 
-		[Header("Dimensions")]
 		[SerializeField]
+		[Header("Dimensions")]
 		private int _columns = 1;
 
 		[SerializeField]
 		private int _lines = 1;
 
-		[HideInInspector]
 		[SerializeField]
+		[HideInInspector]
 		private Renderer _renderer;
 
-		[HideInInspector]
 		[SerializeField]
+		[HideInInspector]
 		private Vector2 _size;
 
-		[HideInInspector]
 		[SerializeField]
+		[HideInInspector]
 		private float _frameTime;
 
 		[NonSerialized]

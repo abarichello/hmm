@@ -1,15 +1,20 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using HeavyMetalMachines.Achievements;
 using HeavyMetalMachines.Announcer;
 using HeavyMetalMachines.BotAI;
 using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Playback;
+using Hoplon.Logging;
 using Pocketverse;
 using Pocketverse.MuralContext;
+using UniRx;
+using Zenject;
 
 namespace HeavyMetalMachines.Event
 {
-	public class EventManager : GameHubBehaviour, ICleanupListener, IKeyFrameParser
+	public class EventManager : GameHubBehaviour, ICleanupListener, IKeyFrameParser, IEventManagerDispatcher
 	{
 		private void Update()
 		{
@@ -17,6 +22,10 @@ namespace HeavyMetalMachines.Event
 			{
 				if (this._serverLine.Count > this.maxCount)
 				{
+					EventManager.Log.DebugFormat("Greatest server line={0}", new object[]
+					{
+						this.maxCount = this._serverLine.Count
+					});
 				}
 				while (this._serverLine.Count > 0)
 				{
@@ -24,7 +33,6 @@ namespace HeavyMetalMachines.Event
 					this._serverLine.RemoveAt(0);
 					this.InternalTrigger(data);
 				}
-				return;
 			}
 		}
 
@@ -53,7 +61,7 @@ namespace HeavyMetalMachines.Event
 			data.Content.EventTime = GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
 			if (data.Kind != EventScopeKind.Effect && data.Kind != EventScopeKind.Pickup)
 			{
-				this.Send(data);
+				this._eventDispatcher.Send(data);
 			}
 			this.Trigger(data);
 		}
@@ -74,15 +82,16 @@ namespace HeavyMetalMachines.Event
 			case EventScopeKind.Player:
 				this.Players.Trigger((PlayerEvent)data.Content, data.EventId);
 				break;
-			case EventScopeKind.Creep:
-				this.Creeps.Trigger(data.Content, data.EventId);
-				break;
 			case EventScopeKind.Effect:
 				this.Effects.Trigger(data);
 				break;
 			case EventScopeKind.Announcer:
-				this.Annoucer.Trigger((AnnouncerEvent)data.Content, data.EventId);
+			{
+				AnnouncerEvent announcerEvent = (AnnouncerEvent)data.Content;
+				this.Annoucer.Trigger(announcerEvent, data.EventId);
+				this.TryToIncrementAchievement(announcerEvent);
 				break;
+			}
 			case EventScopeKind.Pickup:
 				this.Pickups.Trigger(data.Content, data.EventId);
 				break;
@@ -128,16 +137,6 @@ namespace HeavyMetalMachines.Event
 			}
 		}
 
-		public int CreateAndBufferEvent(IEventContent data)
-		{
-			EventData eventData = new EventData();
-			eventData.EventId = GameHubBehaviour.Hub.PlaybackManager.NextId();
-			eventData.Time = GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
-			eventData.Content = data;
-			this.BufferEvent(eventData);
-			return eventData.EventId;
-		}
-
 		public void BufferEvent(EventData evt)
 		{
 			this._buffer[evt.EventId] = evt;
@@ -157,11 +156,26 @@ namespace HeavyMetalMachines.Event
 			}
 		}
 
+		public static void FreeEventData(EventData data)
+		{
+			EventManager._eventDataPool.Push(data);
+		}
+
+		public static EventData GetEventDataFromPool()
+		{
+			if (EventManager._eventDataPool.Count > 0)
+			{
+				return EventManager._eventDataPool.Pop();
+			}
+			return new EventData();
+		}
+
 		public void Process(BitStream stream)
 		{
-			EventData eventData = new EventData();
-			eventData.ReadFromBitStream(stream);
-			this.Trigger(eventData);
+			EventData eventDataFromPool = EventManager.GetEventDataFromPool();
+			eventDataFromPool.Reset();
+			eventDataFromPool.ReadFromBitStream(stream);
+			this.Trigger(eventDataFromPool);
 		}
 
 		public bool RewindProcess(IFrame frame)
@@ -172,25 +186,10 @@ namespace HeavyMetalMachines.Event
 			{
 				return true;
 			}
-			EventScopeKind kind = eventData.Kind;
-			if (kind != EventScopeKind.Player && kind != EventScopeKind.Bot)
+			switch (eventData.Kind)
 			{
-				if (kind == EventScopeKind.Effect)
-				{
-					if (eventData.Content is EffectEvent && this.Effects.GetBaseFx(eventData.EventId) != null)
-					{
-						EffectRemoveEvent content = new EffectRemoveEvent
-						{
-							TargetEventId = eventData.EventId,
-							DestroyReason = BaseFX.EDestroyReason.Default
-						};
-						eventData.PreviousId = eventData.EventId;
-						eventData.Content = content;
-						this.Effects.Trigger(eventData);
-					}
-				}
-			}
-			else
+			case EventScopeKind.Player:
+			case EventScopeKind.Bot:
 			{
 				PlayerEvent playerEvent = eventData.Content as PlayerEvent;
 				if (playerEvent != null)
@@ -209,8 +208,53 @@ namespace HeavyMetalMachines.Event
 					}
 					this.Trigger(eventData);
 				}
+				break;
+			}
+			case EventScopeKind.Effect:
+				if (eventData.Content is EffectEvent && this.Effects.GetBaseFx(eventData.EventId) != null)
+				{
+					EffectRemoveEvent content = new EffectRemoveEvent
+					{
+						TargetEventId = eventData.EventId,
+						DestroyReason = BaseFX.EDestroyReason.Default
+					};
+					eventData.PreviousId = eventData.EventId;
+					eventData.Content = content;
+					this.Effects.Trigger(eventData);
+				}
+				break;
+			case EventScopeKind.Pickup:
+			{
+				PickupDropEvent pickupDropEvent = eventData.Content as PickupDropEvent;
+				if (pickupDropEvent != null && this.Pickups.GetPickUpByEventID(eventData.EventId) != null)
+				{
+					PickupRemoveEvent pickup = new PickupRemoveEvent
+					{
+						PickupId = PickupManager.GetPickupId(eventData.EventId),
+						Reason = SpawnReason.Replay
+					};
+					this.Pickups.Trigger(pickup, -1);
+				}
+				break;
+			}
 			}
 			return false;
+		}
+
+		public void FastForward(IFrame frame, IFrameProcessContext ctx)
+		{
+			EventData eventData = new EventData();
+			eventData.ReadFromBitStream(frame.GetReadData());
+			if (frame.PreviousFrameId == -1)
+			{
+				ctx.AddToExecutionQueue(frame.FrameId);
+				return;
+			}
+			if (ctx.RemoveFromExecutionQueue(frame.PreviousFrameId))
+			{
+				return;
+			}
+			ctx.AddToExecutionQueue(frame.FrameId);
 		}
 
 		public void SendFullFrame(byte to)
@@ -223,8 +267,8 @@ namespace HeavyMetalMachines.Event
 				EventData eventData = list[i];
 				BitStream writeStream = StaticBitStream.GetWriteStream();
 				eventData.WriteToBitStream(writeStream);
-				GameHubBehaviour.Hub.PlaybackManager.SendFullKeyFrame(to, this.Type, eventData.EventId, eventData.PreviousId, eventData.Time, writeStream.ToArray());
-				EventManager.Log.InfoFormat("Sending full frame event={0}", new object[]
+				this._serverDispatcher.SendSnapshot(to, this.Type.Convert(), eventData.EventId, eventData.PreviousId, eventData.Time, writeStream.ToArray());
+				EventManager.Log.DebugFormat("Sending full frame event={0}", new object[]
 				{
 					eventData
 				});
@@ -240,16 +284,69 @@ namespace HeavyMetalMachines.Event
 		{
 			BitStream writeStream = StaticBitStream.GetWriteStream();
 			e.WriteToBitStream(writeStream);
-			GameHubBehaviour.Hub.PlaybackManager.SendKeyFrame(this.Type, true, e.EventId, e.PreviousId, writeStream.ToArray());
+			this._serverDispatcher.SendFrame(this.Type.Convert(), true, e.EventId, e.PreviousId, writeStream.ToArray());
+		}
+
+		private void TryToIncrementAchievement(AnnouncerEvent announcerEvent)
+		{
+			if (GameHubBehaviour.Hub.Net.IsServer() || GameHubBehaviour.Hub.User.IsNarrator)
+			{
+				return;
+			}
+			if (EventManager.IsQuadricide(announcerEvent))
+			{
+				this.IncrementQuadricideAchievement();
+			}
+		}
+
+		private static bool IsQuadricide(AnnouncerEvent announcerEvent)
+		{
+			switch (announcerEvent.AnnouncerEventKind)
+			{
+			case AnnouncerLog.AnnouncerEventKinds.PlayerKilledByPlayer:
+			case AnnouncerLog.AnnouncerEventKinds.PlayerKilledByPlayerWithAssists:
+			case AnnouncerLog.AnnouncerEventKinds.PlayerKilledByEnvironment:
+			case AnnouncerLog.AnnouncerEventKinds.PlayerKilledByEnvironmentWithAssists:
+				if (announcerEvent.KillerTeam == GameHubBehaviour.Hub.Players.CurrentPlayerTeam && announcerEvent.CurrentKillingSpree == 4)
+				{
+					return true;
+				}
+				break;
+			}
+			return false;
+		}
+
+		private void IncrementQuadricideAchievement()
+		{
+			EventManager.Log.Info("IncrementQuadricideAchievement");
+			AchievementIncrement achievementIncrement = new AchievementIncrement
+			{
+				AchievementObjective = 5,
+				Increment = 1
+			};
+			ObservableExtensions.Subscribe<Unit>(this._diContainer.Resolve<IIncrementAchievement>().Increment(new AchievementIncrement[]
+			{
+				achievementIncrement
+			}));
 		}
 
 		public static readonly BitLogger Log = new BitLogger(typeof(EventManager));
 
 		private List<EventData> _serverLine = new List<EventData>();
 
-		public EffectsManager Effects;
+		[Inject]
+		private IServerPlaybackDispatcher _serverDispatcher;
 
-		public CreepSpawnManager Creeps;
+		[Inject]
+		private IEventManagerDispatcher _eventDispatcher;
+
+		[Inject]
+		private DiContainer _diContainer;
+
+		[Inject]
+		private ILogger<EventManager> _logger;
+
+		public EffectsManager Effects;
 
 		public PlayerSpawnManager Players;
 
@@ -264,6 +361,8 @@ namespace HeavyMetalMachines.Event
 		private int maxCount;
 
 		private Dictionary<int, EventData> _buffer = new Dictionary<int, EventData>();
+
+		private static Stack<EventData> _eventDataPool = new Stack<EventData>(1024);
 
 		private readonly byte[] SingleTo = new byte[1];
 	}

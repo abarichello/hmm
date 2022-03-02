@@ -27,7 +27,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			return num;
 		}
 
-		protected override void OnMyEffectDestroyed(DestroyEffect evt)
+		protected override void OnMyEffectDestroyed(DestroyEffectMessage evt)
 		{
 			if (this._lavaEffectId != -1 || !this._leaveLava.BoolGet())
 			{

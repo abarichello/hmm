@@ -162,6 +162,26 @@ namespace HeavyMetalMachines.Audio
 
 		public VoiceOverLine Taunt;
 
+		public VoiceOverLine QuickChat_Attack_Interceptors;
+
+		public VoiceOverLine QuickChat_Attack_Supporters;
+
+		public VoiceOverLine QuickChat_Attack_Transporters;
+
+		public VoiceOverLine QuickChat_Group_Up;
+
+		public VoiceOverLine QuickChat_Need_Repair;
+
+		public VoiceOverLine QuickChat_Need_Repair_Intense;
+
+		public VoiceOverLine QuickChat_Ok;
+
+		public VoiceOverLine QuickChat_Special_Almost_Ready;
+
+		public VoiceOverLine QuickChat_Special_Not_Ready;
+
+		public VoiceOverLine QuickChat_Special_Ready;
+
 		public VoiceOverLine CounselorOnLoading;
 	}
 }

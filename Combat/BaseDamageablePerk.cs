@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	public abstract class BaseDamageablePerk : BasePerk, DestroyEffect.IDestroyEffectListener
+	public abstract class BaseDamageablePerk : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		public override void PerkInitialized()
 		{
@@ -123,12 +123,12 @@ namespace HeavyMetalMachines.Combat
 					});
 					return false;
 				}
-				float time = combat.Movement.LastSpeed;
+				float num2 = combat.Movement.LastSpeed;
 				if (this.RelativeSpeedToAmount && combat != damagedCombat)
 				{
-					time = (damagedCombat.Movement.LastVelocity - combat.Movement.LastVelocity).magnitude;
+					num2 = (damagedCombat.Movement.LastVelocity - combat.Movement.LastVelocity).magnitude;
 				}
-				float baseAmount = this.speedToAmount.Evaluate(time);
+				float baseAmount = this.speedToAmount.Evaluate(num2);
 				array = ModifierData.CreateConvoluted(array, baseAmount);
 			}
 			if (dir != null)
@@ -157,7 +157,7 @@ namespace HeavyMetalMachines.Combat
 			return true;
 		}
 
-		public virtual void OnDestroyEffect(DestroyEffect evt)
+		public virtual void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (evt.RemoveData.WillCreateNextEvent && this.SaveSlot != DataHolderSlot.None && base.enabled)
 			{
@@ -184,7 +184,8 @@ namespace HeavyMetalMachines.Combat
 				break;
 			case BaseDamageablePerk.ECustomDirection.SplitLeftRight:
 			{
-				Plane plane = new Plane(effect.transform.right, effect.transform.position);
+				Plane plane;
+				plane..ctor(effect.transform.right, effect.transform.position);
 				if (plane.GetSide(damagedCombat.transform.position))
 				{
 					mods.SetDirection(effect.transform.right);

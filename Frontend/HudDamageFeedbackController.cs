@@ -18,7 +18,7 @@ namespace HeavyMetalMachines.Frontend
 
 		private HudDamageFeedback GetHudDamageFeedback()
 		{
-			foreach (Camera camera in UnityEngine.Object.FindObjectsOfType<Camera>())
+			foreach (Camera camera in Object.FindObjectsOfType<Camera>())
 			{
 				if (camera.gameObject.layer == 31)
 				{

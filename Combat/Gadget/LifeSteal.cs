@@ -29,7 +29,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 
 		protected override void OnPosDamageCaused(CombatObject causer, CombatObject taker, ModifierData mod, float amount, int eventId)
 		{
-			this.GetHittingCombatsInArea(this.Combat.transform.position, this.DrainLifeAuraRange, 1077058560, this.MyInfo.Effect, ref this.m_cpoCombatObjects);
+			this.GetHittingCombatsInArea(this.Combat.transform.position, this.DrainLifeAuraRange, 1077054464, this.MyInfo.Effect, ref this.m_cpoCombatObjects);
 			for (int i = 0; i < this.m_cpoCombatObjects.Count; i++)
 			{
 				CombatObject combatObject = this.m_cpoCombatObjects[i];

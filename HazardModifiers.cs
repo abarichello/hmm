@@ -5,7 +5,6 @@ using UnityEngine;
 
 namespace HeavyMetalMachines
 {
-	[CreateAssetMenu(menuName = "HMM")]
 	public class HazardModifiers : GameHubScriptableObject, ISerializationCallbackReceiver
 	{
 		public ModifierData[] Data { get; private set; }

@@ -121,7 +121,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			return GameHubBehaviour.Hub.Events.TriggerEvent(effectEvent);
 		}
 
-		protected override void InnerOnDestroyEffect(DestroyEffect evt)
+		protected override void InnerOnDestroyEffect(DestroyEffectMessage evt)
 		{
 			base.InnerOnDestroyEffect(evt);
 			if (this.CurrentExtraWarmupEffectId == evt.RemoveData.TargetEventId)

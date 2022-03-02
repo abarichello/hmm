@@ -10,6 +10,7 @@ namespace HeavyMetalMachines
 		Scoreboard,
 		Loading,
 		MatchData,
-		Counselor
+		Counselor,
+		Teams
 	}
 }

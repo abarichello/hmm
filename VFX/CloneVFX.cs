@@ -61,21 +61,21 @@ namespace HeavyMetalMachines.VFX
 				}
 				if (flag)
 				{
-					Vector3 b = Vector3.zero;
+					Vector3 vector = Vector3.zero;
 					switch (this.CloneDirection)
 					{
 					case CloneVFX.ECloneDirection.Forward:
-						b = base.transform.forward * (this.SpawnDistance + this.OffSet);
+						vector = base.transform.forward * (this.SpawnDistance + this.OffSet);
 						break;
 					case CloneVFX.ECloneDirection.Backward:
-						b = -base.transform.forward * (this.SpawnDistance + this.OffSet);
+						vector = -base.transform.forward * (this.SpawnDistance + this.OffSet);
 						break;
 					}
 					while (num-- > 0)
 					{
-						this.spawnPosition += b;
+						this.spawnPosition += vector;
 						MasterVFX masterVFX = (MasterVFX)GameHubBehaviour.Hub.Resources.PrefabCacheInstantiate(this.PrefabToClone, this.spawnPosition, base.transform.rotation);
-						masterVFX.transform.parent = GameHubBehaviour.Hub.Drawer.Effects;
+						GameHubBehaviour.Hub.Drawer.AddEffect(masterVFX.transform);
 						masterVFX.baseMasterVFX = this.PrefabToClone;
 						masterVFX.Activate(this.master.TargetFX);
 						this.clones.Enqueue(masterVFX);

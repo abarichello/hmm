@@ -1,9 +1,8 @@
 ﻿using System;
-using Hoplon.SensorSystem;
 
 namespace HeavyMetalMachines.Infra.Counselor
 {
-	public class CounselorAdvice : Sensor
+	public class CounselorAdvice
 	{
 		private int _uses;
 

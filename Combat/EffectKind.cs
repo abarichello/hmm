@@ -22,6 +22,7 @@ namespace HeavyMetalMachines.Combat
 		HPGodDamage,
 		ChargeRepair,
 		HPTemp,
-		ModifyParameter
+		NonLethalDamageIgnoringTempHP,
+		NewEffectModifier
 	}
 }

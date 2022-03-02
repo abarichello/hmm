@@ -94,7 +94,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			GameHubBehaviour.Hub.Events.TriggerEvent(effectEvent);
 		}
 
-		protected override void InnerOnDestroyEffect(DestroyEffect evt)
+		protected override void InnerOnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (!base.Activated)
 			{
@@ -112,7 +112,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 					return;
 				}
 				CombatObject component = @object.GetComponent<CombatObject>();
-				if (component == null || !component.IsAlive() || (!component.IsPlayer && !component.IsCreep))
+				if (component == null || !component.IsAlive() || !component.IsPlayer)
 				{
 					return;
 				}

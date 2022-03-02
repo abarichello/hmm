@@ -29,27 +29,11 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 			EventScopeKind targetType = this._targetType;
 			if (targetType != EventScopeKind.Player)
 			{
-				if (targetType != EventScopeKind.Creep)
+				if (targetType != EventScopeKind.Bot)
 				{
-					if (targetType != EventScopeKind.Bot)
-					{
-						throw new Exception("Invalid TargetType!!!");
-					}
-					this.IterateAddingOrRemovingPassiveModifier<PlayerData>(shouldAddModif, GameHubBehaviour.Hub.Players.Bots, (PlayerData b) => b.Team == this.TeamKind && b.CharacterInstance != null, (PlayerData b) => b.CharacterInstance.GetComponent<CombatController>());
+					throw new Exception("Invalid TargetType!!!");
 				}
-				else
-				{
-					List<CreepController> list = (this.TeamKind != TeamKind.Blue) ? GameHubBehaviour.Hub.Events.Creeps.GetRedCreepList() : GameHubBehaviour.Hub.Events.Creeps.GetBlueCreepList();
-					this.IterateAddingOrRemovingPassiveModifier<CreepController>(shouldAddModif, list, (CreepController c) => true, (CreepController c) => c.CreepCombat.Controller);
-					if (shouldAddModif)
-					{
-						GameHubBehaviour.Hub.Events.Creeps.ListenToCreepSpawn += this.OnCreepSpawn;
-					}
-					else
-					{
-						GameHubBehaviour.Hub.Events.Creeps.ListenToCreepSpawn -= this.OnCreepSpawn;
-					}
-				}
+				this.IterateAddingOrRemovingPassiveModifier<PlayerData>(shouldAddModif, GameHubBehaviour.Hub.Players.Bots, (PlayerData b) => b.Team == this.TeamKind && b.CharacterInstance != null, (PlayerData b) => b.CharacterInstance.GetComponent<CombatController>());
 			}
 			else
 			{
@@ -72,11 +56,6 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 					combatController.RemovePassiveModifiers(this._modifierDatas, null, -1);
 				}
 			}
-		}
-
-		private void OnCreepSpawn(CreepController creepcontroller)
-		{
-			creepcontroller.Combat.Controller.AddPassiveModifiers(this._modifierDatas, null, -1);
 		}
 
 		public EventScopeKind _targetType;

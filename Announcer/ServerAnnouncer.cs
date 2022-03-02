@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.Arena;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Event;
 using HeavyMetalMachines.Match;
@@ -17,7 +18,7 @@ namespace HeavyMetalMachines.Announcer
 		{
 			if (carrier != null && !carrier.IsBomb && GameHubObject.Hub.BombManager.IsCarryingBomb(carrier.Id.ObjId))
 			{
-				GameArenaInfo currentArena = GameHubObject.Hub.ArenaConfig.GetCurrentArena();
+				IGameArenaInfo currentArena = GameHubObject.Hub.ArenaConfig.GetCurrentArena();
 				float num = (carrier.Team != TeamKind.Blue) ? GameHubObject.Hub.SensorController.DistanceToBlueGoal : GameHubObject.Hub.SensorController.DistanceToRedGoal;
 				AnnouncerEvent content = new AnnouncerEvent
 				{

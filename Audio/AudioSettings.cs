@@ -1,7 +1,6 @@
 ﻿using System;
 using FMod;
 using HeavyMetalMachines.Audio.Music;
-using HeavyMetalMachines.FMod;
 using HeavyMetalMachines.Match;
 using Pocketverse;
 using UnityEngine;
@@ -17,10 +16,6 @@ namespace HeavyMetalMachines.Audio
 				return 1f;
 			}
 			PlayerData playerOrBotsByObjectId = GameHubScriptableObject.Hub.Players.GetPlayerOrBotsByObjectId(id.ObjId);
-			if (playerOrBotsByObjectId == null)
-			{
-				return 1f;
-			}
 			if (playerOrBotsByObjectId.Team == GameHubScriptableObject.Hub.Players.CurrentPlayerTeam)
 			{
 				return this.AlliesVolume;
@@ -67,15 +62,15 @@ namespace HeavyMetalMachines.Audio
 		public float EngineStateHisteria = 0.2f;
 
 		[Header("Snapshots")]
-		public FMODAsset MuteSnapshot;
+		public AudioEventAsset MuteSnapshot;
 
-		public FMODAsset DeathSnapshot;
+		public AudioEventAsset DeathSnapshot;
 
-		public FMODAsset BombDeliverySnapshot;
+		public AudioEventAsset BombDeliverySnapshot;
 
-		public FMODAsset MatchEndSnapshot;
+		public AudioEventAsset MatchEndSnapshot;
 
-		public FMODAsset loadingSnapshot;
+		public AudioEventAsset loadingSnapshot;
 
 		[Header("Banks")]
 		public string[] SyncronousStartingBanks;
@@ -85,6 +80,10 @@ namespace HeavyMetalMachines.Audio
 		public string AsyncronousCounselorBankName;
 
 		[Header("Music and Ambience")]
+		public MusicAndAmbience Welcome;
+
+		public MusicAndAmbience CreateProfile;
+
 		public MusicAndAmbience MainMenu;
 
 		public MusicAndAmbience CharacterPick;
@@ -93,27 +92,12 @@ namespace HeavyMetalMachines.Audio
 
 		public MusicAndAmbience EndMatch;
 
-		public MusicAndAmbience PreOvertime;
+		public MusicAndAmbience RankedDrafter;
 
-		public MusicAndAmbience Overtime;
-
-		[Header("Volume Controllers")]
-		public FModVCAAsset masterVolumeVCAAsset;
-
-		public FModVCAAsset musicVolumeVCAAsset;
-
-		public FModVCAAsset sfxGameplayVolumeVCAAsset;
-
-		public FModVCAAsset sfxAmbientVolumeVCAAsset;
-
-		public FModVCAAsset announcerVolumeVCAAsset;
-
-		public FModVCAAsset voiceOverVolumeVCAAsset;
+		public MusicAndAmbience TournamentDrafter;
 
 		[Header("Global SFXs")]
-		public FMODAsset PickScreenCharacterEnterSFX;
-
-		public FMODAsset CreepEngineAudioAsset;
+		public AudioEventAsset PickScreenCharacterEnterSFX;
 
 		public CrowdConfiguration defaultCrowd;
 

@@ -2,16 +2,22 @@
 using System.Collections.Generic;
 using HeavyMetalMachines.Combat.GadgetScript.Body;
 using HeavyMetalMachines.Combat.GadgetScript.Body.Filter;
+using HeavyMetalMachines.Infra.Context;
 using Hoplon.GadgetScript;
+using Plugins.Attributes.ReferenceByString;
 using Pocketverse;
-using SharedUtils.Loading;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Combat.GadgetScript.Block
 {
 	[CreateAssetMenu(menuName = "GadgetScript/Block/Body/InstantiateBody")]
-	public class InstantiateBodyBlock : BaseBlock, IGadgetBlockWithAsset
+	public class InstantiateBodyBlock : BaseBlock
 	{
+		private static LayerMask GetDefaultNonCombatCollisionLayers()
+		{
+			return 20972032;
+		}
+
 		protected override void OnEnable()
 		{
 			base.OnEnable();
@@ -22,9 +28,10 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 			}
 		}
 
-		public void PrecacheAssets()
+		protected override void InternalInitialize(ref IList<BaseBlock> referencedBlocks, IHMMContext context)
 		{
-			ResourceLoader.Instance.PreCachePrefab(this._bodyPrefabName, 1);
+			base.InternalInitialize(ref referencedBlocks, context);
+			ResourceLoader.Instance.PreCachePrefab(this._bodyPrefabName, this._precacheNumber);
 			if (this._collisionFilter == null)
 			{
 				return;
@@ -35,174 +42,114 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 				JsonUtility.FromJsonOverwrite(this._collisionFilter[i].SerializedObject, combatFilter);
 				this._combatFilter.Add(combatFilter);
 			}
+			referencedBlocks.Add(this._bodyEvents.OnCheckCollisionBlock);
+			referencedBlocks.Add(this._bodyEvents.OnDisplacementIntervalBlock);
+			referencedBlocks.Add(this._bodyEvents.OnMovementFinishedBlock);
+			referencedBlocks.Add(this._bodyEvents.OnTimeIntervalBlock);
+			referencedBlocks.Add(this._bodyEvents.OnEnterBlock);
+			referencedBlocks.Add(this._bodyEvents.OnExitBlock);
+			referencedBlocks.Add(this._bodyEvents.OnStayBlock);
 		}
 
-		protected override bool CheckSanity(IGadgetContext gadgetContext, IEventContext eventContext)
+		public override IBlock Execute(IGadgetContext gadgetContext, IEventContext eventContext)
 		{
 			IHMMGadgetContext ihmmgadgetContext = (IHMMGadgetContext)gadgetContext;
 			IHMMEventContext ihmmeventContext = (IHMMEventContext)eventContext;
-			if (ihmmgadgetContext.IsClient && !ihmmeventContext.ShouldCreateBody)
+			Transform ownerTransform = CreateGadgetBody.GetOwnerTransform(ihmmgadgetContext);
+			GadgetBodyCreation creation = new GadgetBodyCreation
 			{
-				return true;
-			}
-			if (string.IsNullOrEmpty(this._bodyPrefabName))
-			{
-				base.LogSanitycheckError("'Body Prefab Name' parameter cannot be null.");
-				return false;
-			}
-			if (this._body == null)
-			{
-				base.LogSanitycheckError("'Body' parameter cannot be null.");
-				return false;
-			}
-			return true;
-		}
-
-		protected override IBlock InnerExecute(IGadgetContext gadgetContext, IEventContext eventContext)
-		{
-			IHMMGadgetContext ihmmgadgetContext = (IHMMGadgetContext)gadgetContext;
-			IHMMEventContext ihmmeventContext = (IHMMEventContext)eventContext;
-			Vector3 value;
-			Vector3 value2;
+				HmmEventContext = ihmmeventContext,
+				HmmGadgetContext = ihmmgadgetContext,
+				BodyParameter = this._body,
+				FinalPositionParameter = InstantiateBodyBlock._finalPosition,
+				FinalDirectionParameter = InstantiateBodyBlock._finalDirection,
+				DummyKind = this._dummyKind,
+				CustomDummyName = this._customDummyName,
+				OwnerTransform = ownerTransform,
+				DirectionParameter = this._direction,
+				UseRelativeDirection = this._useRelativeDirection,
+				PositionParameter = this._position,
+				UsePositionAsOffset = this._usePositionAsOffset
+			};
+			PositionDirection positionAndDirection = CreateGadgetBody.GetPositionAndDirection(creation);
 			if (ihmmgadgetContext.IsClient)
 			{
-				ihmmeventContext.LoadParameter(InstantiateBodyBlock._finalPosition);
-				ihmmeventContext.LoadParameter(InstantiateBodyBlock._finalDirection);
-				if (this._position != null)
+				ihmmeventContext.LoadParameterIfExisting(this._position);
+				ihmmeventContext.LoadParameterIfExisting(this._direction);
+				ihmmeventContext.LoadParameterIfExisting(this._timeInterval);
+				ihmmeventContext.LoadParameterIfExisting(this._displacementInterval);
+				ihmmeventContext.LoadParameterIfExisting(this._collisionCheckTimeInterval);
+				ihmmeventContext.LoadParameterIfExisting(this._collisionCheckCount);
+				if (!ihmmeventContext.ConsumeBody())
 				{
-					ihmmeventContext.LoadParameter(this._position);
-				}
-				if (this._direction != null)
-				{
-					ihmmeventContext.LoadParameter(this._direction);
-				}
-				if (this._timeInterval != null)
-				{
-					ihmmeventContext.LoadParameter(this._timeInterval);
-				}
-				if (this._collisionCheckTimeInterval != null)
-				{
-					ihmmeventContext.LoadParameter(this._collisionCheckTimeInterval);
-				}
-				if (this._collisionCheckCount != null)
-				{
-					ihmmeventContext.LoadParameter(this._collisionCheckCount);
-				}
-				bool shouldCreateBody = ihmmeventContext.ShouldCreateBody;
-				ihmmeventContext.TryConsumeFirstBody();
-				if (!shouldCreateBody)
-				{
+					this._body.SetValue<GadgetBody>(gadgetContext, null);
 					return this._nextBlock;
 				}
-				value = InstantiateBodyBlock._finalPosition.GetValue(gadgetContext);
-				value2 = InstantiateBodyBlock._finalDirection.GetValue(gadgetContext);
 			}
 			else
 			{
-				Transform transform = ((Identifiable)ihmmgadgetContext.GetIdentifiable(ihmmgadgetContext.OwnerId)).transform;
-				Transform dummy = ihmmgadgetContext.Owner.Dummy.GetDummy(this._dummyKind, this._customDummyName);
-				this.GetPositionAndDirection(transform, dummy, gadgetContext, out value, out value2);
-				value.y = 0f;
-				value2.y = 0f;
-				InstantiateBodyBlock._finalPosition.SetValue(gadgetContext, value);
-				InstantiateBodyBlock._finalDirection.SetValue(gadgetContext, value2);
-				ihmmeventContext.SaveParameter(InstantiateBodyBlock._finalPosition);
-				ihmmeventContext.SaveParameter(InstantiateBodyBlock._finalDirection);
-				if (this._position != null)
-				{
-					ihmmeventContext.SaveParameter(this._position);
-				}
-				if (this._direction != null)
-				{
-					ihmmeventContext.SaveParameter(this._direction);
-				}
-				if (this._timeInterval != null)
-				{
-					ihmmeventContext.SaveParameter(this._timeInterval);
-				}
-				if (this._collisionCheckTimeInterval != null)
-				{
-					ihmmeventContext.SaveParameter(this._collisionCheckTimeInterval);
-				}
-				if (this._collisionCheckCount != null)
-				{
-					ihmmeventContext.SaveParameter(this._collisionCheckCount);
-				}
+				ihmmeventContext.SaveParameterIfExisting(this._position);
+				ihmmeventContext.SaveParameterIfExisting(this._direction);
+				ihmmeventContext.SaveParameterIfExisting(this._timeInterval);
+				ihmmeventContext.SaveParameterIfExisting(this._displacementInterval);
+				ihmmeventContext.SaveParameterIfExisting(this._collisionCheckTimeInterval);
+				ihmmeventContext.SaveParameterIfExisting(this._collisionCheckCount);
 			}
-			Transform prefab = (Transform)LoadingManager.ResourceContent.GetAsset(this._bodyPrefabName).Asset;
-			float eventTime = (!(this._timeInterval != null)) ? -1f : this._timeInterval.GetValue(gadgetContext);
-			float collisionEventTime = (!(this._collisionCheckTimeInterval != null)) ? 0f : this._collisionCheckTimeInterval.GetValue(gadgetContext);
-			int collisionTestsToPerform = (!(this._collisionCheckCount != null)) ? 0 : this._collisionCheckCount.GetValue(gadgetContext);
-			Quaternion rotation = (!(value2 == Vector3.zero)) ? Quaternion.LookRotation(value2, Vector3.up) : Quaternion.identity;
-			Component component = ResourceLoader.Instance.PrefabCacheInstantiate(prefab, value, rotation);
-			if (component == null)
+			float floatParameter = InstantiateBodyBlock.GetFloatParameter(gadgetContext, this._timeInterval, -1f);
+			float floatParameter2 = InstantiateBodyBlock.GetFloatParameter(gadgetContext, this._displacementInterval, -1f);
+			float floatParameter3 = InstantiateBodyBlock.GetFloatParameter(gadgetContext, this._collisionCheckTimeInterval, 0f);
+			float floatParameter4 = InstantiateBodyBlock.GetFloatParameter(gadgetContext, this._collisionCheckCount, 0f);
+			Transform prefab = CreateGadgetBody.GetPrefab(this._bodyPrefabName);
+			GadgetBody.InitializationParameters parameters = new GadgetBody.InitializationParameters
 			{
-				InstantiateBodyBlock.Log.ErrorFormat("Could not get body GameObject from Cache. {0}", new object[]
+				GadgetContext = ihmmgadgetContext,
+				EventContext = ihmmeventContext,
+				EventBlocks = this._bodyEvents,
+				EventParameters = this._bodyParameters,
+				TimedEventInterval = floatParameter,
+				CollisionCheckTimeInterval = floatParameter3,
+				CollisionCheckCount = (int)floatParameter4,
+				DisplacementEventInterval = floatParameter2,
+				Filters = this._combatFilter,
+				HitOverBarrier = this._hitOverBarrier,
+				Prefab = prefab,
+				NonCombatCollisionLayers = this._nonCombatCollisionLayers
+			};
+			Component component;
+			if (!CreateGadgetBody.TryInstantiatePrefab(positionAndDirection, prefab, out component))
+			{
+				InstantiateBodyBlock.Log.ErrorFormat("Could not instantiate body. Block={0} Prefab={1}", new object[]
 				{
-					this
+					base.name,
+					this._bodyPrefabName
 				});
+				return this._nextBlock;
 			}
 			GadgetBody component2 = component.GetComponent<GadgetBody>();
 			if (component2 == null)
 			{
-				InstantiateBodyBlock.Log.ErrorFormat("Could not get GadgetBody from Cache. {0}", new object[]
+				InstantiateBodyBlock.Log.ErrorFormat("Gadget body prefab does not contains a GadgetBody component. Block={0} Prefab={1}", new object[]
 				{
-					this
+					base.name,
+					this._bodyPrefabName
 				});
+				return this._nextBlock;
 			}
-			this._body.SetValue(gadgetContext, component2);
-			component2.Initialize(ihmmgadgetContext, this._bodyEvents, this._bodyParameters, eventTime, collisionEventTime, collisionTestsToPerform, this._combatFilter, eventContext, prefab);
-			component2.transform.parent = ResourceLoader.Instance.Drawer.Effects;
-			ihmmgadgetContext.Bodies.Add(component2.Id, component2);
-			if (ihmmgadgetContext.IsServer)
-			{
-				ihmmeventContext.AddBody(component2.Id);
-			}
-			Identifiable component3 = component2.GetComponent<Identifiable>();
-			bool flag = component3 != null;
-			if (flag)
-			{
-				component3.Register(component2.Id);
-			}
-			if (this._forceSendToClient || flag)
-			{
-				ihmmeventContext.SendToClient();
-			}
+			this._body.SetValue<GadgetBody>(gadgetContext, component2);
+			ResourceLoader.Instance.Drawer.AddEffect(component2.transform);
+			component2.Initialize(parameters);
+			CreateGadgetBody.AddBodyToEventContext(ihmmgadgetContext, ihmmeventContext, component2, this._forceSendToClient);
 			return this._nextBlock;
 		}
 
-		public override bool UsesParameterWithId(int parameterId)
+		private static float GetFloatParameter(IGadgetContext gadgetContext, BaseParameter parameter, float fallbackValue)
 		{
-			return base.CheckIsParameterWithId(this._position, parameterId) || base.CheckIsParameterWithId(this._direction, parameterId) || base.CheckIsParameterWithId(this._timeInterval, parameterId) || base.CheckIsParameterWithId(this._collisionCheckTimeInterval, parameterId) || base.CheckIsParameterWithId(this._collisionCheckCount, parameterId) || base.CheckIsParameterWithId(this._body, parameterId);
-		}
-
-		private void GetPositionAndDirection(Transform ownerTransform, Transform originTransform, IParameterContext context, out Vector3 position, out Vector3 direction)
-		{
-			direction = Vector3.zero;
-			if (this._direction != null)
+			if (null != parameter)
 			{
-				direction = this._direction.GetValue(context);
-				if (this._useRelativeDirection)
-				{
-					direction = ownerTransform.TransformDirection(direction);
-				}
+				IParameterTomate<float> parameterTomate = parameter.ParameterTomate as IParameterTomate<float>;
+				return parameterTomate.GetValue(gadgetContext);
 			}
-			if (this._position != null)
-			{
-				position = this._position.GetValue(context);
-				if (this._usePositionAsOffset)
-				{
-					position += originTransform.position;
-				}
-				if (direction != Vector3.zero)
-				{
-					direction = (position - ownerTransform.position).normalized;
-				}
-			}
-			else
-			{
-				position = originTransform.position;
-			}
+			return fallbackValue;
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(InstantiateBodyBlock));
@@ -211,57 +158,106 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 		private GadgetBody.BodyEventsBlocks _bodyEvents;
 
 		[Header("Read")]
-		[SerializeField]
 		[Tooltip("Position where the Body will be created")]
-		private Vector3Parameter _position;
-
+		[Restrict(false, new Type[]
+		{
+			typeof(Vector3)
+		})]
 		[SerializeField]
+		private BaseParameter _position;
+
 		[Tooltip("If marked, the Position will be added to the position of the Dummy")]
+		[SerializeField]
 		private bool _usePositionAsOffset;
 
-		[SerializeField]
 		[Tooltip("Point where the Body will be created relative to the Owner. If not found, the center of the Owner is selected.")]
+		[SerializeField]
 		private CDummy.DummyKind _dummyKind;
 
-		[SerializeField]
 		[Tooltip("Name of the Custom Dummy, if used.")]
+		[SerializeField]
 		private string _customDummyName;
 
-		[SerializeField]
 		[Tooltip("Direction of the Body")]
-		private Vector3Parameter _direction;
-
+		[Restrict(false, new Type[]
+		{
+			typeof(Vector3)
+		})]
 		[SerializeField]
+		private BaseParameter _direction;
+
 		[Tooltip("If marked, the direction will be transformed to the local rotation of the owner")]
+		[SerializeField]
 		private bool _useRelativeDirection;
 
-		[SerializeField]
 		[Tooltip("Interval of time between executions of OnTimeIntervalBlock")]
-		private FloatParameter _timeInterval;
-
+		[Restrict(false, new Type[]
+		{
+			typeof(float)
+		})]
 		[SerializeField]
+		private BaseParameter _timeInterval;
+
+		[Tooltip("Interval of time between executions of OnDisplacementIntervalBlock")]
+		[Restrict(false, new Type[]
+		{
+			typeof(float)
+		})]
+		[SerializeField]
+		private BaseParameter _displacementInterval;
+
 		[Tooltip("The interval between collision checks (the first will be performed instantly.")]
-		private FloatParameter _collisionCheckTimeInterval;
-
+		[Restrict(false, new Type[]
+		{
+			typeof(float)
+		})]
 		[SerializeField]
+		private BaseParameter _collisionCheckTimeInterval;
+
 		[Tooltip("How many collision checks must be performed, including the one performed instantly. If zero or empty, only the instant check will be performed.")]
-		private IntParameter _collisionCheckCount;
-
+		[Restrict(false, new Type[]
+		{
+			typeof(float)
+		})]
 		[SerializeField]
+		private BaseParameter _collisionCheckCount;
+
 		[Tooltip("Filter of what is EXCLUDED from the collision. If any one of these filters is true, the collision event is not triggered.")]
+		[Obsolete("Obsolete! Use FilterBlock")]
+		[SerializeField]
 		private BaseCombatFilter[] _collisionFilter;
 
+		[Tooltip("When colliding with a Combat and a Barrier at same time, ignores the Barrier")]
 		[SerializeField]
+		private bool _hitOverBarrier;
+
 		[Tooltip("Name of the Prefab of the Body")]
+		[SerializeField]
+		[ReferenceByName(typeof(GameObject))]
+		[Restrict(true, new Type[]
+		{
+
+		})]
 		private string _bodyPrefabName;
 
 		[SerializeField]
+		private int _precacheNumber = 1;
+
 		[Tooltip("Creates this body on Client even if it has no VFX")]
+		[SerializeField]
 		private bool _forceSendToClient;
 
-		[Header("Write")]
+		[Tooltip("Specifices the layers of the non-combat bodies (e.g. the scenery) which should trigger collision events with the created body.")]
 		[SerializeField]
-		private GadgetBodyParameter _body;
+		private LayerMask _nonCombatCollisionLayers = InstantiateBodyBlock.GetDefaultNonCombatCollisionLayers();
+
+		[Header("Write")]
+		[Restrict(true, new Type[]
+		{
+			typeof(IGadgetBody)
+		})]
+		[SerializeField]
+		private BaseParameter _body;
 
 		[SerializeField]
 		private GadgetBody.BodyEventsParameters _bodyParameters;

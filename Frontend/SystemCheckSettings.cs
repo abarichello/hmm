@@ -8,13 +8,5 @@ namespace HeavyMetalMachines.Frontend
 		public int MemoryMinimumRequirement;
 
 		public int MemoryWarningRequirement;
-
-		public float LowSpecWindowTimeout;
-
-		public string TitleTextDraft;
-
-		public string QuestionTextDraft;
-
-		public string OkButtonTextDraft;
 	}
 }

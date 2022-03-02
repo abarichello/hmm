@@ -22,7 +22,7 @@ namespace HeavyMetalMachines.Event
 
 		public int TargetEventId { get; set; }
 
-		public void WriteToBitStream(Pocketverse.BitStream bs)
+		public void WriteToBitStream(BitStream bs)
 		{
 			bs.WriteBool(this.WillCreateNextEvent);
 			bs.WriteCompressedInt(this.TargetEventId);
@@ -32,7 +32,7 @@ namespace HeavyMetalMachines.Event
 			bs.WriteCompressedInt((int)this.DestroyReason);
 		}
 
-		public void ReadFromBitStream(Pocketverse.BitStream bs)
+		public void ReadFromBitStream(BitStream bs)
 		{
 			this.WillCreateNextEvent = bs.ReadBool();
 			this.TargetEventId = bs.ReadCompressedInt();

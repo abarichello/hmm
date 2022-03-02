@@ -1,12 +1,13 @@
 ﻿using System;
+using Assets.Standard_Assets.Scripts.HMM.PlotKids;
 using FMod;
 using HeavyMetalMachines.Announcer;
 using HeavyMetalMachines.Audio.Music;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Event;
 using HeavyMetalMachines.Frontend;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.Match;
-using HeavyMetalMachines.Options;
 using Pocketverse;
 using UnityEngine;
 
@@ -36,23 +37,23 @@ namespace HeavyMetalMachines.Audio
 			}
 		}
 
-		public void Play(AnnouncerVoiceOverType announcerVOType)
+		public void Play(NarratorVoiceOverType announcerVOType)
 		{
 			switch (announcerVOType)
 			{
-			case AnnouncerVoiceOverType.IntroArena:
+			case 0:
 				this.PlayAudio(this.announcerVO.IntroArena, true);
 				break;
-			case AnnouncerVoiceOverType.MatchFound:
+			case 1:
 				this.PlayAudio(this.announcerVO.MatchFound, true);
 				break;
-			case AnnouncerVoiceOverType.PickStart:
+			case 2:
 				this.PlayAudio(this.announcerVO.PickStart, true);
 				break;
-			case AnnouncerVoiceOverType.PickCountdown:
+			case 3:
 				this.PlayAudio(this.announcerVO.PickCountdown, true);
 				break;
-			case AnnouncerVoiceOverType.PickEnd:
+			case 4:
 				this.PlayAudio(this.announcerVO.PickEnd, true);
 				break;
 			}
@@ -88,8 +89,7 @@ namespace HeavyMetalMachines.Audio
 			{
 				game.FinishedLoading += this.GameFinishedLoading;
 			}
-			AudioOptions audio = GameHubBehaviour.Hub.Options.Audio;
-			audio.OnAnnouncerIndexChanged = (Action)Delegate.Combine(audio.OnAnnouncerIndexChanged, new Action(this.OnAnnouncerIndexChanged));
+			GameHubBehaviour.Hub.Options.Audio.OnAnnouncerIndexChanged += this.OnAnnouncerIndexChanged;
 			GameHubBehaviour.Hub.BombManager.ClientListenToBombDrop += this.OnBombDrop;
 			GameHubBehaviour.Hub.BombManager.ListenToBombDelivery += this.OnBombDelivery;
 			GameHubBehaviour.Hub.BombManager.ListenToPhaseChange += this.OnPhaseChange;
@@ -125,7 +125,7 @@ namespace HeavyMetalMachines.Audio
 
 		private void Players_ListenToObjectUnspawn(PlayerEvent data)
 		{
-			if (data.Reason != SpawnReason.Death || GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreBoard.State.BombDelivery)
+			if (data.Reason != SpawnReason.Death || GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreboardState.BombDelivery)
 			{
 				return;
 			}
@@ -284,8 +284,7 @@ namespace HeavyMetalMachines.Audio
 			{
 				game.FinishedLoading -= this.GameFinishedLoading;
 			}
-			AudioOptions audio = GameHubBehaviour.Hub.Options.Audio;
-			audio.OnAnnouncerIndexChanged = (Action)Delegate.Remove(audio.OnAnnouncerIndexChanged, new Action(this.OnAnnouncerIndexChanged));
+			GameHubBehaviour.Hub.Options.Audio.OnAnnouncerIndexChanged -= this.OnAnnouncerIndexChanged;
 			GameHubBehaviour.Hub.BombManager.ClientListenToBombDrop -= this.OnBombDrop;
 			GameHubBehaviour.Hub.BombManager.ListenToBombDelivery -= this.OnBombDelivery;
 			GameHubBehaviour.Hub.BombManager.ListenToPhaseChange -= this.OnPhaseChange;
@@ -326,7 +325,7 @@ namespace HeavyMetalMachines.Audio
 			}
 		}
 
-		private void OnBombEnterSection(FMODVoiceOverAsset assetAllyTeam, FMODVoiceOverAsset assetEnemyTeam, TeamKind trackedTeam)
+		private void OnBombEnterSection(AudioEventAsset assetAllyTeam, AudioEventAsset assetEnemyTeam, TeamKind trackedTeam)
 		{
 			TeamKind team = GameHubBehaviour.Hub.Players.CurrentPlayerData.Team;
 			if (team == trackedTeam)
@@ -368,19 +367,19 @@ namespace HeavyMetalMachines.Audio
 			this.OnBombEnterSection(this.announcerVO.BombLastCurveAlly, this.announcerVO.BombLastCurveEnemy, trackTeamKind);
 		}
 
-		private void OnPhaseChange(BombScoreBoard.State state)
+		private void OnPhaseChange(BombScoreboardState state)
 		{
 			this.ClearDeathSnapshot();
-			BombScoreBoard.State previouState = GameHubBehaviour.Hub.BombManager.ScoreBoard.PreviouState;
-			if (previouState == BombScoreBoard.State.Replay)
+			BombScoreboardState previouState = GameHubBehaviour.Hub.BombManager.ScoreBoard.PreviouState;
+			if (previouState == BombScoreboardState.Replay)
 			{
 				this.CommentOnScore();
 			}
-			if (state != BombScoreBoard.State.Replay)
+			if (state != BombScoreboardState.Replay)
 			{
-				if (state != BombScoreBoard.State.BombDelivery)
+				if (state != BombScoreboardState.BombDelivery)
 				{
-					if (state == BombScoreBoard.State.Shop)
+					if (state == BombScoreboardState.Shop)
 					{
 						if (this.bombDeliveredSnapshot != null)
 						{
@@ -495,7 +494,7 @@ namespace HeavyMetalMachines.Audio
 			this.AnnounceBombDelivery(scoredTeam);
 		}
 
-		private void PlayKillAudio(AnnouncerManager.QueuedAnnouncerLog queuedAnnouncerLog)
+		private void PlayKillAudio(QueuedAnnouncerLog queuedAnnouncerLog)
 		{
 			switch (queuedAnnouncerLog.AnnouncerEvent.CurrentKillingSpree)
 			{
@@ -523,7 +522,7 @@ namespace HeavyMetalMachines.Audio
 			}
 		}
 
-		private void OnHudAnnounceTriggered(AnnouncerManager.QueuedAnnouncerLog queuedAnnouncerLog)
+		private void OnHudAnnounceTriggered(QueuedAnnouncerLog queuedAnnouncerLog)
 		{
 			if (GameHubBehaviour.Hub.User.IsNarrator)
 			{
@@ -550,7 +549,7 @@ namespace HeavyMetalMachines.Audio
 					return;
 				case AnnouncerLog.AnnouncerEventKinds.BombShootingNearGoal:
 				{
-					FMODVoiceOverAsset asset = (queuedAnnouncerLog.AnnouncerEvent.KillerTeam != GameHubBehaviour.Hub.Players.CurrentPlayerTeam) ? this.announcerVO.BombShootingEnemyTeam : this.announcerVO.BombShootingAlliedTeam;
+					AudioEventAsset asset = (queuedAnnouncerLog.AnnouncerEvent.KillerTeam != GameHubBehaviour.Hub.Players.CurrentPlayerTeam) ? this.announcerVO.BombShootingEnemyTeam : this.announcerVO.BombShootingAlliedTeam;
 					this.PlayAudio(asset, true);
 					break;
 				}
@@ -598,15 +597,15 @@ namespace HeavyMetalMachines.Audio
 			}
 		}
 
-		public void PlayAudio(FMODVoiceOverAsset asset, bool replayRestriction = true)
+		public void PlayAudio(AudioEventAsset asset, bool replayRestriction = true)
 		{
-			if (GameHubBehaviour.Hub.Match.LevelIsTutorial())
+			if (GameHubBehaviour.Hub.Match.LevelIsTutorial() || SpectatorController.IsSpectating)
 			{
 				return;
 			}
 			if (asset != null)
 			{
-				if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreBoard.State.Replay && replayRestriction)
+				if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreboardState.Replay && replayRestriction)
 				{
 					return;
 				}
@@ -614,7 +613,7 @@ namespace HeavyMetalMachines.Audio
 			}
 		}
 
-		private void PlayCrowdAudio(FMODAsset asset)
+		private void PlayCrowdAudio(AudioEventAsset asset)
 		{
 			if (asset && !GameHubBehaviour.Hub.Match.LevelIsTutorial())
 			{

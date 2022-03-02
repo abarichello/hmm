@@ -1,5 +1,7 @@
 ﻿using System;
 using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Frontend;
+using HeavyMetalMachines.GameCamera;
 using Pocketverse;
 using UnityEngine;
 
@@ -7,6 +9,19 @@ namespace HeavyMetalMachines.Infra.Context
 {
 	public class HMMContext : GameHubObject, IHMMContext
 	{
+		public HMMContext(IGameCamera gameCamera)
+		{
+			this._gameCamera = gameCamera;
+		}
+
+		public IGameCamera GameCamera
+		{
+			get
+			{
+				return this._gameCamera;
+			}
+		}
+
 		public ICombatObject Bomb
 		{
 			get
@@ -70,6 +85,14 @@ namespace HeavyMetalMachines.Infra.Context
 			}
 		}
 
+		public IGadgetHud GadgetHud
+		{
+			get
+			{
+				return GameHubObject.Hub.State.Current.GetStateGuiController<GameGui>().GadgetHud;
+			}
+		}
+
 		public IGameTime Clock
 		{
 			get
@@ -94,9 +117,41 @@ namespace HeavyMetalMachines.Infra.Context
 			}
 		}
 
+		public bool IsTest
+		{
+			get
+			{
+				return GameHubObject.Hub.Net.IsTest();
+			}
+		}
+
 		public bool IsCarryingBomb(ICombatObject combatObject)
 		{
 			return GameHubObject.Hub.BombManager.IsCarryingBomb(combatObject.Identifiable.ObjId);
 		}
+
+		public IHudIconBar GetHudIconBar(ICombatObject combatObject)
+		{
+			GameGui stateGuiController = GameHubObject.Hub.State.Current.GetStateGuiController<GameGui>();
+			HudLifebarPlayerObject lifebarObject = stateGuiController.HudLifebarController.GetLifebarObject(combatObject.Identifiable.ObjId);
+			return lifebarObject.IconBar;
+		}
+
+		public IStateMachine StateMachine
+		{
+			get
+			{
+				return GameHubObject.Hub.State;
+			}
+		}
+
+		public IHudEmotePresenter GetHudEmote(ICombatObject combatObject)
+		{
+			GameGui stateGuiController = GameHubObject.Hub.State.Current.GetStateGuiController<GameGui>();
+			HudLifebarPlayerObject lifebarObject = stateGuiController.HudLifebarController.GetLifebarObject(combatObject.Identifiable.ObjId);
+			return lifebarObject.hudEmotePresenter;
+		}
+
+		private IGameCamera _gameCamera;
 	}
 }

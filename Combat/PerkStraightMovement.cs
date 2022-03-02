@@ -5,7 +5,6 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	[RequireComponent(typeof(Rigidbody))]
 	public class PerkStraightMovement : BasePerk, IPerkMovement
 	{
 		protected float _deltaTime
@@ -99,9 +98,9 @@ namespace HeavyMetalMachines.Combat
 
 		protected virtual float ExtraSpeedFromCar(Vector3 carVelocity)
 		{
-			float b = Vector3.Dot(carVelocity, this._direction);
-			float num = Mathf.Max(0f, b) * this._extraPositiveVelocityMultiplier;
-			return num + Mathf.Min(0f, b) * this._extraNegativeVelocityMultiplier;
+			float num = Vector3.Dot(carVelocity, this._direction);
+			float num2 = Mathf.Max(0f, num) * this._extraPositiveVelocityMultiplier;
+			return num2 + Mathf.Min(0f, num) * this._extraNegativeVelocityMultiplier;
 		}
 
 		protected virtual void UpdateAfterVisibilityChange()
@@ -145,12 +144,12 @@ namespace HeavyMetalMachines.Combat
 		[SerializeField]
 		protected float _duration = 1f;
 
-		[SerializeField]
 		[Tooltip("If the car is moving in the SAME direction of the projectile when shooting it, how much of the speed should be added to the projectile ")]
+		[SerializeField]
 		protected float _extraPositiveVelocityMultiplier = 1f;
 
-		[SerializeField]
 		[Tooltip("If the car is moving in the OPPOSITE direction of the projectile when shooting it, how much of the speed should be added to the projectile ")]
+		[SerializeField]
 		protected float _extraNegativeVelocityMultiplier = 1f;
 
 		protected Vector3 _direction;

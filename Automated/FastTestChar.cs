@@ -1,5 +1,6 @@
 ﻿using System;
-using HeavyMetalMachines.Character;
+using Assets.ClientApiObjects;
+using Assets.ClientApiObjects.Components;
 using HeavyMetalMachines.Frontend;
 using Pocketverse;
 
@@ -9,6 +10,7 @@ namespace HeavyMetalMachines.Automated
 	{
 		private void Start()
 		{
+			FastTestChar.Log.DebugFormat("Added FastTestChar!", new object[0]);
 		}
 
 		private void OnEnable()
@@ -28,15 +30,20 @@ namespace HeavyMetalMachines.Automated
 
 		private void TryToPick(PickModeSetup pick)
 		{
-			CharacterInfo validChar = this.GetValidChar();
-			pick.SelectCharacter(validChar.CharacterId);
-			pick.ConfirmPick(validChar.CharacterId);
-			pick.ConfirmSkin(validChar.CharacterItemTypeGuid, Guid.Empty);
+			IItemType validChar = this.GetValidChar();
+			CharacterItemTypeComponent component = validChar.GetComponent<CharacterItemTypeComponent>();
+			FastTestChar.Log.Debug("TryingToPick");
+			pick.SelectCharacter(component.CharacterId);
+			pick.ConfirmPick(component.CharacterId);
+			pick.ConfirmSkin(validChar.Id, Guid.Empty);
 		}
 
-		private CharacterInfo GetValidChar()
+		private IItemType GetValidChar()
 		{
-			return GameHubBehaviour.Hub.InventoryColletion.GetCharacterInfoByCharacterId(GameHubBehaviour.Hub.Config.GetIntValue(ConfigAccess.FastTestChar));
+			int intValue = GameHubBehaviour.Hub.Config.GetIntValue(ConfigAccess.FastTestChar);
+			IItemType result;
+			GameHubBehaviour.Hub.InventoryColletion.AllCharactersByCharacterId.TryGetValue(intValue, out result);
+			return result;
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(FastTestChar));

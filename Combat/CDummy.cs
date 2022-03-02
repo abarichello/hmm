@@ -71,8 +71,8 @@ namespace HeavyMetalMachines.Combat
 		{
 			for (int i = 0; i < this.CustomDummies.Count; i++)
 			{
-				Transform x = this.CustomDummies[i];
-				if (x == customDummy)
+				Transform transform = this.CustomDummies[i];
+				if (transform == customDummy)
 				{
 					this.CustomDummies.Remove(customDummy);
 					break;
@@ -80,29 +80,42 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
-		public Transform GetCustomDummy(string dummyName)
+		public Transform GetCustomDummy(string dummyName, Object sourceObj = null)
 		{
 			for (int i = 0; i < this.CustomDummies.Count; i++)
 			{
 				Transform transform = this.CustomDummies[i];
 				if (transform == null)
 				{
-					HeavyMetalMachines.Utils.Debug.Assert(false, "GetCustomDummy: Null Custom Dummy in GameObject " + base.gameObject.name, HeavyMetalMachines.Utils.Debug.TargetTeam.Sd);
+					Debug.Assert(false, "GetCustomDummy: Null Custom Dummy in GameObject " + base.gameObject.name, Debug.TargetTeam.Sd);
 				}
 				else if (transform.name == dummyName)
 				{
 					return transform;
 				}
 			}
-			CDummy.Log.WarnFormat("GetCustomDummy: {0} NOT found in GameObject {1}", new object[]
+			if (sourceObj == null)
 			{
-				dummyName,
-				base.gameObject.name
-			});
-			return null;
+				CDummy.Log.ErrorFormat("GetCustomDummy: {0} NOT found in GameObject {1}. Wrong DummyName or wrong Skin. Source object not tracked.", new object[]
+				{
+					dummyName,
+					base.gameObject.name
+				});
+			}
+			else
+			{
+				CDummy.Log.ErrorFormat("GetCustomDummy: {0} NOT found in GameObject {1}. Wrong DummyName or wrong Skin. Source object name: '{2}', type of {3}.", new object[]
+				{
+					dummyName,
+					base.gameObject.name,
+					sourceObj.name,
+					sourceObj.GetType()
+				});
+			}
+			return this._transform;
 		}
 
-		public Transform GetDummy(CDummy.DummyKind kind, string customDummyName)
+		public Transform GetDummy(CDummy.DummyKind kind, string customDummyName, Object sourceObj = null)
 		{
 			this.EnsureValidTransform();
 			switch (kind)
@@ -140,7 +153,7 @@ namespace HeavyMetalMachines.Combat
 			default:
 				if (kind == CDummy.DummyKind.Custom)
 				{
-					return this.GetCustomDummy(customDummyName);
+					return this.GetCustomDummy(customDummyName, sourceObj);
 				}
 				if (this.CarGenerator && this.CarGenerator.bodyGO)
 				{

@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using Assets.ClientApiObjects;
-using Commons.Swordfish.Battlepass;
 using HeavyMetalMachines.Frontend;
 using Pocketverse;
 using UnityEngine;
@@ -26,6 +25,12 @@ namespace HeavyMetalMachines.Customization
 				this._categoriesToggles[i].NewItemImage.SetActive(false);
 				this._buttonsDataByInstanceId[this._categoriesToggles[i].CategoryToggleId] = this._categoriesToggles[i];
 			}
+			this._inventoryComponent.OnCategoryItemSeenCountChanged += this.UpdateNewItemsMarker;
+		}
+
+		private void OnDisable()
+		{
+			this._inventoryComponent.OnCategoryItemSeenCountChanged -= this.UpdateNewItemsMarker;
 		}
 
 		protected void Start()
@@ -67,24 +72,6 @@ namespace HeavyMetalMachines.Customization
 				}
 				this._buttonsDataByCategoryId[this._categoriesToggles[i].CategoryScriptableObject.Id] = this._categoriesToggles[i];
 			}
-		}
-
-		[UnityUiComponentCall]
-		public void OnCategoryToggleValueChanged(HmmUiToggle toggle)
-		{
-			if (!toggle.isOn)
-			{
-				return;
-			}
-			int instanceID = toggle.GetInstanceID();
-			PlayerCustomizationSlot customizationSlot = PlayerCustomizationSlot.None;
-			CustomizationInventoryCategoriesView.CategoryToggleData categoryToggleData;
-			if (this._buttonsDataByInstanceId.TryGetValue(instanceID, out categoryToggleData))
-			{
-				this._currentlySelectedCategoryId = categoryToggleData.CategoryScriptableObject.Id;
-				customizationSlot = categoryToggleData.CategoryScriptableObject.CustomizationSlot;
-			}
-			this._view.SelectCategory(this._currentlySelectedCategoryId, customizationSlot);
 		}
 
 		public void UpdateNewItemsMarker(Guid categoryId, int newItemsCount)
@@ -149,6 +136,10 @@ namespace HeavyMetalMachines.Customization
 
 		[SerializeField]
 		private GameObject _markAllAsSeenButton;
+
+		[Header("Data")]
+		[SerializeField]
+		private CustomizationInventoryComponent _inventoryComponent;
 
 		private Dictionary<Guid, CustomizationInventoryCategoriesView.CategoryToggleData> _buttonsDataByCategoryId;
 

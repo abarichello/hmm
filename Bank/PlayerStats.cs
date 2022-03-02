@@ -1,10 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using Assets.ClientApiObjects;
+using Assets.ClientApiObjects.Components;
+using Assets.Customization;
 using HeavyMetalMachines.Car;
+using HeavyMetalMachines.Characters;
 using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Combat.Gadget;
+using HeavyMetalMachines.DataTransferObjects.Battlepass;
 using HeavyMetalMachines.Infra.Context;
+using HeavyMetalMachines.Items.DataTransferObjects;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Playback.Snapshot;
 using HeavyMetalMachines.UpdateStream;
 using HeavyMetalMachines.Utils;
 using Pocketverse;
@@ -13,9 +21,9 @@ using UnityEngine;
 namespace HeavyMetalMachines.Bank
 {
 	[Serializable]
-	public class PlayerStats : StreamContent, IPlayerStats
+	public class PlayerStats : StreamContent, IPlayerStats, IPlayerStatsSerialData, IBaseStreamSerialData<IPlayerStatsSerialData>
 	{
-		public List<int> MissionsCompletedIndex
+		public List<MissionCompleted> MissionsCompletedIndex
 		{
 			get
 			{
@@ -380,12 +388,34 @@ namespace HeavyMetalMachines.Bank
 			}
 		}
 
+		public Guid CharacterItemTypeGuid
+		{
+			get
+			{
+				return this.Combat.Player.Character.CharacterItemTypeGuid;
+			}
+		}
+
+		public CustomizationContent Customizations
+		{
+			get
+			{
+				return this.Combat.Player.Customizations;
+			}
+		}
+
+		public DriverRoleKind CharacterRole
+		{
+			get
+			{
+				CharacterItemTypeComponent component = this.Combat.Player.CharacterItemType.GetComponent<CharacterItemTypeComponent>();
+				return component.Role;
+			}
+		}
+
 		public bool MatchWon { get; set; }
 
 		public int NumberOfMedals { get; set; }
-
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		public event Action StreamDataReceivedObserver;
 
 		public bool Disconnected
 		{
@@ -435,21 +465,67 @@ namespace HeavyMetalMachines.Bank
 			}
 		}
 
+		public int OtherScrap
+		{
+			get
+			{
+				return this._otherScrap;
+			}
+		}
+
+		public int TimedScrap
+		{
+			get
+			{
+				return this._timedScrap;
+			}
+		}
+
+		public int ReliableScrap
+		{
+			get
+			{
+				return this._reliableScrap;
+			}
+		}
+
 		public int Scrap
 		{
 			get
 			{
-				return this._scrap + this._reliableScrap + this._timedScrap;
+				return this._otherScrap + this._reliableScrap + this._timedScrap;
 			}
 		}
 
-		public SDeltaSerializableValue<int> BombsDelivered { get; set; }
+		public int BombsDelivered
+		{
+			get
+			{
+				return this._bombsDelivered;
+			}
+		}
 
 		public float TravelledDistance { get; set; }
 
-		public SDeltaSerializableValue<float> BombPossessionTime { get; set; }
+		public float BombPossessionTime
+		{
+			get
+			{
+				return this._bombPossessionTime;
+			}
+		}
 
-		public SDeltaSerializableValue<float> DebuffTime { get; set; }
+		public float DebuffTime
+		{
+			get
+			{
+				return this._debuffTime;
+			}
+			set
+			{
+				this._debuffTime = value;
+			}
+		}
 
 		public int RoleCarrierKills { get; set; }
 
@@ -467,15 +543,7 @@ namespace HeavyMetalMachines.Bank
 			}
 		}
 
-		public int Gadget0Count { get; set; }
-
-		public int Gadget1Count { get; set; }
-
-		public int Gadget2Count { get; set; }
-
 		public int BombGadgetGrabberCount { get; set; }
-
-		public int BoostGadgetCount { get; set; }
 
 		public int BombGadgetPowerShotCount { get; set; }
 
@@ -511,6 +579,7 @@ namespace HeavyMetalMachines.Bank
 				this.Combat.CustomGadget0.ServerListenToGadgetUse += this.ListenToGadget0Use;
 				this.Combat.CustomGadget1.ServerListenToGadgetUse += this.ListenToGadget1Use;
 				this.Combat.CustomGadget2.ServerListenToGadgetUse += this.ListenToGadget2Use;
+				this.Combat.SprayGadget.ServerListenToGadgetUse += this.ListenToGadgetSprayUse;
 				this.Combat.BombGadget.ServerListenToGadgetUse += this.ListenToBombUse;
 				this.Combat.BoostGadget.ServerListenToGadgetUse += this.ListenToBoostUse;
 				CombatController.OnInstantModifierApplied += this.OnInstantModifierApplied;
@@ -535,40 +604,47 @@ namespace HeavyMetalMachines.Bank
 			{
 				return;
 			}
-			if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreBoard.State.BombDelivery && GameHubBehaviour.Hub.BombManager.ActiveBomb.IsSpawned && GameHubBehaviour.Hub.BombManager.IsCarryingBomb(base.Id.ObjId))
+			if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreboardState.BombDelivery && GameHubBehaviour.Hub.BombManager.ActiveBomb.IsSpawned && GameHubBehaviour.Hub.BombManager.IsCarryingBomb(base.Id.ObjId))
 			{
-				this.BombPossessionTime += Time.deltaTime;
+				this._bombPossessionTime += Time.deltaTime;
 			}
 			if (this._distanceUpdater.ShouldHalt())
 			{
 				return;
 			}
-			this.TravelledDistance += (this.Combat.Movement as CarMovement).SpeedZ;
+			float num = Mathf.Abs((this.Combat.Movement as CarMovement).SpeedZ);
+			this.TravelledDistance += num;
 		}
 
 		private void ListenToGadget0Use()
 		{
-			this.Gadget0Count++;
+			this.RegisterGadgetActivation(GadgetSlot.CustomGadget0);
 		}
 
 		private void ListenToGadget1Use()
 		{
-			this.Gadget1Count++;
+			this.RegisterGadgetActivation(GadgetSlot.CustomGadget1);
 		}
 
 		private void ListenToGadget2Use()
 		{
-			this.Gadget2Count++;
+			this.RegisterGadgetActivation(GadgetSlot.CustomGadget2);
 		}
 
 		private void ListenToBombUse()
 		{
-			this.BombGadgetGrabberCount++;
+			this.RegisterGadgetActivation(GadgetSlot.BombGadget);
+			this.RegisterGadgetActivation(GadgetSlot.BombPassGadget);
 		}
 
 		private void ListenToBoostUse()
 		{
-			this.BoostGadgetCount++;
+			this.RegisterGadgetActivation(GadgetSlot.BoostGadget);
+		}
+
+		private void ListenToGadgetSprayUse()
+		{
+			this.RegisterGadgetActivation(GadgetSlot.SprayGadget);
 		}
 
 		private void OnReverseUsed()
@@ -624,7 +700,7 @@ namespace HeavyMetalMachines.Bank
 
 		private void ListenToBombDelivered(int causerid, TeamKind scoredTeam, Vector3 deliveryPosition)
 		{
-			if (GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreBoard.State.Replay)
+			if (GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreboardState.Replay)
 			{
 				return;
 			}
@@ -632,7 +708,7 @@ namespace HeavyMetalMachines.Bank
 			{
 				return;
 			}
-			this.BombsDelivered++;
+			this._bombsDelivered = this.BombsDelivered + 1;
 		}
 
 		private void OnDestroy()
@@ -646,6 +722,7 @@ namespace HeavyMetalMachines.Bank
 				this.Combat.CustomGadget0.ServerListenToGadgetUse -= this.ListenToGadget0Use;
 				this.Combat.CustomGadget1.ServerListenToGadgetUse -= this.ListenToGadget1Use;
 				this.Combat.CustomGadget2.ServerListenToGadgetUse -= this.ListenToGadget2Use;
+				this.Combat.SprayGadget.ServerListenToGadgetUse -= this.ListenToGadgetSprayUse;
 				this.Combat.BombGadget.ServerListenToGadgetUse -= this.ListenToBombUse;
 				this.Combat.BoostGadget.ServerListenToGadgetUse -= this.ListenToBoostUse;
 				this.Combat.PlayerController.ServerListenToReverseUse -= this.OnReverseUsed;
@@ -654,7 +731,7 @@ namespace HeavyMetalMachines.Bank
 
 		private void OnInstantModifierApplied(ModifierInstance mod, CombatObject causer, CombatObject target, float amount, int eventId)
 		{
-			if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState != BombScoreBoard.State.BombDelivery)
+			if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState != BombScoreboardState.BombDelivery)
 			{
 				return;
 			}
@@ -696,6 +773,109 @@ namespace HeavyMetalMachines.Bank
 			}
 		}
 
+		public void RegisterGadgetActivation(GadgetSlot slot)
+		{
+			this.UpdateGadgetSlotsUses(slot);
+			this.UpdateCategoryAndItemUsages(slot);
+		}
+
+		private void UpdateCategoryAndItemUsages(GadgetSlot slot)
+		{
+			switch (slot)
+			{
+			case GadgetSlot.TakeoffGadget:
+			case GadgetSlot.KillGadget:
+			case GadgetSlot.BombExplosionGadget:
+			case GadgetSlot.SprayGadget:
+			case GadgetSlot.EmoteGadget0:
+			case GadgetSlot.EmoteGadget1:
+			case GadgetSlot.EmoteGadget2:
+			case GadgetSlot.EmoteGadget3:
+			case GadgetSlot.EmoteGadget4:
+				break;
+			default:
+				if (slot != GadgetSlot.RespawnGadget)
+				{
+					return;
+				}
+				break;
+			}
+			CustomizationAssetsScriptableObject customizationAssets = GameHubBehaviour.Hub.CustomizationAssets;
+			ItemTypeScriptableObject itemTypeScriptableObjectByGadgetSlots = customizationAssets.GetItemTypeScriptableObjectByGadgetSlots(slot, this.Customizations);
+			if (itemTypeScriptableObjectByGadgetSlots != null)
+			{
+				this.UpdateCategoryUses(itemTypeScriptableObjectByGadgetSlots.ItemCategoryId);
+				this.UpdateItemTypeUsages(itemTypeScriptableObjectByGadgetSlots.Id);
+			}
+		}
+
+		public int GetGadgetUses(GadgetSlot slot)
+		{
+			if (this._gadgetsUses.ContainsKey(slot))
+			{
+				return this._gadgetsUses[slot];
+			}
+			return 0;
+		}
+
+		public int GetCategoryUses(Guid category)
+		{
+			if (this._categoryUses.ContainsKey(category))
+			{
+				return this._categoryUses[category];
+			}
+			return 0;
+		}
+
+		public int GetItemTypeUses(Guid itemTypeId)
+		{
+			if (this._itemTypeUses.ContainsKey(itemTypeId))
+			{
+				return this._itemTypeUses[itemTypeId];
+			}
+			return 0;
+		}
+
+		public void IncreaseDebuffTime(float debuffTime)
+		{
+			this.DebuffTime += debuffTime;
+		}
+
+		public void IncreaseBombGadgetPowerShotScoreCount(int shotCount)
+		{
+			this.BombGadgetPowerShotScoreCount += shotCount;
+		}
+
+		private void UpdateGadgetSlotsUses(GadgetSlot slot)
+		{
+			if (this._gadgetsUses.ContainsKey(slot))
+			{
+				this._gadgetsUses[slot] = this._gadgetsUses[slot] + 1;
+				return;
+			}
+			this._gadgetsUses[slot] = 1;
+		}
+
+		private void UpdateCategoryUses(Guid categoryId)
+		{
+			if (this._categoryUses.ContainsKey(categoryId))
+			{
+				this._categoryUses[categoryId] = this._categoryUses[categoryId] + 1;
+				return;
+			}
+			this._categoryUses[categoryId] = 1;
+		}
+
+		private void UpdateItemTypeUsages(Guid itemTypeId)
+		{
+			if (this._itemTypeUses.ContainsKey(itemTypeId))
+			{
+				this._itemTypeUses[itemTypeId] = this._itemTypeUses[itemTypeId] + 1;
+				return;
+			}
+			this._itemTypeUses[itemTypeId] = 1;
+		}
+
 		public void AddScrap(int amount, bool reliable, ScrapBank.ScrapReason reason)
 		{
 			GameHubBehaviour.Hub.Stream.StatsStream.Changed(this);
@@ -709,7 +889,7 @@ namespace HeavyMetalMachines.Bank
 			}
 			else
 			{
-				this._scrap += amount;
+				this._otherScrap += amount;
 			}
 			this.TotalScrapCollected += amount;
 			switch (reason)
@@ -738,12 +918,12 @@ namespace HeavyMetalMachines.Bank
 			this._timedScrap -= amount;
 			if (this._timedScrap < 0)
 			{
-				this._scrap += this._timedScrap;
+				this._otherScrap += this._timedScrap;
 				this._timedScrap = 0;
-				if (this._scrap < 0)
+				if (this._otherScrap < 0)
 				{
-					this._reliableScrap += this._scrap;
-					this._scrap = 0;
+					this._reliableScrap += this._otherScrap;
+					this._otherScrap = 0;
 				}
 			}
 			if (this._firstScrapExpenseTimeMillis == 0L)
@@ -764,10 +944,10 @@ namespace HeavyMetalMachines.Bank
 			this._timedScrap -= amount;
 			if (this._timedScrap < 0)
 			{
-				this._scrap += this._timedScrap;
-				if (this._scrap < 0)
+				this._otherScrap += this._timedScrap;
+				if (this._otherScrap < 0)
 				{
-					this._scrap = 0;
+					this._otherScrap = 0;
 				}
 				this._timedScrap = 0;
 			}
@@ -781,14 +961,14 @@ namespace HeavyMetalMachines.Bank
 
 		public override int GetStreamData(ref byte[] data, bool boForceSerialization)
 		{
-			Pocketverse.BitStream writeStream = StaticBitStream.GetWriteStream();
+			BitStream writeStream = StaticBitStream.GetWriteStream();
 			this._StatsCache.UpdateCount();
 			this._timedScrap.Serialize(writeStream, boForceSerialization);
 			writeStream.WriteCompressedInt(this.TotalScrapCollected);
-			if (boForceSerialization || this._StatsCache.SetValues(this._scrap, this._reliableScrap, this._level, this._scrapSpent, this.ScrapCollected, this._creepKills, this._kills, this._deaths, this._assists, this.BombsDelivered))
+			if (boForceSerialization || this._StatsCache.SetValues(this._otherScrap, this._reliableScrap, this._level, this._scrapSpent, this.ScrapCollected, this._creepKills, this._kills, this._deaths, this._assists, this.BombsDelivered))
 			{
 				writeStream.WriteBool(true);
-				this._scrap.Serialize(writeStream, boForceSerialization);
+				this._otherScrap.Serialize(writeStream, boForceSerialization);
 				this._reliableScrap.Serialize(writeStream, boForceSerialization);
 				this._level.Serialize(writeStream, boForceSerialization);
 				this._scrapSpent.Serialize(writeStream, boForceSerialization);
@@ -797,7 +977,7 @@ namespace HeavyMetalMachines.Bank
 				this._kills.Serialize(writeStream, boForceSerialization);
 				this._deaths.Serialize(writeStream, boForceSerialization);
 				this._assists.Serialize(writeStream, boForceSerialization);
-				this.BombsDelivered.Serialize(writeStream, boForceSerialization);
+				this._bombsDelivered.Serialize(writeStream, boForceSerialization);
 			}
 			else
 			{
@@ -806,8 +986,8 @@ namespace HeavyMetalMachines.Bank
 			this._damageDealtToPlayers.Serialize(writeStream, boForceSerialization);
 			this._damageReceived.Serialize(writeStream, boForceSerialization);
 			this._healingProvided.Serialize(writeStream, boForceSerialization);
-			this.BombPossessionTime.Serialize(writeStream, boForceSerialization);
-			this.DebuffTime.Serialize(writeStream, boForceSerialization);
+			this._bombPossessionTime.Serialize(writeStream, boForceSerialization);
+			this._debuffTime.Serialize(writeStream, boForceSerialization);
 			writeStream.WriteBool(false);
 			writeStream.WriteBool(this._disconnected);
 			return writeStream.CopyToArray(data);
@@ -815,12 +995,12 @@ namespace HeavyMetalMachines.Bank
 
 		public override void ApplyStreamData(byte[] data)
 		{
-			Pocketverse.BitStream readStream = StaticBitStream.GetReadStream(data);
+			BitStream readStream = StaticBitStream.GetReadStream(data);
 			this._timedScrap.DeSerialize(readStream);
 			this.TotalScrapCollected = readStream.ReadCompressedInt();
 			if (readStream.ReadBool())
 			{
-				this._scrap.DeSerialize(readStream);
+				this._otherScrap.DeSerialize(readStream);
 				this._reliableScrap.DeSerialize(readStream);
 				this._level.DeSerialize(readStream);
 				this.UpdateLevel(this._level);
@@ -831,18 +1011,38 @@ namespace HeavyMetalMachines.Bank
 				this._deaths.DeSerialize(readStream);
 				this.UpdateDeaths(this._deaths);
 				this.Assists = this._assists.DeSerialize(readStream);
-				this.BombsDelivered = this.BombsDelivered.DeSerialize(readStream);
+				this._bombsDelivered = this._bombsDelivered.DeSerialize(readStream);
 			}
 			this.DamageDealtToPlayers = this._damageDealtToPlayers.DeSerialize(readStream);
 			this.DamageReceived = this._damageReceived.DeSerialize(readStream);
 			this.HealingProvided = this._healingProvided.DeSerialize(readStream);
-			this.BombPossessionTime = this.BombPossessionTime.DeSerialize(readStream);
-			this.DebuffTime = this.DebuffTime.DeSerialize(readStream);
+			this._bombPossessionTime = this._bombPossessionTime.DeSerialize(readStream);
+			this._debuffTime = this._debuffTime.DeSerialize(readStream);
 			this._disconnected = readStream.ReadBool();
-			if (this.StreamDataReceivedObserver != null)
-			{
-				this.StreamDataReceivedObserver();
-			}
+		}
+
+		public void Apply(IPlayerStatsSerialData data)
+		{
+			this._timedScrap = data.TimedScrap;
+			this._totalScrapCollected = data.TotalScrapCollected;
+			this._otherScrap = data.OtherScrap;
+			this._reliableScrap = data.ReliableScrap;
+			this._level = data.Level;
+			this._scrapSpent = data.ScrapSpent;
+			this._scrapCollected = data.ScrapCollected;
+			this._creepKills = data.CreepKills;
+			this._kills = data.Kills;
+			this._deaths = data.Deaths;
+			this._assists = data.Assists;
+			this._bombsDelivered = data.BombsDelivered;
+			this._damageDealtToPlayers = data.DamageDealtToPlayers;
+			this._damageReceived = data.DamageReceived;
+			this._healingProvided = data.HealingProvided;
+			this._bombPossessionTime = data.BombPossessionTime;
+			this._debuffTime = data.DebuffTime;
+			this._disconnected = data.Disconnected;
+			this.UpdateLevel(this._level);
+			this.UpdateDeaths(this._deaths);
 		}
 
 		public static readonly BitLogger Log = new BitLogger(typeof(PlayerStats));
@@ -851,7 +1051,13 @@ namespace HeavyMetalMachines.Bank
 
 		public ScrapLevels ScrapLevel;
 
-		private List<int> _missionsCompletedIndex = new List<int>();
+		private List<MissionCompleted> _missionsCompletedIndex = new List<MissionCompleted>();
+
+		private Dictionary<GadgetSlot, int> _gadgetsUses = new Dictionary<GadgetSlot, int>();
+
+		private Dictionary<Guid, int> _categoryUses = new Dictionary<Guid, int>();
+
+		private Dictionary<Guid, int> _itemTypeUses = new Dictionary<Guid, int>();
 
 		private int _highestKillingStreak;
 
@@ -865,7 +1071,7 @@ namespace HeavyMetalMachines.Bank
 
 		public Dictionary<int, int> CurrentPlayersDomination = new Dictionary<int, int>(5);
 
-		private SDeltaSerializableValue<int> _scrap;
+		private SDeltaSerializableValue<int> _otherScrap;
 
 		private SDeltaSerializableValue<int> _reliableScrap;
 
@@ -918,6 +1124,12 @@ namespace HeavyMetalMachines.Bank
 		private int _numberOfReconnects;
 
 		private long _firstScrapExpenseTimeMillis;
+
+		private SDeltaSerializableValue<int> _bombsDelivered;
+
+		public SDeltaSerializableValue<float> _bombPossessionTime;
+
+		public SDeltaSerializableValue<float> _debuffTime;
 
 		private TimedUpdater _distanceUpdater;
 

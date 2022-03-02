@@ -101,7 +101,7 @@ namespace HeavyMetalMachines.Combat
 				if (other.gameObject.layer == 13)
 				{
 					baseFX = BaseFX.GetFX(other);
-					if (!baseFX.IsDead && baseFX.enabled)
+					if (baseFX != null && !baseFX.IsDead && baseFX.enabled)
 					{
 						combatObject = (combatObject2 = baseFX.GetTargetCombat(BasePerk.PerkTarget.Owner));
 						flag = this.Effect.CheckHit(combatObject2);

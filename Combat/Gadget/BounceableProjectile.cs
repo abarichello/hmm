@@ -71,7 +71,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			return -1;
 		}
 
-		protected override void InnerOnDestroyEffect(DestroyEffect evt)
+		protected override void InnerOnDestroyEffect(DestroyEffectMessage evt)
 		{
 			base.InnerOnDestroyEffect(evt);
 			int effectIndex = this.GetEffectIndex(evt.RemoveData.TargetEventId);
@@ -82,11 +82,16 @@ namespace HeavyMetalMachines.Combat.Gadget
 			this._activeEffects.RemoveAt(effectIndex);
 		}
 
-		protected override int ReflectEffect(DestroyEffect evt, FXInfo effect, ModifierData[] modifiers)
+		protected override int ReflectEffect(DestroyEffectMessage evt, FXInfo effect, ModifierData[] modifiers)
 		{
 			int effectIndex = this.GetEffectIndex(evt.RemoveData.TargetEventId);
 			if (this._activeEffects[effectIndex].BounceCount > 0)
 			{
+				BounceableProjectile.Log.DebugFormat("Reflecting Bounceable effect. Will use {0} effect and not {1}", new object[]
+				{
+					this.MyInfo.BounceEffect,
+					effect
+				});
 				effect = this.MyInfo.BounceEffect;
 			}
 			int num = base.ReflectEffect(evt, effect, evt.EffectData.Modifiers);
@@ -97,7 +102,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			return num;
 		}
 
-		protected override void EndEffect(DestroyEffect evt, float totalDistance)
+		protected override void EndEffect(DestroyEffectMessage evt, float totalDistance)
 		{
 			if (this.FireExtraOnEffectDeath.BoolGet())
 			{

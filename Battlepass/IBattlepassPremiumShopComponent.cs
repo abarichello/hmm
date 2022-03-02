@@ -8,7 +8,7 @@ namespace HeavyMetalMachines.Battlepass
 
 		bool IsPremiumShopSceneLoad();
 
-		void RegisterPremiumShopWindow(IBattlepassPremiumShopView premiumShopView);
+		void RegisterPremiumShopWindow(IBattlepassPremiumShopView premiumShopView, BattlepassSeason battlepassSeason);
 
 		void OnBuyPremiumRequested(int packageIndex);
 

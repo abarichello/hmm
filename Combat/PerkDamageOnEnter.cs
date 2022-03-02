@@ -47,10 +47,15 @@ namespace HeavyMetalMachines.Combat
 		protected void OnTriggerEnter(Collider other)
 		{
 			CombatObject combat = CombatRef.GetCombat(other);
-			if (this.Effect.CheckHit(combat))
+			if (!this.Effect.CheckHit(combat))
 			{
-				this._hittedThroughEnter.Add(combat.Id.ObjId);
+				return;
 			}
+			if (this.IgnoreOwnerTriggerEnter && this.Effect.Owner.ObjId == combat.Id.ObjId)
+			{
+				return;
+			}
+			this._hittedThroughEnter.Add(combat.Id.ObjId);
 		}
 
 		protected void OnTriggerExit(Collider other)
@@ -73,6 +78,14 @@ namespace HeavyMetalMachines.Combat
 			CombatObject combatObject2 = null;
 			bool flag = false;
 			CombatObject combat = CombatRef.GetCombat(other);
+			if (null == combat)
+			{
+				return;
+			}
+			if (this.IgnoreOwnerTriggerEnter && this.Effect.Owner.ObjId == combat.Id.ObjId)
+			{
+				return;
+			}
 			switch (this.Mode)
 			{
 			case PerkDamageOnEnter.ModeEnum.DamageOtherAndOwner:
@@ -111,8 +124,8 @@ namespace HeavyMetalMachines.Combat
 			}
 			if (flag)
 			{
-				Vector3 direction = combatObject.transform.position - base._trans.position;
-				if (combatObject && combatObject2 && (this.DamageThroughScenery || !Physics.Raycast(base._trans.position, direction, direction.magnitude, 512)))
+				Vector3 vector = combatObject.transform.position - base._trans.position;
+				if (combatObject && combatObject2 && (this.DamageThroughScenery || !Physics.Raycast(base._trans.position, vector, vector.magnitude, 512)))
 				{
 					this._hitted.Add(combatObject2.Id.ObjId);
 					base.ApplyDamage(combatObject, combatObject2, isBarrier, this.Effect.Data.Direction, this.Effect.transform.position);
@@ -120,7 +133,7 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
-		public override void OnDestroyEffect(DestroyEffect evt)
+		public override void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (GameHubBehaviour.Hub.Net.IsClient())
 			{
@@ -159,9 +172,13 @@ namespace HeavyMetalMachines.Combat
 
 		public BasePerk.DamageSource DamageOnDestroySource;
 
-		private HashSet<int> _hitted = new HashSet<int>();
+		[SerializeField]
+		[Tooltip("Workaround for OnTriggerEnter behaviour change in Unity 2018")]
+		private bool IgnoreOwnerTriggerEnter;
 
-		private HashSet<int> _hittedThroughEnter = new HashSet<int>();
+		private readonly HashSet<int> _hitted = new HashSet<int>();
+
+		private readonly HashSet<int> _hittedThroughEnter = new HashSet<int>();
 
 		public enum ModeEnum
 		{

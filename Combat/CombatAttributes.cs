@@ -2,13 +2,14 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using HeavyMetalMachines.Combat.Gadget;
+using HeavyMetalMachines.Playback.Snapshot;
 using HeavyMetalMachines.UpdateStream;
 using Pocketverse;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class CombatAttributes : StreamContent
+	public class CombatAttributes : StreamContent, ICombatAttributesSerialData, IBaseStreamSerialData<ICombatAttributesSerialData>
 	{
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatAttributes.StreamAppliedListener OnStreamApplied;
@@ -616,6 +617,15 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
+		public HashSet<int> Status
+		{
+			get
+			{
+				this.CheckDirty();
+				return this._status;
+			}
+		}
+
 		public Vector3 ImmobilizedDirection
 		{
 			get
@@ -633,6 +643,8 @@ namespace HeavyMetalMachines.Combat
 				return this._supressedTags;
 			}
 		}
+
+		public bool ForceInvincible { get; set; }
 
 		public bool IsInvulnerable
 		{
@@ -858,6 +870,7 @@ namespace HeavyMetalMachines.Combat
 			this._lateralFriction.Set(0f);
 			this._lateralFrictionPct.Set(0f);
 			this._currentStatus = StatusKind.None;
+			this._status.Clear();
 			this._cooldownReductionGadget0.Set(0f);
 			this._cooldownReductionGadget1.Set(0f);
 			this._cooldownReductionGadget2.Set(0f);
@@ -1276,13 +1289,17 @@ namespace HeavyMetalMachines.Combat
 					this._drag = 0f;
 					this._dragPct = 0f;
 				}
+				if (mod.Data.Status.HasFlag(StatusKind.NewStatusModifier))
+				{
+					mod.Info.NewModifier.Apply(mod.Causer, this.Combat, GameHubBehaviour.Hub.GetContext());
+				}
 			}
 		}
 
 		public override int GetStreamData(ref byte[] data, bool boForceSerialization)
 		{
 			this.CheckDirty();
-			Pocketverse.BitStream stream = base.GetStream();
+			BitStream stream = base.GetStream();
 			this._hpMax.Serialize(stream, boForceSerialization);
 			this._hpRegen.Serialize(stream, boForceSerialization);
 			this._hpPureDamage.Serialize(stream, boForceSerialization);
@@ -1351,12 +1368,18 @@ namespace HeavyMetalMachines.Combat
 			this._powerPct.Serialize(stream, 2, boForceSerialization);
 			stream.WriteBool(this.ForceInvincible);
 			stream.WriteCompressedInt((int)this._currentStatus);
+			if (this._statusArray.Length != this._status.Count)
+			{
+				this._statusArray = new int[this._status.Count];
+			}
+			this._status.CopyTo(this._statusArray);
+			stream.WriteIntArray(this._statusArray);
 			return stream.CopyToArray(data);
 		}
 
 		public override void ApplyStreamData(byte[] data)
 		{
-			Pocketverse.BitStream streamFor = base.GetStreamFor(data);
+			BitStream streamFor = base.GetStreamFor(data);
 			this._isDirty = false;
 			this._hpMax.DeSerialize(streamFor);
 			this._hpRegen.DeSerialize(streamFor);
@@ -1426,6 +1449,15 @@ namespace HeavyMetalMachines.Combat
 			this._powerPct.DeSerialize(streamFor, 2);
 			this.ForceInvincible = streamFor.ReadBool();
 			this._currentStatus = (StatusKind)streamFor.ReadCompressedInt();
+			this._status.Clear();
+			if (streamFor.ReadBool())
+			{
+				int num = streamFor.ReadCompressedInt();
+				for (int i = 0; i < num; i++)
+				{
+					this._status.Add(streamFor.ReadCompressedInt());
+				}
+			}
 			if (this.OnStreamApplied != null)
 			{
 				this.OnStreamApplied();
@@ -1439,9 +1471,84 @@ namespace HeavyMetalMachines.Combat
 			this._isDirty = false;
 		}
 
-		public static readonly BitLogger Log = new BitLogger(typeof(CombatAttributes));
+		public void Apply(ICombatAttributesSerialData other)
+		{
+			this._hpMax = other.HPMax;
+			this._hpMaxPct = other.HPMaxPct;
+			this._hpRegen = other.HPRegen;
+			this._hpRegenPct = other.HPRegenPct;
+			this._hpPartialRegenPct = other.HPPartialRegenPct;
+			this._hpPureDamage = other.HPPureDamage;
+			this._hpPureDamagePct = other.HPPureDamagePct;
+			this._hpPureArmor = other.HPPureArmor;
+			this._hpPureArmorPct = other.HPPureArmorPct;
+			this._epMax = other.EPMax;
+			this._epMaxPct = other.EPMaxPct;
+			this._epRegen = other.EPRegen;
+			this._epRegenPct = other.EPRegenPct;
+			this._epPartialRegenPct = other.EPPartialRegenPct;
+			this._accelPct = other.AccelerationModPct;
+			this._accel = other.AccelerationMod;
+			this._backwardAccelPct = other.BackAccelModPct;
+			this._backwardAccel = other.BackAccelMod;
+			this._brakeAccelPct = other.BrakeAccelModPct;
+			this._brakeAccel = other.BrakeAccelMod;
+			this._gripExtraFwdAccelerationPct = other.GripExtraFwdAccelModPct;
+			this._gripExtraFwdAcceleration = other.GripExtraFwdAccelMod;
+			this._gripExtraBackAccelerationPct = other.GripExtraBackAccelModPct;
+			this._gripExtraBackAcceleration = other.GripExtraBackAccelMod;
+			this._drag = other.DragMod;
+			this._dragPct = other.DragModPct;
+			this._driftDrag = other.DriftDragMod;
+			this._driftDragPct = other.DriftDragModPct;
+			this._lateralFriction = other.LateralFriction;
+			this._lateralFrictionPct = other.LateralFrictionPct;
+			this._hpLightDamage = other.HPLightDamage;
+			this._hpLightDamagePct = other.HPLightDamagePct;
+			this._hpLightArmor = other.HPLightArmor;
+			this._hpLightArmorPct = other.HPLightArmorPct;
+			this._hpHeavyDamage = other.HPHeavyDamage;
+			this._hpHeavyDamagePct = other.HPHeavyDamagePct;
+			this._hpHeavyArmor = other.HPHeavyArmor;
+			this._hpHeavyArmorPct = other.HPHeavyArmorPct;
+			this._hpRepairArmor = other.HPRepairArmor;
+			this._hpRepairArmorPct = other.HPRepairArmorPct;
+			this._fireRate = other.FireRate;
+			this._fireRatePct = other.FireRatePct;
+			this._scrapBonus = other.ScrapBonus;
+			this._scrapBonusPct = other.ScrapBonusPct;
+			this._powerPct = other.PowerPct;
+			this._mass = other.Mass;
+			this._massPct = other.MassPct;
+			this._pushForceModPct = other.PushForcePct;
+			this._pushReceivedModPct = other.PushReceivedPct;
+			this._sceneryBouncinessModPct = other.SceneryBouncinessPct;
+			this._turningRadius = other.TurningRadius;
+			this._turningRadiusPct = other.TurningRadiusPct;
+			this._maxAngularPush = other.MaxAngularPush;
+			this._maxAngularPushPct = other.MaxAngularPushPct;
+			this._forcedAngularPush = other.ForcedAngularPush;
+			this._maxAngularSpeed = other.MaxAngularSpeed;
+			this._maxAngularSpeedPct = other.MaxAngularSpeedPct;
+			this._cooldownReductionGadget0 = other.CooldownReductionGadget0;
+			this._cooldownReductionGadget1 = other.CooldownReductionGadget1;
+			this._cooldownReductionGadget2 = other.CooldownReductionGadget2;
+			this._cooldownReductionGadgetB = other.CooldownReductionGadgetB;
+			this._cooldownReductionGadget0Pct = other.CooldownReductionGadget0Pct;
+			this._cooldownReductionGadget1Pct = other.CooldownReductionGadget1Pct;
+			this._cooldownReductionGadget2Pct = other.CooldownReductionGadget2Pct;
+			this._cooldownReductionGadgetBPct = other.CooldownReductionGadgetBPct;
+			this._crowdControlReduction = other.CrowdControlReduction;
+			this._currentStatus = other.CurrentStatus;
+			this.ForceInvincible = other.ForceInvincible;
+			this._status.Clear();
+			foreach (int item in other.Status)
+			{
+				this._status.Add(item);
+			}
+		}
 
-		public bool ForceInvincible;
+		public static readonly BitLogger Log = new BitLogger(typeof(CombatAttributes));
 
 		private SDeltaSerializableValue<float> _hpMax;
 
@@ -1574,6 +1681,10 @@ namespace HeavyMetalMachines.Combat
 		private SDeltaSerializableValue<float> _lateralFriction;
 
 		private SDeltaSerializableValue<float> _lateralFrictionPct;
+
+		private HashSet<int> _status = new HashSet<int>();
+
+		private int[] _statusArray = new int[0];
 
 		private StatusKind _currentStatus;
 

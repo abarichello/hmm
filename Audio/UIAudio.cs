@@ -76,15 +76,15 @@ namespace HeavyMetalMachines.Audio
 			}
 		}
 
-		public FMODAsset OnClickAudio;
+		public AudioEventAsset OnClickAudio;
 
 		public UIButtonColor.UIMouseButton MouseButton = UIButtonColor.UIMouseButton.Left;
 
-		public FMODAsset OnMouseOverAudio;
+		public AudioEventAsset OnMouseOverAudio;
 
-		public FMODAsset OnMouseOverOutAudio;
+		public AudioEventAsset OnMouseOverOutAudio;
 
-		public FMODAsset OnPressAudio;
+		public AudioEventAsset OnPressAudio;
 
 		private bool mIsOver;
 

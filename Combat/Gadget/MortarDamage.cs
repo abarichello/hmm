@@ -25,11 +25,11 @@ namespace HeavyMetalMachines.Combat.Gadget
 			float num = this._moveSpeed;
 			float lifeTime = myInfo.LifeTime;
 			bool fixedMoveSpeed = myInfo.FixedMoveSpeed;
-			Vector3 a = base.Target;
-			a.y = position.y;
-			a -= position;
-			Vector3 normalized = a.normalized;
-			float num2 = a.magnitude;
+			Vector3 vector = base.Target;
+			vector.y = position.y;
+			vector -= position;
+			Vector3 normalized = vector.normalized;
+			float num2 = vector.magnitude;
 			Vector3 target;
 			if (num2 > range)
 			{

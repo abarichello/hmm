@@ -11,7 +11,7 @@ namespace HeavyMetalMachines.Combat
 		{
 			if (GameHubBehaviour.Hub.Net.IsServer())
 			{
-				UnityEngine.Object.Destroy(this);
+				Object.Destroy(this);
 				return;
 			}
 			GameHubBehaviour.Hub.BombManager.ListenToBombUnspawn += this.OnBombTaken;

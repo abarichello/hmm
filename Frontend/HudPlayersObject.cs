@@ -1,13 +1,10 @@
 ﻿using System;
-using System.Collections;
-using System.Collections.Generic;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids;
-using FMod;
 using HeavyMetalMachines.Announcer;
 using HeavyMetalMachines.Bank;
 using HeavyMetalMachines.Combat;
-using HeavyMetalMachines.Combat.Gadget;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Players.Business;
 using HeavyMetalMachines.VFX;
 using HeavyMetalMachines.VFX.PlotKids.VoiceChat;
 using Pocketverse;
@@ -20,6 +17,7 @@ namespace HeavyMetalMachines.Frontend
 		private void Start()
 		{
 			SpectatorController.EvtWatchCar += this.OnWatchCar_UpdadeFeedbackIcon;
+			this._position = this.ThumbGrey.transform.localPosition;
 		}
 
 		public void Setup(PlayerStats playerScrapData, CombatObject combatObject, SpawnController spawnController, string userId)
@@ -28,26 +26,22 @@ namespace HeavyMetalMachines.Frontend
 			this._combatObject = combatObject;
 			PlayerData player = combatObject.Player;
 			this._botControlledGameObject.SetActive(!player.IsBot && (player.IsBotControlled || !player.Connected));
+			HudPlayersObject.Log.DebugFormat("Setup players object. Name:{0} IsControlled:{1}, isConnected:{2}", new object[]
+			{
+				player.Name,
+				player.IsBotControlled,
+				player.Connected
+			});
 			this._combatObjectId = this._combatObject.Id.ObjId;
 			this._combatObject.ListenToObjectSpawn += this.OnCombatObjecSpawn;
 			this._combatObject.ListenToObjectUnspawn += this.OnCombatObjecUnspawn;
 			this.RespawnController.Configure(this._combatObject);
-			if (SpectatorController.IsSpectating)
+			if (!SpectatorController.IsSpectating)
 			{
-				this._groupIconsFeedback.gameObject.SetActive(true);
-			}
-			else
-			{
-				this._groupIconsFeedback.gameObject.SetActive(true);
 				this._portraitSpectatorButton.enabled = false;
 			}
-			this._lastUpgradedLevel = new Dictionary<string, int>[4];
-			for (int i = 0; i < 4; i++)
-			{
-				this._lastUpgradedLevel[i] = new Dictionary<string, int>();
-			}
 			GameHubBehaviour.Hub.Announcer.ListenToEvent += this.ListenToAnnouncerEvent;
-			this._voiceChatStatus.Setup(player.UserId, player.IsBot, player.Team != GameHubBehaviour.Hub.Players.CurrentPlayerData.Team);
+			this._voiceChatStatus.Setup(player.ConvertToPlayer(), player.IsBot, player.Team != GameHubBehaviour.Hub.Players.CurrentPlayerData.Team);
 		}
 
 		private void OnCombatObjecSpawn(CombatObject combatObject, SpawnEvent msg)
@@ -60,21 +54,14 @@ namespace HeavyMetalMachines.Frontend
 			this.ThumbConfig(false);
 			if (this._combatObject.IsBot && GameHubBehaviour.Hub.Match.LevelIsTutorial())
 			{
-				UnityEngine.Object.Destroy(base.gameObject);
+				Object.Destroy(base.gameObject);
 			}
 		}
 
 		private void ThumbConfig(bool isAlive)
 		{
-			this.ThumbGrey.enabled = !isAlive;
-			if (!isAlive)
-			{
-				this.Thumb.alpha = 0.5f;
-			}
-			else
-			{
-				this.Thumb.alpha = 1f;
-			}
+			this.ThumbGrey.transform.localPosition = (isAlive ? (Vector3.up * 10000f) : this._position);
+			this.Thumb.alpha = ((!isAlive) ? 0.5f : 1f);
 		}
 
 		public void Update()
@@ -104,13 +91,9 @@ namespace HeavyMetalMachines.Frontend
 			{
 				color = this.CurrentPlayerColor;
 			}
-			else if (isSameTeam)
-			{
-				color = Color.cyan;
-			}
 			else
 			{
-				color = Color.red;
+				color = ((!isSameTeam) ? Color.red : Color.cyan);
 			}
 			this.BorderPortraitUi2DSprite.color = color;
 			this.BombSprite.color = color;
@@ -131,24 +114,11 @@ namespace HeavyMetalMachines.Frontend
 			{
 				this._combatObject.ListenToObjectSpawn -= this.OnCombatObjecSpawn;
 				this._combatObject.ListenToObjectUnspawn -= this.OnCombatObjecUnspawn;
-				this._combatObject.CustomGadget0.ListenToGadgetSetLevel -= this.onGadgetSetLevel;
-				this._combatObject.CustomGadget1.ListenToGadgetSetLevel -= this.onGadgetSetLevel;
-				this._combatObject.CustomGadget2.ListenToGadgetSetLevel -= this.onGadgetSetLevel;
-				this._combatObject.GenericGadget.ListenToGadgetSetLevel -= this.onGadgetSetLevel;
-				if (this._lastUpgradedLevel != null)
-				{
-					for (int i = 0; i < 4; i++)
-					{
-						this._lastUpgradedLevel[i].Clear();
-						this._lastUpgradedLevel[i] = null;
-					}
-				}
-				this._lastUpgradedLevel = null;
 			}
 			SpectatorController.EvtWatchCar -= this.OnWatchCar_UpdadeFeedbackIcon;
 		}
 
-		private void ListenToAnnouncerEvent(AnnouncerManager.QueuedAnnouncerLog queuedAnnouncerLog)
+		private void ListenToAnnouncerEvent(QueuedAnnouncerLog queuedAnnouncerLog)
 		{
 			if (queuedAnnouncerLog.AnnouncerEvent.AnnouncerEventKind != AnnouncerLog.AnnouncerEventKinds.BotControllerActivated && queuedAnnouncerLog.AnnouncerEvent.AnnouncerEventKind != AnnouncerLog.AnnouncerEventKinds.BotControllerDeactivated)
 			{
@@ -161,128 +131,12 @@ namespace HeavyMetalMachines.Frontend
 			this._botControlledGameObject.SetActive(queuedAnnouncerLog.AnnouncerEvent.AnnouncerEventKind == AnnouncerLog.AnnouncerEventKinds.BotControllerActivated);
 		}
 
-		private void onGadgetSetLevel(GadgetBehaviour gadget, string upgradeName, int level)
-		{
-			if (!gadget.IsUpgradeInShop(upgradeName))
-			{
-				return;
-			}
-			int gadgetHashTableIndex = this.GetGadgetHashTableIndex(gadget.Slot);
-			if (gadgetHashTableIndex < 0 || gadgetHashTableIndex >= 4)
-			{
-				return;
-			}
-			int num;
-			if (this._lastUpgradedLevel[gadgetHashTableIndex].TryGetValue(upgradeName, out num))
-			{
-				this._lastUpgradedLevel[gadgetHashTableIndex][upgradeName] = level;
-			}
-			else
-			{
-				this._lastUpgradedLevel[gadgetHashTableIndex].Add(upgradeName, level);
-				num = level;
-			}
-			if (num == level)
-			{
-				return;
-			}
-			if (SingletonMonoBehaviour<PanelController>.Instance.IsModalOfTypeOpened<SpectatorModalGUI>())
-			{
-				return;
-			}
-			if (base.gameObject.activeInHierarchy && level > num)
-			{
-				base.StartCoroutine(this.DisplayGadgetFeedback(gadget, upgradeName, level, num));
-			}
-		}
-
-		private int GetGadgetHashTableIndex(GadgetSlot slot)
-		{
-			switch (slot)
-			{
-			case GadgetSlot.CustomGadget0:
-				return 0;
-			case GadgetSlot.CustomGadget1:
-				return 1;
-			case GadgetSlot.CustomGadget2:
-				return 2;
-			case GadgetSlot.GenericGadget:
-				return 3;
-			}
-			HudPlayersObject.Log.Error("Invalid Gadget Slot");
-			return -1;
-		}
-
-		private IEnumerator DisplayGadgetFeedback(GadgetBehaviour gadget, string upgradeName, int level, int lastLevel)
-		{
-			while (GameHubBehaviour.Hub.Match.State != MatchData.MatchState.MatchStarted || this._isAnimationPlaying || this.BombScoredStatus())
-			{
-				yield return null;
-			}
-			this._isAnimationPlaying = true;
-			this._feedbackEffectGameObject.SetActive(true);
-			Animation feedbackEffectAnimation = this._feedbackEffectGameObject.GetComponent<Animation>();
-			feedbackEffectAnimation.Play("BaseAnimation");
-			base.StartCoroutine(this.DisableShowedFeedback());
-			FMODAudioManager.PlayOneShotAt(this._upgradeFeedbackAudio, base.transform.position, 0);
-			this._feedbackSellGameObject.SetActive(level < lastLevel);
-			bool changeAndDisplayIcon = level > lastLevel || this._feedbackRevertGameObject.activeSelf || this._feedbackSellGameObject.activeSelf;
-			if (changeAndDisplayIcon)
-			{
-				GadgetBehaviour.UpgradeInstance[] upgrades = gadget.Upgrades;
-				GadgetBehaviour.UpgradeInstance upgradeInstance = null;
-				for (int i = 0; i < upgrades.Length; i++)
-				{
-					if (upgrades[i].Info.Name.Equals(upgradeName))
-					{
-						upgradeInstance = upgrades[i];
-						break;
-					}
-				}
-				if (upgradeInstance != null)
-				{
-					string instanceIconName = HudUtils.GetInstanceIconName(gadget.Combat.Player.Character.Asset, upgradeInstance.Info, true);
-					for (int j = 0; j < this._instanceIconSprites.Length; j++)
-					{
-						this._instanceIconSprites[j].SpriteName = instanceIconName;
-					}
-				}
-				this._feedbackUpgradeGameObject.SetActive(true);
-				Animation component = this._feedbackUpgradeGameObject.GetComponent<Animation>();
-				component.Play("PurshaseAnimation");
-			}
-			yield break;
-		}
-
-		private IEnumerator DisableShowedFeedback()
-		{
-			yield return base.StartCoroutine(UnityUtils.WaitForSecondsRealTime(this.DelayToDisableFeedback));
-			Animation feedbackEffectAnimation = this._feedbackEffectGameObject.GetComponent<Animation>();
-			feedbackEffectAnimation.Play("ExitBaseAnimation");
-			Animation feedbackUpgradeAnimation = this._feedbackUpgradeGameObject.GetComponent<Animation>();
-			feedbackUpgradeAnimation.Play("ExitFeed");
-			while (feedbackEffectAnimation.isPlaying)
-			{
-				yield return null;
-			}
-			this._isAnimationPlaying = false;
-			this._feedbackSellGameObject.SetActive(false);
-			this._feedbackUpgradeGameObject.SetActive(false);
-			this._feedbackEffectGameObject.SetActive(false);
-			this._feedbackRevertGameObject.SetActive(false);
-			yield break;
-		}
-
-		private bool BombScoredStatus()
-		{
-			return GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreBoard.State.PreReplay || GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreBoard.State.Replay;
-		}
-
 		private void OnWatchCar_UpdadeFeedbackIcon(CombatObject combatObject)
 		{
 			if (combatObject != null && combatObject == this._combatObject)
 			{
 				this._isBeeingWatchedIconIsActive = true;
+				this._isBeingWatchedIconAnimator.ResetTrigger("Exit");
 				this._isBeingWatchedIconAnimator.SetTrigger("Select");
 				return;
 			}
@@ -291,6 +145,7 @@ namespace HeavyMetalMachines.Frontend
 				return;
 			}
 			this._isBeeingWatchedIconIsActive = false;
+			this._isBeingWatchedIconAnimator.ResetTrigger("Select");
 			this._isBeingWatchedIconAnimator.SetTrigger("Exit");
 		}
 
@@ -317,8 +172,6 @@ namespace HeavyMetalMachines.Frontend
 
 		public GameObject Disconnected;
 
-		public GameObject Collider;
-
 		public UILabel PlayerNameLabel;
 
 		public GameObject PlayerNameGO;
@@ -342,44 +195,15 @@ namespace HeavyMetalMachines.Frontend
 		[SerializeField]
 		private UI2DSprite _botControlledSprite;
 
-		[SerializeField]
-		private HMMUI2DDynamicSprite[] _instanceIconSprites;
-
 		private int _combatObjectId = -1;
-
-		private Dictionary<string, int>[] _lastUpgradedLevel;
 
 		[SerializeField]
 		private UIButtonToggled _portraitSpectatorButton;
 
 		[SerializeField]
-		private GameObject _isBeingWatchedIcon;
-
-		[SerializeField]
 		private Animator _isBeingWatchedIconAnimator;
 
-		[Header("FeedBack upgrade itens")]
-		private Dictionary<string, int> _gadgetUpgrades;
-
-		[SerializeField]
-		private Transform _groupIconsFeedback;
-
-		[SerializeField]
-		private GameObject _feedbackEffectGameObject;
-
-		[SerializeField]
-		private GameObject _feedbackUpgradeGameObject;
-
-		[SerializeField]
-		private GameObject _feedbackRevertGameObject;
-
-		[SerializeField]
-		private GameObject _feedbackSellGameObject;
-
-		[SerializeField]
-		private FMODAsset _upgradeFeedbackAudio;
-
-		public List<HudTabPlayer.HudTabGadgetInfo> GadgetInfos;
+		private Vector3 _position;
 
 		private bool _isAnimationPlaying;
 

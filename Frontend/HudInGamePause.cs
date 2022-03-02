@@ -1,15 +1,39 @@
 ﻿using System;
 using System.Collections;
 using FMod;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Input;
+using HeavyMetalMachines.Input.ControllerInput;
+using HeavyMetalMachines.Localization;
+using HeavyMetalMachines.Match;
 using HeavyMetalMachines.Options;
+using HeavyMetalMachines.Pause;
 using HeavyMetalMachines.PostProcessing;
+using HeavyMetalMachines.Presenting;
+using HeavyMetalMachines.Presenting.Unity;
+using HeavyMetalMachines.VFX;
+using Hoplon.Input;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Frontend
 {
-	public class HudInGamePause : HudWindow
+	public class HudInGamePause : HudWindow, IPausePresenter
 	{
+		public bool Visible
+		{
+			get
+			{
+				return this.IsVisible;
+			}
+		}
+
+		public IObservable<bool> VisibilityChanged()
+		{
+			return this._visibilityObservation;
+		}
+
 		public static HudInGamePause Instance
 		{
 			get
@@ -44,37 +68,85 @@ namespace HeavyMetalMachines.Frontend
 			this.currentUnpauseSecond = -1;
 			this.ChangeWindowVisibility(false);
 			this.SetUnpauseCountdownTimer(0f);
+			this._visibilityObservation = new Subject<bool>();
 			PauseController.OnNotification += this.OnNotification;
 		}
 
 		private void Start()
 		{
-			string textlocalized = ControlOptions.GetTextlocalized(ControlAction.Pause, ControlOptions.ControlActionInputType.Primary);
-			string text = Language.Get("PAUSE_GAME_UNPAUSE_HINT", TranslationSheets.GUI);
-			text = string.Format(text, textlocalized);
-			this.descriptionLabel.text = text;
+			this.UpdateKeyInfo();
+			this.descriptionLabel.text = Language.Get("PAUSE_GAME_UNPAUSE_HINT", TranslationContext.GUI);
+			this._inputActiveDeviceChangeNotifierDisposable = ObservableExtensions.Subscribe<InputDevice>(Observable.Do<InputDevice>(this._inputActiveDeviceChangeNotifier.ObserveActiveDeviceChange(), delegate(InputDevice activeDevice)
+			{
+				this.UpdateKeyInfo();
+			}));
+		}
+
+		private void UpdateKeyInfo()
+		{
+			bool flag = this._inputGetActiveDevicePoller.GetActiveDevice() == 3;
+			ControllerInputActions controllerInputActions = (!flag) ? 20 : 50;
+			ISprite sprite;
+			string text;
+			this._inputTranslation.TryToGetInputActionActiveDeviceAssetOrFallbackToTranslation(controllerInputActions, ref sprite, ref text);
+			if (flag)
+			{
+				this.KeyGameObject.SetActive(false);
+				this.descriptionKeySprite.transform.parent.gameObject.SetActive(true);
+				this.descriptionKeySprite.sprite2D = (sprite as UnitySprite).GetSprite();
+				return;
+			}
+			this.descriptionKeySprite.transform.parent.gameObject.SetActive(false);
+			this.KeyGameObject.SetActive(true);
+			this.KeyLabel.text = text;
 		}
 
 		public override void OnDestroy()
 		{
 			base.OnDestroy();
 			PauseController.OnNotification -= this.OnNotification;
+			this._visibilityObservation.Dispose();
 			if (HudInGamePause.instance == this)
 			{
 				HudInGamePause.instance = null;
+			}
+			if (this._inputActiveDeviceChangeNotifierDisposable != null)
+			{
+				this._inputActiveDeviceChangeNotifierDisposable.Dispose();
+				this._inputActiveDeviceChangeNotifierDisposable = null;
 			}
 		}
 
 		private void Update()
 		{
-			if (this.IsVisible && this.unpauseCountdownTimer > 0f)
+			if (this.IsVisible)
 			{
-				this.unpauseCountdownTimer -= Time.unscaledDeltaTime;
-				if (this.unpauseCountdownTimer < 0f)
+				if (this.unpauseCountdownTimer > 0f)
 				{
-					this.unpauseCountdownTimer = 0f;
+					this.unpauseCountdownTimer -= Time.unscaledDeltaTime;
+					if (this.unpauseCountdownTimer < 0f)
+					{
+						this.unpauseCountdownTimer = 0f;
+					}
+					this.SetUnpauseCountdownTimer(this.unpauseCountdownTimer);
 				}
-				this.SetUnpauseCountdownTimer(this.unpauseCountdownTimer);
+				if (this._currentSettings.ShouldUseTimePool && this._currentSettings.ShouldCheckActivationLimit && PauseController.Instance.CurrentState == PauseController.PauseState.Paused)
+				{
+					PlayerData lastPlayerWhoToggled = PauseController.Instance.GetLastPlayerWhoToggled();
+					if (!lastPlayerWhoToggled.IsNarrator)
+					{
+						PauseController.TeamPauseData pauseDataOnClient = PauseController.Instance.GetPauseDataOnClient(lastPlayerWhoToggled.Team);
+						int num = (pauseDataOnClient.TimeoutMillis - GameHubBehaviour.Hub.GameTime.GetSynchTime()) / 1000;
+						int num2 = Mathf.FloorToInt((float)num);
+						this.SetTeamActivation(pauseDataOnClient.ActivationRemaining);
+						this.SetTeamCountdownTimer(num2);
+						if (num2 != this.previousTeamCountdownTime)
+						{
+							this.RecolorSideFeeback(num2 > 0 && pauseDataOnClient.ActivationRemaining > 0);
+							this.previousTeamCountdownTime = num2;
+						}
+					}
+				}
 			}
 			if (this.blockMessageTimer > 0f)
 			{
@@ -86,6 +158,25 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
+		public override void ChangeWindowVisibility(bool visible)
+		{
+			bool isVisible = this.IsVisible;
+			base.ChangeWindowVisibility(visible);
+			if (isVisible != this.IsVisible)
+			{
+				this._visibilityObservation.OnNext(this.IsVisible);
+			}
+		}
+
+		private InGamePauseTeamConfiguration GetInGamePauseTeamConfiguration(PlayerData playerWhoToggled)
+		{
+			if (playerWhoToggled.Team == GameHubBehaviour.Hub.Players.CurrentPlayerTeam)
+			{
+				return this.allyTeamConfiguration;
+			}
+			return this.enemyTeamConfiguration;
+		}
+
 		public void OnPauseTitleAnimationEnd()
 		{
 			if (!this._pauseTitleOutAnimationStarted)
@@ -93,8 +184,13 @@ namespace HeavyMetalMachines.Frontend
 				return;
 			}
 			this._pauseTitleOutAnimationEnded = true;
+			HudInGamePause.Log.DebugFormat("OnPauseTitleAnimationEnd", new object[0]);
 			if (!PauseController.Instance.IsGamePaused)
 			{
+				HudInGamePause.Log.DebugFormat("game is not paused, will not start countdown animation. curent state {0}", new object[]
+				{
+					PauseController.Instance.IsGamePaused
+				});
 				return;
 			}
 			this.unpauseCountdownTextAnimator.SetBool("active", true);
@@ -105,14 +201,79 @@ namespace HeavyMetalMachines.Frontend
 		{
 			if (this.showPauseCoroutine != null)
 			{
+				HudInGamePause.Log.DebugFormat("Stop old coroutine", new object[0]);
 				base.StopCoroutine(this.showPauseCoroutine);
+			}
+			if (show)
+			{
+				this.InitializeHudElements();
 			}
 			this.showPauseCoroutine = base.StartCoroutine(this.ShowPauseStateCoroutine(show, delayTime));
 		}
 
+		private void InitializeHudElements()
+		{
+			this._currentSettings = PauseController.Instance.PauseSettingsData;
+			PlayerData lastPlayerWhoToggled = PauseController.Instance.GetLastPlayerWhoToggled();
+			InGamePauseTeamConfiguration inGamePauseTeamConfiguration = this.GetInGamePauseTeamConfiguration(lastPlayerWhoToggled);
+			HudInGamePause.Log.DebugFormat("playerWhoToggled {0} currentTeamConfiguration {1} _currentSettings {2}", new object[]
+			{
+				lastPlayerWhoToggled,
+				inGamePauseTeamConfiguration.TitleLabel,
+				this._currentSettings.InitialTimePoolForTeam
+			});
+			if (this._currentSettings.ShouldCheckActivationLimit)
+			{
+				this.sidePanelGameObject.SetActive(true);
+				PauseController.TeamPauseData pauseDataOnClient = PauseController.Instance.GetPauseDataOnClient(lastPlayerWhoToggled.Team);
+				this.SetTeamActivation(pauseDataOnClient.ActivationRemaining);
+				int num = (pauseDataOnClient.TimeoutMillis - GameHubBehaviour.Hub.GameTime.GetSynchTime()) / 1000;
+				this.SetTeamCountdownTimer(num);
+				this.previousTeamCountdownTime = num;
+				this.RecolorSideFeeback(num > 0 && pauseDataOnClient.ActivationRemaining > 0);
+			}
+			else
+			{
+				this.sidePanelGameObject.SetActive(false);
+			}
+			this.TeamBackgroundSprite.color = inGamePauseTeamConfiguration.TeamBackgroundColor;
+			this.sideFeedbackBackgroundSprite.SpriteName = inGamePauseTeamConfiguration.SideFeedbackBackgroundSpriteName;
+			this.titleLabel.text = Language.Get(inGamePauseTeamConfiguration.TitleLabel, TranslationContext.Hud);
+		}
+
+		private void RecolorSideFeeback(bool isOnCooldown)
+		{
+			if (isOnCooldown)
+			{
+				this.teamCountdownTimerLabel.color = this.LabelCountColorOnCountdown;
+				this.teamActivationLabel.color = this.LabelCountColorOnCountdown;
+				this.ChangeSideFeedbackSpritesColor(this.IconColorOnCountdown);
+				this.ChangeSideFeedbackLabelColor(this.LabelColorOnCountdown);
+			}
+			else
+			{
+				this.teamActivationLabel.color = this.LabelCountColorOnTimeout;
+				this.teamCountdownTimerLabel.color = this.LabelCountColorOnTimeout;
+				this.ChangeSideFeedbackSpritesColor(this.IconColorOnTimeout);
+				this.ChangeSideFeedbackLabelColor(this.LabelColorOnTimeout);
+			}
+		}
+
 		private IEnumerator ShowPauseStateCoroutine(bool show, float delayToStart)
 		{
+			HudInGamePause.Log.DebugFormat("ShowPauseStateCoroutine show: {0} - visible: {1} - delayToStart: {2}", new object[]
+			{
+				show,
+				this.IsVisible,
+				delayToStart
+			});
 			yield return base.StartCoroutine(UnityUtils.WaitForSecondsRealTime(delayToStart));
+			HudInGamePause.Log.DebugFormat("ShowPauseStateCoroutine afterdelay show: {0} - visible: {1} - delayToStart: {2}", new object[]
+			{
+				show,
+				this.IsVisible,
+				delayToStart
+			});
 			if (show)
 			{
 				if (!this.IsVisible)
@@ -127,7 +288,7 @@ namespace HeavyMetalMachines.Frontend
 					base.ShowFromUI();
 					GameHubBehaviour.Hub.AnnouncerAudio.PlayPauseAudio();
 					this.SetBorderOverlayBehind(false);
-					PostProcessingState postProcessingState = CarCamera.Singleton.postProcessing.Request("Pause", () => PauseController.Instance.IsGamePaused, false);
+					PostProcessingState postProcessingState = this._postProcessing.Request("Pause", () => PauseController.Instance.IsGamePaused, false);
 					if (postProcessingState != null)
 					{
 						postProcessingState.Enabled = true;
@@ -140,22 +301,29 @@ namespace HeavyMetalMachines.Frontend
 			}
 			else if (this.IsVisible)
 			{
-				base.HideFromUI();
-				this.HideBlockInputMessage();
 				this._pauseTitleOutAnimationStarted = true;
 				this._pauseTitleOutAnimationEnded = false;
 				this.pausedTitleAnimator.SetBool("active", false);
 				this.unpauseCountdownTextAnimator.SetBool("active", false);
 				this.unpauseCounterAnimator.gameObject.SetActive(false);
 				this.ShowBorderOverlay(false);
+				base.HideFromUI();
+				this.HideBlockInputMessage();
 				GameHubBehaviour.Hub.AnnouncerAudio.PlayUnpauseAudio();
 			}
+			HudInGamePause.Log.DebugFormat("ShowPauseStateCoroutine done", new object[0]);
 			yield break;
 		}
 
 		public void ShowPauseScreenBorder(bool show)
 		{
 			this.borderAnimator.SetBool("ShowBorder", show);
+		}
+
+		public void ClearTeamLabels()
+		{
+			this.teamActivationLabel.text = string.Empty;
+			this.teamCountdownTimerLabel.text = string.Empty;
 		}
 
 		public void StartUnpauseCountdownTimer(float countdownDuration)
@@ -177,6 +345,70 @@ namespace HeavyMetalMachines.Frontend
 				{
 					base.StartCoroutine(this.PlayNumberAnimation());
 				}
+				else
+				{
+					HudInGamePause.Log.DebugFormat("Still wait animation to activate time. Timer value:{0}", new object[]
+					{
+						this.currentUnpauseSecond
+					});
+				}
+			}
+		}
+
+		private void ChangeSideFeedbackSpritesColor(Color color)
+		{
+			for (int i = 0; i < this.SideFeedbackChangeColorSprites.Length; i++)
+			{
+				this.SideFeedbackChangeColorSprites[i].color = color;
+			}
+		}
+
+		private void ChangeSideFeedbackLabelColor(Color color)
+		{
+			for (int i = 0; i < this.SideFeedbackChangeColorLabels.Length; i++)
+			{
+				this.SideFeedbackChangeColorLabels[i].color = color;
+			}
+		}
+
+		private void SetTeamActivation(int activation)
+		{
+			if (activation > 0)
+			{
+				this.teamActivationLabel.text = activation.ToString();
+			}
+			else
+			{
+				this.teamActivationLabel.text = "0";
+			}
+		}
+
+		private void SetTeamCountdownTimer(int secondToBeShown)
+		{
+			if (secondToBeShown > 0)
+			{
+				this.teamCountdownTimerLabel.text = string.Format("{0:0}:{1:0#}", Mathf.Floor((float)(secondToBeShown / 60)), Mathf.Floor((float)(secondToBeShown % 60)));
+			}
+			else
+			{
+				this.teamCountdownTimerLabel.text = "0:00";
+			}
+		}
+
+		private void RecolorCountdownTimer(int secondToBeShown)
+		{
+			if (secondToBeShown > 0)
+			{
+				this.teamCountdownTimerLabel.color = this.LabelCountColorOnCountdown;
+				this.ChangeSideFeedbackSpritesColor(this.IconColorOnCountdown);
+				this.ChangeSideFeedbackLabelColor(this.LabelColorOnCountdown);
+			}
+			else
+			{
+				this.teamActivationLabel.color = this.LabelCountColorOnTimeout;
+				this.teamCountdownTimerLabel.color = this.LabelCountColorOnTimeout;
+				this.ChangeSideFeedbackSpritesColor(this.IconColorOnTimeout);
+				this.ChangeSideFeedbackLabelColor(this.LabelColorOnTimeout);
 			}
 		}
 
@@ -240,7 +472,58 @@ namespace HeavyMetalMachines.Frontend
 		private UILabel countdownTimerLabel;
 
 		[SerializeField]
+		private UILabel titleLabel;
+
+		[SerializeField]
 		private UILabel descriptionLabel;
+
+		[SerializeField]
+		private UILabel KeyLabel;
+
+		[SerializeField]
+		private GameObject KeyGameObject;
+
+		[SerializeField]
+		private UI2DSprite descriptionKeySprite;
+
+		[SerializeField]
+		private UILabel teamCountdownTimerLabel;
+
+		[SerializeField]
+		private UILabel teamActivationLabel;
+
+		[SerializeField]
+		private UI2DSprite[] SideFeedbackChangeColorSprites;
+
+		[SerializeField]
+		private UILabel[] SideFeedbackChangeColorLabels;
+
+		[SerializeField]
+		private Color IconColorOnCountdown;
+
+		[SerializeField]
+		private Color IconColorOnTimeout;
+
+		[SerializeField]
+		private Color LabelColorOnCountdown;
+
+		[SerializeField]
+		private Color LabelColorOnTimeout;
+
+		[SerializeField]
+		private Color LabelCountColorOnCountdown;
+
+		[SerializeField]
+		private Color LabelCountColorOnTimeout;
+
+		[SerializeField]
+		private GameObject sidePanelGameObject;
+
+		[SerializeField]
+		private HMMUI2DDynamicSprite sideFeedbackBackgroundSprite;
+
+		[SerializeField]
+		private UI2DSprite TeamBackgroundSprite;
 
 		[SerializeField]
 		private float blockInputMessageDuration = 2.5f;
@@ -249,7 +532,7 @@ namespace HeavyMetalMachines.Frontend
 		private Animator blockInputMessageAnimator;
 
 		[SerializeField]
-		private FMODAsset blockActionAudioAsset;
+		private AudioEventAsset blockActionAudioAsset;
 
 		[SerializeField]
 		private Animator pausedTitleAnimator;
@@ -272,6 +555,12 @@ namespace HeavyMetalMachines.Frontend
 		[SerializeField]
 		private int borderDepthOnPause = 2013;
 
+		[SerializeField]
+		private InGamePauseTeamConfiguration allyTeamConfiguration;
+
+		[SerializeField]
+		private InGamePauseTeamConfiguration enemyTeamConfiguration;
+
 		private static HudInGamePause instance;
 
 		private float blockMessageTimer;
@@ -284,7 +573,27 @@ namespace HeavyMetalMachines.Frontend
 
 		private Coroutine showPauseCoroutine;
 
+		private int previousTeamCountdownTime = -1;
+
+		[InjectOnClient]
+		private IInputTranslation _inputTranslation;
+
+		[InjectOnClient]
+		private IInputActiveDeviceChangeNotifier _inputActiveDeviceChangeNotifier;
+
+		[InjectOnClient]
+		private IInputGetActiveDevicePoller _inputGetActiveDevicePoller;
+
+		[InjectOnClient]
+		private IGamePostProcessing _postProcessing;
+
+		private Subject<bool> _visibilityObservation;
+
+		private IDisposable _inputActiveDeviceChangeNotifierDisposable;
+
 		private GameGui _gameGui;
+
+		private PauseSettings.PauseData _currentSettings;
 
 		private bool _pauseTitleOutAnimationStarted;
 

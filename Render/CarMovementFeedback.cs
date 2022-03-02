@@ -43,7 +43,7 @@ namespace HeavyMetalMachines.Render
 			this._trans = base.transform;
 			if (GameHubBehaviour.Hub != null && GameHubBehaviour.Hub.Net.IsServer() && !GameHubBehaviour.Hub.Net.IsTest())
 			{
-				UnityEngine.Object.Destroy(this);
+				Object.Destroy(this);
 				return;
 			}
 			this.minDeltaAcceleration = 1.8f;
@@ -62,21 +62,21 @@ namespace HeavyMetalMachines.Render
 			}
 			if (this.prefabAccelerationPS && !this.accelerateParticleSystem)
 			{
-				this.accelerateParticleSystem = UnityEngine.Object.Instantiate<HoplonParticleSystem>(this.prefabAccelerationPS, this._trans);
+				this.accelerateParticleSystem = Object.Instantiate<HoplonParticleSystem>(this.prefabAccelerationPS, this._trans);
 				this.accelerateParticleSystem.transform.parent = this._trans;
 				this.accelerateParticleSystem.transform.localPosition = zero;
 				this.accelerateParticleSystem.transform.localRotation = Quaternion.identity;
 			}
 			if (this.prefabBrakePS && !this.brakeParticleSystem)
 			{
-				this.brakeParticleSystem = UnityEngine.Object.Instantiate<HoplonParticleSystem>(this.prefabBrakePS, this._trans);
+				this.brakeParticleSystem = Object.Instantiate<HoplonParticleSystem>(this.prefabBrakePS, this._trans);
 				this.brakeParticleSystem.transform.parent = this._trans;
 				this.brakeParticleSystem.transform.localPosition = zero;
 				this.brakeParticleSystem.transform.localRotation = Quaternion.identity;
 			}
 			if (this.prefabDriftPS && !this.driftParticleSystem)
 			{
-				this.driftParticleSystem = UnityEngine.Object.Instantiate<HoplonParticleSystem>(this.prefabDriftPS, this._trans);
+				this.driftParticleSystem = Object.Instantiate<HoplonParticleSystem>(this.prefabDriftPS, this._trans);
 				this.driftParticleSystem.transform.parent = this._trans;
 				this.driftParticleSystem.transform.localPosition = zero;
 				this.driftParticleSystem.transform.localRotation = Quaternion.identity;

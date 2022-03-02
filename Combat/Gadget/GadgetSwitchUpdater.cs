@@ -110,7 +110,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			this._gadget.DestroyExistingFiredEffects();
 		}
 
-		public void DestroyEffect(DestroyEffect evt)
+		public void DestroyEffect(DestroyEffectMessage evt)
 		{
 			bool flag = evt.RemoveData.TargetEventId == this._gadget.LastWarmupId && evt.RemoveData.DestroyReason == BaseFX.EDestroyReason.Lifetime;
 			bool flag2 = evt.RemoveData.TargetEventId == this._currentEffectId;

@@ -82,7 +82,7 @@ namespace HeavyMetalMachines.VFX
 				}
 			}
 			this.UpdatePickups();
-			this.CanCollectToCache = (!this._isSpawningEnabled && this._pickups.Size == 0u);
+			this.CanCollectToCache = (!this._isSpawningEnabled && this._pickups.Size == 0U);
 		}
 
 		protected override void OnDeactivate()
@@ -96,17 +96,17 @@ namespace HeavyMetalMachines.VFX
 
 		private void SpawnPickup()
 		{
-			PickupVFX.PickupData item;
-			item.StartTime = Time.time;
-			item.Height = UnityEngine.Random.Range(0.75f, 1.15f) * this.Height;
-			item.Amplitude = ((UnityEngine.Random.value <= 0.5f) ? -1f : 1f) * UnityEngine.Random.Range(0.75f, 1.15f) * this.Amplitude;
-			item.StartPosition = this._originCombat.transform.position;
-			item.MasterVfx = (MasterVFX)GameHubBehaviour.Hub.Resources.PrefabCacheInstantiate(this.PickupPrefab, item.StartPosition, Quaternion.identity);
-			item.MasterVfx.baseMasterVFX = this.PickupPrefab;
-			item.VfxTransform = item.MasterVfx.transform;
-			item.VfxTransform.parent = GameHubBehaviour.Hub.Drawer.Effects;
-			item.MasterVfx.Activate(this._master.TargetFX, item.VfxTransform);
-			this._pickups.Push(item);
+			PickupVFX.PickupData pickupData;
+			pickupData.StartTime = Time.time;
+			pickupData.Height = Random.Range(0.75f, 1.15f) * this.Height;
+			pickupData.Amplitude = ((Random.value <= 0.5f) ? -1f : 1f) * Random.Range(0.75f, 1.15f) * this.Amplitude;
+			pickupData.StartPosition = this._originCombat.transform.position;
+			pickupData.MasterVfx = (MasterVFX)GameHubBehaviour.Hub.Resources.PrefabCacheInstantiate(this.PickupPrefab, pickupData.StartPosition, Quaternion.identity);
+			pickupData.MasterVfx.baseMasterVFX = this.PickupPrefab;
+			pickupData.VfxTransform = pickupData.MasterVfx.transform;
+			GameHubBehaviour.Hub.Drawer.AddEffect(pickupData.VfxTransform);
+			pickupData.MasterVfx.Activate(this._master.TargetFX, pickupData.VfxTransform);
+			this._pickups.Push(pickupData);
 		}
 
 		private void UpdatePickups()
@@ -116,7 +116,7 @@ namespace HeavyMetalMachines.VFX
 			if (flag)
 			{
 				Vector3 position = this._destinationCombat.transform.position;
-				for (uint num2 = 0u; num2 < this._pickups.Size; num2 += 1u)
+				for (uint num2 = 0U; num2 < this._pickups.Size; num2 += 1U)
 				{
 					float num3 = (Time.time - this._pickups[num2].StartTime) * this._invTimeToReach;
 					Vector3 vector = Vector3.Lerp(this._pickups[num2].StartPosition, position, num3);
@@ -129,13 +129,13 @@ namespace HeavyMetalMachines.VFX
 							{
 								Vector3 normalized = Vector3.Cross(position - this._pickups[num2].StartPosition, Vector3.up).normalized;
 								vector.y += -4f * this._pickups[num2].Height * num3 * (num3 - 1f);
-								vector += this._pickups[num2].Amplitude * Mathf.Sin(6.28318548f * (float)this.Octave * num3) * normalized;
+								vector += this._pickups[num2].Amplitude * Mathf.Sin(6.2831855f * (float)this.Octave * num3) * normalized;
 							}
 						}
 						else
 						{
 							Vector3 normalized2 = Vector3.Cross(position - this._pickups[num2].StartPosition, Vector3.up).normalized;
-							vector += this._pickups[num2].Amplitude * Mathf.Sin(6.28318548f * (float)this.Octave * num3) * normalized2;
+							vector += this._pickups[num2].Amplitude * Mathf.Sin(6.2831855f * (float)this.Octave * num3) * normalized2;
 						}
 					}
 					else
@@ -153,7 +153,7 @@ namespace HeavyMetalMachines.VFX
 			}
 			while (num-- > 0)
 			{
-				this._pickups[0u].MasterVfx.Destroy((!flag) ? BaseFX.EDestroyReason.Default : BaseFX.EDestroyReason.HitIdentifiable);
+				this._pickups[0U].MasterVfx.Destroy((!flag) ? BaseFX.EDestroyReason.Default : BaseFX.EDestroyReason.HitIdentifiable);
 				this._pickups.Pop();
 			}
 		}

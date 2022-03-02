@@ -72,14 +72,14 @@ namespace HeavyMetalMachines.VFX
 			for (int i = 0; i < 4; i++)
 			{
 				HMMLifebarSpriteContainer hmmlifebarSpriteContainer = this._panel.spriteContainers[i];
-				float x = (float)((int)Math.Floor((double)hmmlifebarSpriteContainer.transform.localPosition.x));
-				float y = (float)((int)Math.Floor((double)hmmlifebarSpriteContainer.transform.localPosition.y));
-				int num = (int)Math.Floor((double)(25f + (float)(i * 25)));
+				float num = (float)((int)Math.Floor((double)hmmlifebarSpriteContainer.transform.localPosition.x));
+				float num2 = (float)((int)Math.Floor((double)hmmlifebarSpriteContainer.transform.localPosition.y));
+				int num3 = (int)Math.Floor((double)(25f + (float)(i * 25)));
 				hmmlifebarSpriteContainer.InternalWidth = (int)Math.Floor((double)(54f + (float)(i * 9)));
 				int internalWidth = hmmlifebarSpriteContainer.InternalWidth;
-				int num2 = num << 16;
-				num2 += internalWidth;
-				zero.SetRow(i, new Vector4(x, y, (float)num2, 0f));
+				int num4 = num3 << 16;
+				num4 += internalWidth;
+				zero.SetRow(i, new Vector4(num, num2, (float)num4, 0f));
 			}
 			sharedMaterial.SetMatrix(this._spritesPropertyId, zero);
 		}

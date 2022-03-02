@@ -20,5 +20,10 @@ namespace HeavyMetalMachines.Swordfish
 		{
 			GameHubObject.Hub.ClientApi.customws.ExecuteCustomWSWithReturn(null, "BuyFreeDailyBooster", string.Empty, onSuccess, onError);
 		}
+
+		public static void GetAllStoreItems(Guid storeId, SwordfishClientApi.ParameterizedCallback<string> onSuccess, SwordfishClientApi.ErrorCallback onError)
+		{
+			GameHubObject.Hub.ClientApi.customws.ExecuteCustomWSWithReturn(null, "GetAllStoreItems", storeId.ToString(), onSuccess, onError);
+		}
 	}
 }

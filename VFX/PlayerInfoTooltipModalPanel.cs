@@ -1,19 +1,28 @@
 ﻿using System;
 using System.Collections;
 using System.Text;
-using Assets.Standard_Assets.Scripts.HMM.PlotKids.Infra;
-using Assets.Standard_Assets.Scripts.HMM.PlotKids.Social;
+using Assets.ClientApiObjects;
+using Assets.ClientApiObjects.Components;
 using ClientAPI.Objects;
-using HeavyMetalMachines.Character;
+using HeavyMetalMachines.DataTransferObjects.Player;
+using HeavyMetalMachines.Friends.GUI;
 using HeavyMetalMachines.Frontend;
-using HeavyMetalMachines.Swordfish.Player;
+using HeavyMetalMachines.Localization;
+using Hoplon.Serialization;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.VFX
 {
 	public class PlayerInfoTooltipModalPanel : ModalGUIController
 	{
+		private void OnDisable()
+		{
+			this.TryDisposeLoadRankDisposable();
+		}
+
 		protected override void InitDialogTasks()
 		{
 			HudWindowManager.Instance.OnNewWindowAdded += this.OnNewWindowAdded;
@@ -43,8 +52,11 @@ namespace HeavyMetalMachines.VFX
 		{
 			this._hub = GameHubBehaviour.Hub;
 			this._playerNameLabel.text = userFriend.PlayerName;
-			this._iconLoader.UpdatePlayerIcon(userFriend.UniversalID);
-			FriendBag friendBag = ManagerController.Get<FriendManager>().GetFriendBag(userFriend);
+			if (userFriend.IsRegisteredOnServer)
+			{
+				this.LoadRank(userFriend.PlayerId);
+			}
+			FriendBag friendBag = (FriendBag)((JsonSerializeable<!0>)userFriend.Bag);
 			StringBuilder stringBuilder = new StringBuilder();
 			if (friendBag != null)
 			{
@@ -52,17 +64,23 @@ namespace HeavyMetalMachines.VFX
 				stringBuilder.AppendLine(string.Format("[{0}]{1}[-] [{2}]{3} {4}[-]", new object[]
 				{
 					HudUtils.RGBToHex(Color.white),
-					Language.Get("PLAYER_TOOLTIP_MATCHES_WON", TranslationSheets.Help),
+					Language.Get("PLAYER_TOOLTIP_MATCHES_WON", TranslationContext.Help),
 					HudUtils.RGBToHex(this._usedCharacterColor),
 					friendBag.MatchesWon,
-					Language.Get("PLAYER_TOOLTIP_MATCHES_WON_SUFFIX", TranslationSheets.Help)
+					Language.Get("PLAYER_TOOLTIP_MATCHES_WON_SUFFIX", TranslationContext.Help)
 				}));
 				long num = Convert.ToInt64((DateTime.UtcNow - new DateTime(friendBag.LastMatchStartedTime)).TotalMinutes);
-				HeavyMetalMachines.Character.CharacterInfo characterInfo;
-				if (this._hub.InventoryColletion.AllCharactersByInfoId.TryGetValue(friendBag.LastUsedCharacterId, out characterInfo))
+				IItemType itemType;
+				if (this._hub.InventoryColletion.AllCharactersByCharacterId.TryGetValue(friendBag.LastUsedCharacterId, out itemType))
 				{
+					string characterLocalizedName = itemType.GetComponent<CharacterItemTypeComponent>().GetCharacterLocalizedName();
 					string key = (friendBag.HudWindowManagerState != 3) ? "PLAYER_TOOLTIP_LAST_CHARACTER" : "PLAYER_TOOLTIP_CURRENT_CHARACTER";
-					stringBuilder.AppendLine(string.Format(Language.Get(key, TranslationSheets.Help), HudUtils.RGBToHex(this._usedCharacterColor), characterInfo.LocalizedName, num));
+					stringBuilder.AppendLine(Language.GetFormatted(key, TranslationContext.Help, new object[]
+					{
+						HudUtils.RGBToHex(this._usedCharacterColor),
+						characterLocalizedName,
+						num
+					}));
 				}
 				PlotKidsExtensions.WriteFriendStatus(stringBuilder, friendBag);
 			}
@@ -73,6 +91,25 @@ namespace HeavyMetalMachines.VFX
 			this._playerInfoLabel.text = stringBuilder.ToString();
 		}
 
+		private void LoadRank(long playerId)
+		{
+			this.TryDisposeLoadRankDisposable();
+			this._loadRankDisposable = ObservableExtensions.Subscribe<Unit>(this._friendTooltipRankPresenter.LoadRank(playerId));
+		}
+
+		private void TryDisposeLoadRankDisposable()
+		{
+			if (this._loadRankDisposable == null)
+			{
+				return;
+			}
+			this._loadRankDisposable.Dispose();
+			this._loadRankDisposable = null;
+		}
+
+		[Inject]
+		private IFriendTooltipRankPresenter _friendTooltipRankPresenter;
+
 		private Transform _contextMenuTransform;
 
 		[SerializeField]
@@ -80,9 +117,6 @@ namespace HeavyMetalMachines.VFX
 
 		[SerializeField]
 		private UILabel _playerInfoLabel;
-
-		[SerializeField]
-		private SteamIconLoader _iconLoader;
 
 		[SerializeField]
 		private Color _infoColor;
@@ -97,5 +131,7 @@ namespace HeavyMetalMachines.VFX
 		public SocialModalGUI ParentGUI;
 
 		private HMMHub _hub;
+
+		private IDisposable _loadRankDisposable;
 	}
 }

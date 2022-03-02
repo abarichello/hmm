@@ -1,7 +1,10 @@
 ﻿using System;
+using System.IO;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
 using Pocketverse;
 using UnityEngine;
 using UnityEngine.UI;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
@@ -11,9 +14,11 @@ namespace HeavyMetalMachines.Frontend
 		{
 			this.PlayButton.SetActive(false);
 			this.MatchData.gameObject.SetActive(false);
+			this.FilePath.text = this.Component.DefaultFile;
 			this.Component.OnVersionMismatched += this.ListenToVersionMismatched;
 			this.Component.OnReadFileException += this.ListenToReadFileException;
 			this.Component.OnMatchFileLoaded += this.ListenToMatchFileLoaded;
+			this.PlayReplayFileAtConfigIfRunningOnConsoles();
 		}
 
 		private void OnDisable()
@@ -51,9 +56,7 @@ namespace HeavyMetalMachines.Frontend
 
 		public void OnButtonLoad()
 		{
-			this.WarningText.text = string.Empty;
-			this.MatchData.text = string.Empty;
-			this.Component.LoadFile(this.FilePath.text);
+			this.Load(this.FilePath.text);
 		}
 
 		public void OnButtonPlay()
@@ -61,9 +64,40 @@ namespace HeavyMetalMachines.Frontend
 			this.Component.Play();
 		}
 
+		private void Load(string fileUri)
+		{
+			this.WarningText.text = string.Empty;
+			this.MatchData.text = string.Empty;
+			if (string.IsNullOrEmpty(fileUri))
+			{
+				Debug.LogError("HORTA replay file uri is null or empty.");
+				return;
+			}
+			Debug.LogErrorFormat("HORTA is loading replay file at '{0}'.", new object[]
+			{
+				fileUri
+			});
+			this.Component.LoadFile(fileUri);
+		}
+
+		private void PlayReplayFileAtConfigIfRunningOnConsoles()
+		{
+			if (!Platform.Current.IsConsole())
+			{
+				return;
+			}
+			string fileUri = Path.Combine(Application.streamingAssetsPath, this._config.GetValue(ConfigAccess.HORTAFileUri));
+			this.Load(fileUri);
+			this.Component.Play();
+		}
+
 		public static readonly BitLogger Log = new BitLogger(typeof(HORTAView));
 
-		public HORTAComponent Component;
+		[Inject]
+		private IConfigLoader _config;
+
+		[InjectOnClient]
+		private HORTAComponent Component;
 
 		public InputField FilePath;
 

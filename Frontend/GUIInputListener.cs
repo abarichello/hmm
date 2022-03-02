@@ -19,26 +19,26 @@ namespace HeavyMetalMachines.Frontend
 		}
 
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		public static event ClientAPI.Action OnKeyStartPressed;
+		public static event Action OnKeyStartPressed;
 
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		public static event ClientAPI.Action OnKeyYPressed;
+		public static event Action OnKeyYPressed;
 
 		private static void OnKeyPressed(GameObject go, KeyCode key)
 		{
-			if (key != KeyCode.JoystickButton3)
+			if (key != 333)
 			{
-				if (key == KeyCode.JoystickButton7)
+				if (key == 337)
 				{
 					if (GUIInputListener.OnKeyStartPressed != null)
 					{
-						GUIInputListener.OnKeyStartPressed();
+						GUIInputListener.OnKeyStartPressed.Invoke();
 					}
 				}
 			}
 			else if (GUIInputListener.OnKeyYPressed != null)
 			{
-				GUIInputListener.OnKeyYPressed();
+				GUIInputListener.OnKeyYPressed.Invoke();
 			}
 		}
 

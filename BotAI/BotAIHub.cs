@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using Pocketverse;
+using UnityEngine;
 
 namespace HeavyMetalMachines.BotAI
 {
@@ -8,5 +10,7 @@ namespace HeavyMetalMachines.BotAI
 		public GarageController GarageControllerRed;
 
 		public GarageController GarageControllerBlu;
+
+		public List<Transform> RepairPoints = new List<Transform>();
 	}
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.Combat.Modifier;
 using HeavyMetalMachines.VFX;
 using UnityEngine;
 
@@ -23,7 +24,7 @@ namespace HeavyMetalMachines.Combat
 
 		protected bool Equals(ModifierInfo other)
 		{
-			return this.Attribute == other.Attribute && this.Effect == other.Effect && this.Status == other.Status && this.TargetGadget == other.TargetGadget && this.IsPercent.Equals(other.IsPercent) && this.Unstable.Equals(other.Unstable) && this.Tapered == other.Tapered && this.FriendlyFire.Equals(other.FriendlyFire) && this.NotForEnemies.Equals(other.NotForEnemies) && this.NotForWards.Equals(other.NotForWards) && this.NotForBuildings.Equals(other.NotForBuildings) && this.NotFurTurrets.Equals(other.NotFurTurrets) && this.NotForCreeps.Equals(other.NotForCreeps) && this.NotForPlayers.Equals(other.NotForPlayers) && this.IsReactive.Equals(other.IsReactive) && this.UsePower.Equals(other.UsePower) && this.IsPurgeable.Equals(other.IsPurgeable) && this.IsDispellable.Equals(other.IsDispellable) && this.NotConvoluted.Equals(other.NotConvoluted) && object.Equals(this.Feedback, other.Feedback) && (this.Attribute != AttributeBuffKind.SupressTargetTag || object.Equals(this.TargetTag, other.TargetTag));
+			return this.Attribute == other.Attribute && this.Effect == other.Effect && this.Status == other.Status && this.TargetGadget == other.TargetGadget && this.IsPercent.Equals(other.IsPercent) && this.Unstable.Equals(other.Unstable) && this.Tapered == other.Tapered && this.FriendlyFire.Equals(other.FriendlyFire) && this.NotForEnemies.Equals(other.NotForEnemies) && this.NotForWards.Equals(other.NotForWards) && this.NotForBuildings.Equals(other.NotForBuildings) && this.NotFurTurrets.Equals(other.NotFurTurrets) && this.NotForPlayers.Equals(other.NotForPlayers) && this.IsReactive.Equals(other.IsReactive) && this.UsePower.Equals(other.UsePower) && this.IsPurgeable.Equals(other.IsPurgeable) && this.IsDispellable.Equals(other.IsDispellable) && this.NotConvoluted.Equals(other.NotConvoluted) && object.Equals(this.Feedback, other.Feedback) && (this.Attribute != AttributeBuffKind.SupressTargetTag || object.Equals(this.TargetTag, other.TargetTag));
 		}
 
 		public override bool Equals(object obj)
@@ -45,7 +46,6 @@ namespace HeavyMetalMachines.Combat
 			num = (num * 397 ^ this.NotForWards.GetHashCode());
 			num = (num * 397 ^ this.NotForBuildings.GetHashCode());
 			num = (num * 397 ^ this.NotFurTurrets.GetHashCode());
-			num = (num * 397 ^ this.NotForCreeps.GetHashCode());
 			num = (num * 397 ^ this.NotForPlayers.GetHashCode());
 			num = (num * 397 ^ this.IsReactive.GetHashCode());
 			num = (num * 397 ^ this.UsePower.GetHashCode());
@@ -54,6 +54,8 @@ namespace HeavyMetalMachines.Combat
 			num = (num * 397 ^ this.NotConvoluted.GetHashCode());
 			return num * 397 ^ ((!(this.Feedback != null)) ? 0 : this.Feedback.GetHashCode());
 		}
+
+		public BaseModifier NewModifier;
 
 		public AttributeBuffKind Attribute;
 
@@ -105,8 +107,6 @@ namespace HeavyMetalMachines.Combat
 
 		public bool NotFurTurrets;
 
-		public bool NotForCreeps;
-
 		public bool NotForPlayers;
 
 		public bool HitBanished;
@@ -130,8 +130,6 @@ namespace HeavyMetalMachines.Combat
 		public string Tag;
 
 		public string TargetTag;
-
-		public string ParameterName;
 
 		public ModifierFeedbackInfo Feedback;
 

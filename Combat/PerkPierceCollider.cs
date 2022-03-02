@@ -38,9 +38,9 @@ namespace HeavyMetalMachines.Combat
 		{
 		}
 
-		public override void PerkDestroyed(DestroyEffect destroyEffect)
+		public override void PerkDestroyed(DestroyEffectMessage destroyEffectMessage)
 		{
-			base.PerkDestroyed(destroyEffect);
+			base.PerkDestroyed(destroyEffectMessage);
 			for (int i = 0; i < this._ignoredColliders.Count; i++)
 			{
 				Physics.IgnoreCollision(this._ignoredColliders[i], this._myCollider, false);

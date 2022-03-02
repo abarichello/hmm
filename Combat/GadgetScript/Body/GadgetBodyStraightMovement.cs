@@ -4,7 +4,6 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat.GadgetScript.Body
 {
-	[RequireComponent(typeof(Rigidbody))]
 	public class GadgetBodyStraightMovement : MonoBehaviour, IGadgetBodyMovement
 	{
 		public Vector3 GetDirection()
@@ -28,7 +27,8 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Body
 			IHMMGadgetContext ihmmgadgetContext = (IHMMGadgetContext)gadgetContext;
 			this._speedParameter = (FloatParameter)BaseParameter.GetParameter(this._speedParameter.ContentId);
 			this._duration = (FloatParameter)BaseParameter.GetParameter(this._duration.ContentId);
-			this._time = this._duration.GetValue(gadgetContext);
+			IParameterTomate<float> parameterTomate = this._duration.ParameterTomate as IParameterTomate<float>;
+			this._time = parameterTomate.GetValue(gadgetContext);
 			this._origin = body.Position;
 			this._direction = body.Rotation * Vector3.forward;
 			this._origin.y = 0f;
@@ -46,8 +46,10 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Body
 		{
 			eventContext.LoadParameter(GadgetBodyStraightMovement._initialSpeedParameter);
 			eventContext.LoadParameter(GadgetBodyStraightMovement._rangeParameter);
-			this._initialSpeed = (this._speed = GadgetBodyStraightMovement._initialSpeedParameter.GetValue(context));
-			float value = GadgetBodyStraightMovement._rangeParameter.GetValue(context);
+			IParameterTomate<float> parameterTomate = GadgetBodyStraightMovement._initialSpeedParameter.ParameterTomate as IParameterTomate<float>;
+			this._initialSpeed = (this._speed = parameterTomate.GetValue(context));
+			IParameterTomate<float> parameterTomate2 = GadgetBodyStraightMovement._rangeParameter.ParameterTomate as IParameterTomate<float>;
+			float value = parameterTomate2.GetValue(context);
 			this._end = this._origin + this._direction * value;
 			this._accel = (value - this._speed * this._time) * 2f / (this._time * this._time);
 			this._finalSpeed = this._initialSpeed + this._accel * this._time;
@@ -58,10 +60,10 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Body
 			float num = 0f;
 			if (this._extraVelocity != null)
 			{
-				this._extraVelocity = (Vector3Parameter)BaseParameter.GetParameter(this._extraVelocity.ContentId);
-				num = this.ExtraSpeedFromOwner(this._extraVelocity.GetValue(context));
+				num = this.ExtraSpeedFromOwner(this._extraVelocity.GetValue<Vector3>(context));
 			}
-			this._initialSpeed = (this._finalSpeed = this._speedParameter.GetValue(context) + num);
+			IParameterTomate<float> parameterTomate = this._speedParameter.ParameterTomate as IParameterTomate<float>;
+			this._initialSpeed = (this._finalSpeed = parameterTomate.GetValue(context) + num);
 			if (this._velocityType == GadgetBodyStraightMovement.MovementType.Accelerated)
 			{
 				this._initialSpeed = num;
@@ -75,17 +77,19 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Body
 			float num2 = this._speed * this._time + this._accel * this._time * this._time / 2f;
 			this._end = this._origin + this._direction * num2;
 			this._end.y = 0f;
-			GadgetBodyStraightMovement._initialSpeedParameter.SetValue(context, this._initialSpeed);
-			GadgetBodyStraightMovement._rangeParameter.SetValue(context, num2);
+			IParameterTomate<float> parameterTomate2 = GadgetBodyStraightMovement._initialSpeedParameter.ParameterTomate as IParameterTomate<float>;
+			parameterTomate2.SetValue(context, this._initialSpeed);
+			IParameterTomate<float> parameterTomate3 = GadgetBodyStraightMovement._rangeParameter.ParameterTomate as IParameterTomate<float>;
+			parameterTomate3.SetValue(context, num2);
 			eventContext.SaveParameter(GadgetBodyStraightMovement._initialSpeedParameter);
 			eventContext.SaveParameter(GadgetBodyStraightMovement._rangeParameter);
 		}
 
 		protected virtual float ExtraSpeedFromOwner(Vector3 carVelocity)
 		{
-			float b = Vector3.Dot(carVelocity, this._direction);
-			float num = Mathf.Max(0f, b) * this._extraPositiveVelocityMultiplier;
-			return num + Mathf.Min(0f, b) * this._extraNegativeVelocityMultiplier;
+			float num = Vector3.Dot(carVelocity, this._direction);
+			float num2 = Mathf.Max(0f, num) * this._extraPositiveVelocityMultiplier;
+			return num2 + Mathf.Min(0f, num) * this._extraNegativeVelocityMultiplier;
 		}
 
 		public virtual Vector3 GetPosition(float elapsedTime)
@@ -103,30 +107,35 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Body
 			this.Finished = false;
 		}
 
+		private void OnDrawGizmosSelected()
+		{
+			Gizmos.DrawLine(this._origin, this._end);
+		}
+
 		[Header("Read")]
 		[SerializeField]
 		protected GadgetBodyStraightMovement.MovementType _velocityType;
 
 		[SerializeField]
-		protected FloatParameter _speedParameter;
+		protected BaseParameter _speedParameter;
 
 		[SerializeField]
-		protected FloatParameter _duration;
+		protected BaseParameter _duration;
 
 		[SerializeField]
-		protected Vector3Parameter _extraVelocity;
+		protected BaseParameter _extraVelocity;
 
-		[SerializeField]
 		[Tooltip("If the car is moving in the SAME direction of the projectile when shooting it, how much of the speed should be added to the projectile ")]
+		[SerializeField]
 		protected float _extraPositiveVelocityMultiplier = 1f;
 
-		[SerializeField]
 		[Tooltip("If the car is moving in the OPPOSITE direction of the projectile when shooting it, how much of the speed should be added to the projectile ")]
+		[SerializeField]
 		protected float _extraNegativeVelocityMultiplier = 1f;
 
-		protected static FloatParameter _rangeParameter;
+		protected static BaseParameter _rangeParameter;
 
-		protected static FloatParameter _initialSpeedParameter;
+		protected static BaseParameter _initialSpeedParameter;
 
 		protected float _time;
 

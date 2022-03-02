@@ -20,7 +20,7 @@ namespace HeavyMetalMachines.VFX
 					new Vector3(1f, 0f, 1f),
 					new Vector3(1f, 0f, -1f)
 				};
-				int[] indices = new int[]
+				int[] array = new int[]
 				{
 					0,
 					1,
@@ -38,7 +38,7 @@ namespace HeavyMetalMachines.VFX
 				};
 				TeamMarkerVFX.planeMesh.vertices = vertices;
 				TeamMarkerVFX.planeMesh.uv = uv;
-				TeamMarkerVFX.planeMesh.SetIndices(indices, MeshTopology.Triangles, 0);
+				TeamMarkerVFX.planeMesh.SetIndices(array, 0, 0);
 			}
 			Shader shader = (Shader)Resources.Load("Particle Add Overall", typeof(Shader));
 			this.planeMaterial = new Material(shader);

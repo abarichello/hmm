@@ -30,7 +30,7 @@ namespace HeavyMetalMachines.Combat
 			this.Effect.TriggerDestroy(-1, base._trans.position, false, null, Vector3.zero, BaseFX.EDestroyReason.Default, false);
 		}
 
-		public override void OnDestroyEffect(DestroyEffect evt)
+		public override void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			base.OnDestroyEffect(evt);
 			this.RemoveListeners();

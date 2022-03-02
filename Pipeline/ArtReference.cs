@@ -67,20 +67,20 @@ namespace HeavyMetalMachines.Pipeline
 			Gizmos.DrawWireCube(this.ModelBounds.center, this.ModelBounds.size);
 		}
 
-		[FormerlySerializedAs("material")]
 		[SerializeField]
+		[FormerlySerializedAs("material")]
 		private Material _material;
 
-		[FormerlySerializedAs("modelFBX")]
 		[SerializeField]
+		[FormerlySerializedAs("modelFBX")]
 		private GameObject _modelFbx;
 
-		[FormerlySerializedAs("childModel")]
 		[SerializeField]
+		[FormerlySerializedAs("childModel")]
 		public GameObject ChildModel;
 
-		[HideInInspector]
 		[SerializeField]
+		[HideInInspector]
 		protected Bounds ModelBounds;
 
 		[SerializeField]

@@ -105,12 +105,8 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 			this._delayed = future;
 		}
 
-		public object Invoke(int classId, short methodId, object[] args)
+		public object Invoke(int classId, short methodId, object[] args, BitStream bitstream = null)
 		{
-			if (classId != 1010)
-			{
-				throw new Exception("Hierarchy in RemoteClass is not allowed!!! " + classId);
-			}
 			this._delayed = null;
 			if (methodId != 4)
 			{
@@ -128,7 +124,7 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 
 		public bool PauseClientAndServer;
 
-		public const int StaticClassId = 1010;
+		public const int StaticClassId = 1011;
 
 		private Identifiable _identifiable;
 

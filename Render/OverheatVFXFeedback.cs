@@ -40,7 +40,7 @@ namespace HeavyMetalMachines.Render
 			else if (this._gadgetState.GadgetState == GadgetState.CoolingAfterOverheat)
 			{
 				this._prefabInstance = (MasterVFX)GameHubBehaviour.Hub.Resources.PrefabCacheInstantiate(this.CooldownPrefab, base.transform.position, base.transform.rotation);
-				this._prefabInstance.transform.parent = GameHubBehaviour.Hub.Drawer.Effects;
+				GameHubBehaviour.Hub.Drawer.AddEffect(this._prefabInstance.transform);
 				this._prefabInstance.baseMasterVFX = this.CooldownPrefab;
 				this._prefabInstance.Activate(this.combatObject.Id, this.combatObject.Id, this.combatObject.transform);
 			}

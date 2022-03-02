@@ -1,9 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.BI;
+using HeavyMetalMachines.Infra.Context;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Input.NoInputDetection;
+using HeavyMetalMachines.Input.NoInputDetection.Infra;
 using Pocketverse;
 using Pocketverse.MuralContext;
+using UniRx;
 using UnityEngine;
 
 namespace HeavyMetalMachines
@@ -16,7 +21,19 @@ namespace HeavyMetalMachines
 
 		private void Awake()
 		{
-			this._updater = new TimedUpdater(50, true, false);
+			this._updater = new TimedUpdater(50, true, true);
+		}
+
+		private void Start()
+		{
+			if (GameHubBehaviour.Hub.Net.IsServer())
+			{
+				this._storage.Configuration.InputNotificationTicks = TimeSpan.FromSeconds(6.0).Ticks;
+				ObservableExtensions.Subscribe<PlayerInputFrozeDetection>(Observable.Do<PlayerInputFrozeDetection>(this._inputFrozeDetection.ObservePlayerInputFroze(), delegate(PlayerInputFrozeDetection detection)
+				{
+					MatchLogWriter.PlayerInputFroze(detection.PlayerId, this._inputFrozeDetection.GetLastReceivedInputTimeSeconds(detection.PlayerId));
+				}));
+			}
 		}
 
 		private void LateUpdate()
@@ -39,12 +56,16 @@ namespace HeavyMetalMachines
 					}
 					this._updater.Reset();
 				}
-				if (GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreBoard.State.Replay && GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreBoard.State.PreReplay && this.CurrentController.Inputs.HasPressedWeaponsDriveOrChat())
+				if (GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreboardState.Replay && GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreboardState.PreReplay && this.CurrentController.Inputs.HasPressedAnyAntiAfkInput())
 				{
 					GameHubBehaviour.Hub.GuiScripts.AfkControllerGui.Close();
 				}
 				this.Dispatch(new byte[0]).ClientSendInput(this.CurrentController.Inputs);
 				this.CurrentController.Reset();
+			}
+			if (GameHubBehaviour.Hub.Net.IsServer())
+			{
+				this._inputFrozeDetection.Update();
 			}
 		}
 
@@ -57,6 +78,7 @@ namespace HeavyMetalMachines
 				return;
 			}
 			playerController.ExecInput(inputs);
+			this._inputFrozeDetection.StoreInputReceived(playerController.Combat.Player.PlayerId);
 		}
 
 		internal void Register(PlayerController playerController, byte client)
@@ -67,27 +89,6 @@ namespace HeavyMetalMachines
 		public void OnCleanup(CleanupMessage msg)
 		{
 			this.CurrentController = null;
-		}
-
-		public override void OnBeforeSerialize()
-		{
-			base.OnBeforeSerialize();
-			this.serializeHackClients = new List<byte>();
-			this.serializeHackPlayerControllers = new List<PlayerController>();
-			foreach (KeyValuePair<byte, PlayerController> keyValuePair in this._players)
-			{
-				this.serializeHackClients.Add(keyValuePair.Key);
-				this.serializeHackPlayerControllers.Add(keyValuePair.Value);
-			}
-		}
-
-		public override void OnAfterDeserialize()
-		{
-			base.OnAfterDeserialize();
-			for (int i = 0; i < this.serializeHackClients.Count; i++)
-			{
-				this._players.Add(this.serializeHackClients[i], this.serializeHackPlayerControllers[i]);
-			}
 		}
 
 		private int OID
@@ -151,12 +152,8 @@ namespace HeavyMetalMachines
 			this._delayed = future;
 		}
 
-		public object Invoke(int classId, short methodId, object[] args)
+		public object Invoke(int classId, short methodId, object[] args, BitStream bitstream = null)
 		{
-			if (classId != 1019)
-			{
-				throw new Exception("Hierarchy in RemoteClass is not allowed!!! " + classId);
-			}
 			this._delayed = null;
 			if (methodId != 3)
 			{
@@ -174,11 +171,11 @@ namespace HeavyMetalMachines
 
 		private TimedUpdater _updater;
 
-		[SerializeField]
-		private List<byte> serializeHackClients;
+		[InjectOnServer]
+		private IServerPlayerInputFrozeDetection _inputFrozeDetection;
 
-		[SerializeField]
-		private List<PlayerController> serializeHackPlayerControllers;
+		[InjectOnServer]
+		private IServerPlayerInputFrozeConfigurationStorage _storage;
 
 		public const int StaticClassId = 1019;
 

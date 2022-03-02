@@ -1,12 +1,52 @@
 ﻿using System;
+using System.Diagnostics;
 using Assets.ClientApiObjects;
+using HeavyMetalMachines.Store.Business;
+using HeavyMetalMachines.Store.Business.GetStoreItem;
+using HeavyMetalMachines.Store.Business.ObserveStoreItem;
+using HeavyMetalMachines.VFX;
+using Pocketverse;
+using UniRx;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Frontend
 {
 	[Obsolete]
-	public class StoreItem : CharactersItem
+	public class StoreItem : GameHubBehaviour
 	{
+		public ItemTypeScriptableObject StoreItemType
+		{
+			get
+			{
+				return this._storeItemType;
+			}
+		}
+
+		public bool IsPurchasable
+		{
+			get
+			{
+				return this._isPurchasable;
+			}
+			private set
+			{
+				if (this._isPurchasable == value)
+				{
+					return;
+				}
+				this._isPurchasable = value;
+				if (this.IsPurchasableChanged != null)
+				{
+					this.IsPurchasableChanged(this, this._isPurchasable);
+				}
+			}
+		}
+
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
+		public event Action<StoreItem, bool> IsPurchasableChanged;
+
+		public ItemTypeScriptableObject CharacterItemType { get; set; }
+
 		public void ToggleScroll(bool isEnabled)
 		{
 			UIDragScrollView uidragScrollView;
@@ -92,21 +132,123 @@ namespace HeavyMetalMachines.Frontend
 			this.UnlockGroupComponents.UnlockSkinAnimation.Stop();
 		}
 
-		public ItemTypeScriptableObject StoreItemType;
+		public void Setup(ItemTypeScriptableObject storeItemType, IStoreBusinessFactory storeBusinessFactory)
+		{
+			this._storeItemType = storeItemType;
+			this._getStoreItem = storeBusinessFactory.CreateGetStoreItem();
+			if (this._storeItemObservation != null)
+			{
+				this._storeItemObservation.Dispose();
+			}
+			IObserveStoreItem observeStoreItem = storeBusinessFactory.CreateObserveStoreItem();
+			IObservable<StoreItem> observable = observeStoreItem.CreateObservable(storeItemType.Id);
+			this._storeItemObservation = ObservableExtensions.Subscribe<StoreItem>(observable, new Action<StoreItem>(this.ConfigureControls));
+			this.ConfigureControls(this._getStoreItem.Get(storeItemType.Id));
+		}
 
-		public GameObject HardPriceGroup;
+		private void OnDestroy()
+		{
+			if (this._storeItemObservation != null)
+			{
+				this._storeItemObservation.Dispose();
+			}
+		}
 
-		public GameObject SoftPriceGroup;
+		private void ConfigureControls(StoreItem storeItemBusiness)
+		{
+			this.IsPurchasable = storeItemBusiness.IsPurchasable;
+			if (this.boughtGO == null || this.unboughtGO == null)
+			{
+				this.SetPrices(storeItemBusiness);
+				return;
+			}
+			bool flag = GameHubBehaviour.Hub.User.Inventory.HasItemOfType(this._storeItemType.Id);
+			this.boughtGO.SetActive(flag);
+			this.unboughtGO.SetActive(!flag);
+			if (flag)
+			{
+				return;
+			}
+			this.SetPrices(storeItemBusiness);
+		}
+
+		private void SetPrices(StoreItem storeItemPrices)
+		{
+			if (this.softPrice != null)
+			{
+				this.softPrice.text = storeItemPrices.SoftPrice.ToString("0");
+			}
+			if (this.SoftPriceGroup != null)
+			{
+				this.SoftPriceGroup.SetActive(this._storeItemType.IsActive && storeItemPrices.IsSoftPurchasable);
+			}
+			if (this.hardPrice != null)
+			{
+				this.hardPrice.text = storeItemPrices.HardPrice.ToString("0");
+			}
+			if (this.HardPriceGroup != null)
+			{
+				this.HardPriceGroup.SetActive(this._storeItemType.IsActive && storeItemPrices.IsHardPurchasable);
+			}
+		}
+
+		public void UpdateBoughtStatus()
+		{
+			StoreItem storeItemBusiness = this._getStoreItem.Get(this._storeItemType.Id);
+			this.ConfigureControls(storeItemBusiness);
+		}
+
+		public GUIEventListener button;
+
+		public HMMUI2DDynamicSprite carTexture;
+
+		public UILabel categoryLabel;
+
+		public UILabel descriptionLabel;
+
+		public HMMUI2DDynamicSprite icon;
+
+		public UILabel characterName;
+
+		public GameObject boughtGO;
+
+		public GameObject unboughtGO;
+
+		public UILabel softPrice;
+
+		public UILabel hardPrice;
+
+		private ItemTypeScriptableObject _storeItemType;
+
+		private bool _isPurchasable;
+
+		[SerializeField]
+		private GameObject HardPriceGroup;
+
+		[SerializeField]
+		private GameObject SoftPriceGroup;
 
 		public UILabel itemName;
 
 		public UIButton UnlockButton;
+
+		public GameObject NameVariationGroupGameObject;
+
+		public UILabel NameVariationLabel;
+
+		public UILabel RarityLabel;
+
+		public UI2DSprite BorderSprite;
 
 		public int Index;
 
 		[Header("[Unlock Group]")]
 		[SerializeField]
 		protected StoreItem.UnlockGroup UnlockGroupComponents;
+
+		private IGetStoreItem _getStoreItem;
+
+		private IDisposable _storeItemObservation;
 
 		private UIDragScrollView _scrollView;
 

@@ -1,6 +1,6 @@
 ﻿using System;
-using HeavyMetalMachines.Combat;
-using Pocketverse;
+using HeavyMetalMachines.GameCamera.Behaviour;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
 
 namespace HeavyMetalMachines.VFX
 {
@@ -8,22 +8,9 @@ namespace HeavyMetalMachines.VFX
 	{
 		protected override void OnActivate()
 		{
-			if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreBoard.State.Replay)
+			if (this._bombScoreCamera != null)
 			{
-				CarCamera.Singleton.SetTarget("BombExplosionReplay", delegate()
-				{
-					bool flag = LogoTransition.IsPlaying() && !LogoTransition.HasTriggeredMiddleEvent();
-					bool flag2 = GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreBoard.State.Replay;
-					return flag || flag2;
-				}, base.transform, false, false, false);
-			}
-			else
-			{
-				CarCamera.Singleton.SetTarget("BombExplosion", delegate()
-				{
-					BombScoreBoard.State currentState = GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState;
-					return currentState == BombScoreBoard.State.BombDelivery || currentState == BombScoreBoard.State.PreReplay;
-				}, base.transform, false, false, false);
+				this._bombScoreCamera.LookAtExplosion(base.transform);
 			}
 		}
 
@@ -34,5 +21,8 @@ namespace HeavyMetalMachines.VFX
 		protected override void OnDeactivate()
 		{
 		}
+
+		[InjectOnClient]
+		private IBombScoreCameraBehaviour _bombScoreCamera;
 	}
 }

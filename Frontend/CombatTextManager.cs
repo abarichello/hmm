@@ -1,14 +1,22 @@
 ﻿using System;
+using System.Linq;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Match;
 using Pocketverse;
 using Pocketverse.MuralContext;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
 	public class CombatTextManager : GameHubBehaviour, PlayerBuildComplete.IPlayerBuildCompleteListener, ICleanupListener
 	{
+		[Inject]
+		private void Init(DiContainer container)
+		{
+			this._container = container.ParentContainers.First<DiContainer>();
+		}
+
 		public void Start()
 		{
 			this.CombatTextObjectReference.gameObject.SetActive(false);
@@ -16,11 +24,11 @@ namespace HeavyMetalMachines.Frontend
 			this._combatTextObjects[0] = this.CombatTextObjectReference;
 			for (int i = 1; i < this._combatTextObjects.Length; i++)
 			{
-				CombatTextObject combatTextObject = UnityEngine.Object.Instantiate<CombatTextObject>(this.CombatTextObjectReference, Vector3.zero, Quaternion.identity);
-				combatTextObject.transform.SetParent(base.transform);
-				combatTextObject.transform.localScale = Vector3.one;
-				combatTextObject.gameObject.SetActive(false);
-				this._combatTextObjects[i] = combatTextObject;
+				CombatTextObject component = this._container.InstantiatePrefab(this.CombatTextObjectReference).GetComponent<CombatTextObject>();
+				component.transform.SetParent(base.transform);
+				component.transform.localScale = Vector3.one;
+				component.gameObject.SetActive(false);
+				this._combatTextObjects[i] = component;
 			}
 		}
 
@@ -188,6 +196,8 @@ namespace HeavyMetalMachines.Frontend
 		}
 
 		private const int CombatTextMaxPool = 10;
+
+		private DiContainer _container;
 
 		public CombatTextSettings CombatTextSettings;
 

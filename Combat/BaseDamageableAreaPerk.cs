@@ -16,7 +16,7 @@ namespace HeavyMetalMachines.Combat
 		{
 			float radius = (this.Radius != 0f) ? this.Radius : this.Effect.Gadget.Radius;
 			cpoCombatObjects.Clear();
-			BarrierUtils.OverlapSphereRaycastFromCenter(position, radius, 1077058560, cpoCombatObjects);
+			BarrierUtils.OverlapSphereRaycastFromCenter(position, radius, 1077054464, cpoCombatObjects);
 		}
 
 		protected virtual void DamageArea(Vector3 position)

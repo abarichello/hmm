@@ -12,7 +12,7 @@ namespace HeavyMetalMachines.HMMChat
 		public IFuture ReceiveMessage(bool group, string msg)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1024, 4, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1025, 5, new object[]
 			{
 				group,
 				msg
@@ -20,13 +20,40 @@ namespace HeavyMetalMachines.HMMChat
 			return future;
 		}
 
+		public IFuture ReceiveDraftMessage(bool toTeam, string draft, string context, string[] messageParameters)
+		{
+			IFuture<object> future = new Future<object>();
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1025, 6, new object[]
+			{
+				toTeam,
+				draft,
+				context,
+				messageParameters
+			});
+			return future;
+		}
+
 		public IFuture ClientReceiveMessage(bool group, string msg, byte playeraddress)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1024, 7, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1025, 10, new object[]
 			{
 				group,
 				msg,
+				playeraddress
+			});
+			return future;
+		}
+
+		public IFuture ClientReceiveDraftMessage(bool toTeam, string draft, string context, string[] messageParameters, byte playeraddress)
+		{
+			IFuture<object> future = new Future<object>();
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1025, 11, new object[]
+			{
+				toTeam,
+				draft,
+				context,
+				messageParameters,
 				playeraddress
 			});
 			return future;

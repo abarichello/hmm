@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkColliderIgnore : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkColliderIgnore : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		public override void PerkInitialized()
 		{
@@ -14,7 +14,7 @@ namespace HeavyMetalMachines.Combat
 			this._ignoredColliders.Clear();
 			CombatObject targetCombat = base.GetTargetCombat(this.Effect, BasePerk.PerkTarget.Target);
 			CombatObject targetCombat2 = base.GetTargetCombat(this.Effect, BasePerk.PerkTarget.Owner);
-			if (!targetCombat2)
+			if (!targetCombat2 || !targetCombat)
 			{
 				return;
 			}
@@ -50,7 +50,7 @@ namespace HeavyMetalMachines.Combat
 			this.RunIgnores(true);
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			this.RunIgnores(false);
 			this._colliders.Clear();

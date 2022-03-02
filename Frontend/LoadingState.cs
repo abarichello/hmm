@@ -1,74 +1,131 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using Assets.ClientApiObjects;
 using Assets.ClientApiObjects.Components;
 using FMod;
-using HeavyMetalMachines.Character;
+using HeavyMetalMachines.Arena;
+using HeavyMetalMachines.Characters;
+using HeavyMetalMachines.DataTransferObjects.Inventory;
 using HeavyMetalMachines.Match;
-using HeavyMetalMachines.Swordfish.Player;
+using Hoplon.Serialization;
+using Hoplon.Unity.Loading;
 using Pocketverse;
 using SharedUtils.Loading;
+using UnityEngine;
 
 namespace HeavyMetalMachines.Frontend
 {
 	public class LoadingState : GameState
 	{
-		public override void EnableState()
+		protected override void OnStateEnabled()
 		{
-			base.EnableState();
+			LoadingState.Log.DebugFormat("LoadingState enabled", new object[0]);
+			if (GameHubBehaviour.Hub.Net.IsClient())
+			{
+				GameHubBehaviour.Hub.Server.ClientSendPlayerLoadingInfo(0f);
+			}
+			if (GameHubBehaviour.Hub.Net.IsServer())
+			{
+				GameHubBehaviour.Hub.Server.TryStartPlayersReadyEventTimeout();
+			}
 			if (this.SnapshotFMODAsset)
 			{
 				this._snapshotInstance = FMODAudioManager.PlayAt(this.SnapshotFMODAsset, base.transform);
 			}
-			int arenaIndex = GameHubBehaviour.Hub.Match.ArenaIndex;
-			GameArenaConfig arenaConfig = GameHubBehaviour.Hub.ArenaConfig;
-			CustomizationPreLoader customizationPreLoader = new CustomizationPreLoader();
-			customizationPreLoader.GatherCustomizations();
-			customizationPreLoader.CommitToResourceLoader();
+			if (!GameHubBehaviour.Hub.Match.LevelIsTutorial() && GameHubBehaviour.Hub.GuiScripts)
+			{
+				GameHubBehaviour.Hub.GuiScripts.LoadingVersus.ShowWindow(GameHubBehaviour.Hub.Match.ArenaIndex);
+			}
 			if (GameHubBehaviour.Hub.Match.LevelIsTutorial())
 			{
-				ItemTypeScriptableObject itemTypeScriptableObject = GameHubBehaviour.Hub.InventoryColletion.AllItemTypes[GameHubBehaviour.Hub.SharedConfigs.TutorialConfig.PlayerCharacterGuid];
-				CharacterItemTypeComponent component = itemTypeScriptableObject.GetComponent<CharacterItemTypeComponent>();
-				PlayerCarFactory.CarPreCache(component.MainAttributes, Guid.Empty, GameHubBehaviour.Hub.Net.IsClient());
-				ItemTypeScriptableObject itemTypeScriptableObject2 = GameHubBehaviour.Hub.InventoryColletion.AllItemTypes[GameHubBehaviour.Hub.SharedConfigs.TutorialConfig.BotSkinGuid];
-				SkinItemTypeBag skinItemTypeBag = (SkinItemTypeBag)((JsonSerializeable<T>)itemTypeScriptableObject2.Bag);
-				ItemTypeScriptableObject itemTypeScriptableObject3 = GameHubBehaviour.Hub.InventoryColletion.AllItemTypes[skinItemTypeBag.CharacterItemTypeId];
-				CharacterItemTypeComponent component2 = itemTypeScriptableObject3.GetComponent<CharacterItemTypeComponent>();
-				PlayerCarFactory.CarPreCache(component2.MainAttributes, itemTypeScriptableObject2.Id, false);
+				GameHubBehaviour.Hub.Swordfish.Log.BILogClient(50, true);
 			}
-			else
+			if (GameHubBehaviour.Hub.Net.IsClient())
 			{
-				if (GameHubBehaviour.Hub.GuiScripts)
-				{
-					GameHubBehaviour.Hub.GuiScripts.LoadingVersus.ShowWindow(arenaIndex);
-				}
-				List<PlayerData> playersAndBots = GameHubBehaviour.Hub.Players.PlayersAndBots;
-				for (int i = 0; i < playersAndBots.Count; i++)
-				{
-					PlayerData playerData = playersAndBots[i];
-					PlayerCarFactory.CarPreCache(playerData.Character, playerData.Customizations.SelectedSkin, GameHubBehaviour.Hub.Net.IsClient() && playerData.IsCurrentPlayer);
-				}
+				ScreenResolutionController.SetInGameQualityLevel();
+				CustomizationPreLoader customizationPreLoader = new CustomizationPreLoader();
+				customizationPreLoader.GatherCustomizations();
+				customizationPreLoader.CommitToResourceLoader();
 			}
 			this.BasicPreCache();
-			string sceneName = arenaConfig.GetSceneName(arenaIndex);
-			for (int j = 0; j < arenaConfig.SceneObjectsToLoad(arenaIndex).Length; j++)
+			GameArenaConfig arenaConfig = GameHubBehaviour.Hub.ArenaConfig;
+			int arenaIndex = GameHubBehaviour.Hub.Match.ArenaIndex;
+			PreCacheArenaObjects[] array = arenaConfig.SceneObjectsToLoad(arenaIndex);
+			for (int i = 0; i < array.Length; i++)
 			{
-				GameHubBehaviour.Hub.Resources.PreCachePrefab(arenaConfig.SceneObjectsToLoad(arenaIndex)[j].Object.name, arenaConfig.SceneObjectsToLoad(arenaIndex)[j].CacheCount);
+				GameHubBehaviour.Hub.Resources.PreCachePrefab(array[i].Object.name, array[i].CacheCount);
 			}
+			if (this._loadAssetsAsyncCoroutine != null)
+			{
+				base.StopCoroutine(this._loadAssetsAsyncCoroutine);
+				this._loadAssetsAsyncCoroutine = null;
+			}
+			this._loadAssetsAsyncCoroutine = base.StartCoroutine(this.LoadAssetsAsync());
+		}
+
+		private IEnumerator LoadAssetsAsync()
+		{
 			if (GameHubBehaviour.Hub.Match.LevelIsTutorial())
 			{
-				base.LoadingToken.AddLoadable(new SceneLoadable(sceneName, false));
-				if (GameHubBehaviour.Hub.GuiScripts)
+				ItemTypeScriptableObject playerCharacterItem = GameHubBehaviour.Hub.InventoryColletion.AllItemTypes[GameHubBehaviour.Hub.SharedConfigs.TutorialConfig.PlayerCharacterGuid];
+				Future carPreCacheFuture = PlayerCarFactory.CarPreCache(playerCharacterItem.Id, Guid.Empty, GameHubBehaviour.Hub.Net.IsClient());
+				while (!carPreCacheFuture.IsDone)
 				{
-					GameHubBehaviour.Hub.GuiScripts.Loading.TutorialLoadingStarted = true;
+					yield return null;
 				}
-				GameHubBehaviour.Hub.Swordfish.Log.BILogClient(ClientBITags.TutorialLoadingStarted, true);
+				ItemTypeScriptableObject botSkinItem = GameHubBehaviour.Hub.InventoryColletion.AllItemTypes[GameHubBehaviour.Hub.SharedConfigs.TutorialConfig.BotSkinGuid];
+				SkinItemTypeBag botSkinBag = (SkinItemTypeBag)((JsonSerializeable<!0>)botSkinItem.Bag);
+				ItemTypeScriptableObject botCharacterItem = GameHubBehaviour.Hub.InventoryColletion.AllItemTypes[botSkinBag.CharacterItemTypeId];
+				carPreCacheFuture = PlayerCarFactory.CarPreCache(botCharacterItem.Id, botSkinItem.Id, false);
+				while (!carPreCacheFuture.IsDone)
+				{
+					yield return null;
+				}
 			}
 			else
 			{
-				base.LoadingToken.AddLoadable(new SceneLoadable(sceneName, false));
+				List<PlayerData> allPlayers = GameHubBehaviour.Hub.Players.PlayersAndBots;
+				for (int i = 0; i < allPlayers.Count; i++)
+				{
+					PlayerData playerData = allPlayers[i];
+					Future carPreCacheFuture2 = PlayerCarFactory.CarPreCache(playerData.CharacterItemType.Id, playerData.Customizations.GetGuidBySlot(59), GameHubBehaviour.Hub.Net.IsClient() && playerData.IsCurrentPlayer);
+					while (!carPreCacheFuture2.IsDone)
+					{
+						yield return null;
+					}
+				}
 			}
-			base.LoadingToken.StartLoading(new LoadingManager.LoadCompleteCallback(this.OnLoadingComplete));
+			LoadingState.Log.Info("Start loading");
+			AsyncRequest<LoadingResult> request = Loading.Engine.LoadToken(base.LoadingToken);
+			yield return request;
+			if (LoadStatusExtensions.IsError(request.Result.Status))
+			{
+				LoadingState.Log.ErrorFormat("Loading failed with status: {0}", new object[]
+				{
+					request.Result.Status
+				});
+				yield return LoadingFailedHandler.HandleFailure(request.Result);
+				yield break;
+			}
+			this._resourceLoaderPrepareCaches = base.StartCoroutine(ResourceLoader.Instance.PrepareCaches());
+			yield return this._resourceLoaderPrepareCaches;
+			LoadingState.Log.Info("OnLoadingComplete");
+			if (GameHubBehaviour.Hub.Match.LevelIsTutorial())
+			{
+				GameHubBehaviour.Hub.Swordfish.Log.BILogClient(51, true);
+			}
+			if (GameHubBehaviour.Hub.State.Current.StateKind == GameState.GameStateKind.GameWrapUp)
+			{
+				yield break;
+			}
+			if (GameHubBehaviour.Hub.Net.IsClient())
+			{
+				GameHubBehaviour.Hub.Server.ClientSendPlayerLoadingInfo(0.5f);
+			}
+			this.gameState.LoadingToken.InheritData(base.LoadingToken);
+			base.GoToState(this.gameState, false);
+			yield break;
 		}
 
 		public void BasicPreCache()
@@ -77,28 +134,33 @@ namespace HeavyMetalMachines.Frontend
 			{
 				GameHubBehaviour.Hub.BombManager.Rules.Weapon.PreCacheAssets();
 			}
-		}
-
-		private void OnLoadingComplete()
-		{
-			if (GameHubBehaviour.Hub.Match.LevelIsTutorial())
+			if (GameHubBehaviour.Hub.BombManager.Rules.BombInfo.Skin)
 			{
-				GameHubBehaviour.Hub.Swordfish.Log.BILogClient(ClientBITags.TutorialLoadingCompleted, true);
+				BombSkinItemTypeComponent component = GameHubBehaviour.Hub.BombManager.Rules.BombInfo.Skin.GetComponent<BombSkinItemTypeComponent>();
+				GameHubBehaviour.Hub.Resources.PreCachePrefab(component.BombPrefabName, 1);
 			}
-			this.gameState.LoadingToken.InheritData(base.LoadingToken);
-			base.GoToState(this.gameState, false);
 		}
 
 		protected override void OnStateDisabled()
 		{
 			base.OnStateDisabled();
+			if (this._loadAssetsAsyncCoroutine != null)
+			{
+				base.StopCoroutine(this._loadAssetsAsyncCoroutine);
+				this._loadAssetsAsyncCoroutine = null;
+			}
+			if (this._resourceLoaderPrepareCaches != null)
+			{
+				base.StopCoroutine(this._resourceLoaderPrepareCaches);
+				this._resourceLoaderPrepareCaches = null;
+			}
+			if (!(GameHubBehaviour.Hub.State.Current is Game) && GameHubBehaviour.Hub.GuiScripts)
+			{
+				GameHubBehaviour.Hub.GuiScripts.LoadingVersus.HideWindow();
+			}
 			if (this._snapshotInstance != null)
 			{
 				this._snapshotInstance.Stop();
-			}
-			if (GameHubBehaviour.Hub.Match.LevelIsTutorial() && GameHubBehaviour.Hub.GuiScripts)
-			{
-				GameHubBehaviour.Hub.GuiScripts.Loading.TutorialLoadingStarted = true;
 			}
 		}
 
@@ -106,8 +168,12 @@ namespace HeavyMetalMachines.Frontend
 
 		public GameState gameState;
 
-		public FMODAsset SnapshotFMODAsset;
+		public AudioEventAsset SnapshotFMODAsset;
 
 		private FMODAudioManager.FMODAudio _snapshotInstance;
+
+		private Coroutine _loadAssetsAsyncCoroutine;
+
+		private Coroutine _resourceLoaderPrepareCaches;
 	}
 }

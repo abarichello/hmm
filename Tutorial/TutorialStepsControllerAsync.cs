@@ -12,7 +12,7 @@ namespace HeavyMetalMachines.Tutorial
 		public IFuture ForceStep(int stepIndex)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1009, 2, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1010, 3, new object[]
 			{
 				stepIndex
 			});
@@ -22,7 +22,7 @@ namespace HeavyMetalMachines.Tutorial
 		public IFuture StepChangedOnServer(int step)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1009, 8, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1010, 9, new object[]
 			{
 				step
 			});
@@ -32,7 +32,7 @@ namespace HeavyMetalMachines.Tutorial
 		public IFuture SyncBehaviourCompletedOnClient(int pStep, int pBehaviourIndex)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1009, 11, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1010, 12, new object[]
 			{
 				pStep,
 				pBehaviourIndex
@@ -43,7 +43,7 @@ namespace HeavyMetalMachines.Tutorial
 		public IFuture SyncBehaviourCompletedOnServer(int pStep, int pBehaviourIndex)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1009, 13, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1010, 14, new object[]
 			{
 				pStep,
 				pBehaviourIndex
@@ -54,7 +54,7 @@ namespace HeavyMetalMachines.Tutorial
 		public IFuture SetPlayerInputsActive(bool activeInput)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1009, 14, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1010, 15, new object[]
 			{
 				activeInput
 			});

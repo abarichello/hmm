@@ -1,5 +1,5 @@
 ﻿using System;
-using Hoplon.Common.Time;
+using Hoplon.Time;
 using Hoplon.Timeline;
 using UnityEngine;
 

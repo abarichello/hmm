@@ -1,22 +1,30 @@
 ﻿using System;
 using Gamesight;
+using Pocketverse;
 
 namespace HeavyMetalMachines.Utils
 {
-	public class BiUtils
+	public class BiUtils : IBiUtils
 	{
-		public static void MarkConversion(HMMHub hub)
+		public void MarkConversion()
 		{
-			if (hub.Config.GetBoolValue(ConfigAccess.EnableRedShell))
+			HMMHub hub = GameHubBehaviour.Hub;
+			IConfigLoader config = hub.Config;
+			string universalID = hub.User.UserSF.UniversalID;
+			if (config.GetBoolValue(ConfigAccess.EnableRedShell))
 			{
 				GamesightTrack.SetApiKey("e2adebeff1cf8431da5b3b3d4a78e2a3");
-				GamesightTrack.SetUserId(hub.User.UserSF.UniversalID);
+				GamesightTrack.SetUserId(universalID);
 				GamesightTrack.MarkConversion();
 			}
-			if (hub.Config.GetBoolValue(ConfigAccess.EnableHoplonTT))
+			if (config.GetBoolValue(ConfigAccess.EnableHoplonTT))
 			{
-				string value = hub.Config.GetValue(ConfigAccess.HoplonTTUrl);
-				HoplonTrackingTool.MarkConversion(value, hub.User.UserSF.UniversalID);
+				string value = config.GetValue(ConfigAccess.HoplonTTUrl);
+				HoplonTrackingTool.MarkConversion(value, universalID);
+			}
+			if (config.GetBoolValue(ConfigAccess.SkipSwordfish))
+			{
+				return;
 			}
 		}
 	}

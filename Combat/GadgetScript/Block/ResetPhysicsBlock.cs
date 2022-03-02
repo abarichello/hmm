@@ -8,30 +8,19 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 	[CreateAssetMenu(menuName = "GadgetScript/Block/Physics/ResetPhysics")]
 	public class ResetPhysicsBlock : BaseBlock
 	{
-		protected override bool CheckSanity(IGadgetContext gadgetContext, IEventContext eventContext)
+		public override IBlock Execute(IGadgetContext gadgetContext, IEventContext eventContext)
 		{
-			if (this._physicalObject == null)
-			{
-				base.LogSanitycheckError("'Physical Object' parameter cannot be null.");
-				return false;
-			}
-			return true;
-		}
-
-		protected override IBlock InnerExecute(IGadgetContext gadgetContext, IEventContext eventContext)
-		{
-			IPhysicalObject value = this._physicalObject.GetValue(gadgetContext);
+			IPhysicalObject value = this._physicalObject.GetValue<IPhysicalObject>(gadgetContext);
 			value.ResetImpulseAndVelocity();
 			return this._nextBlock;
 		}
 
-		public override bool UsesParameterWithId(int parameterId)
-		{
-			return base.CheckIsParameterWithId(this._physicalObject, parameterId);
-		}
-
 		[Header("Read")]
+		[Restrict(true, new Type[]
+		{
+			typeof(IPhysicalObject)
+		})]
 		[SerializeField]
-		private PhysicalObjectParameter _physicalObject;
+		private BaseParameter _physicalObject;
 	}
 }

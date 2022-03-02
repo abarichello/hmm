@@ -1,11 +1,12 @@
 ﻿using System;
+using HeavyMetalMachines.Frontend.UnityUI;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace HeavyMetalMachines.Frontend
 {
 	[AddComponentMenu("UI/Effects/Gradient")]
-	public class HmmUiGradient : BaseMeshEffect
+	public class HmmUiGradient : BaseMeshEffect, IUiGradient
 	{
 		public void SetAlpha(float topAlpha, float bottomAlpha)
 		{
@@ -28,25 +29,25 @@ namespace HeavyMetalMachines.Frontend
 			{
 				return;
 			}
-			UIVertex vertex = default(UIVertex);
-			vh.PopulateUIVertex(ref vertex, 0);
-			float y = vertex.position.y;
-			vh.PopulateUIVertex(ref vertex, --num);
-			float y2 = vertex.position.y;
+			UIVertex uivertex = default(UIVertex);
+			vh.PopulateUIVertex(ref uivertex, 0);
+			float y = uivertex.position.y;
+			vh.PopulateUIVertex(ref uivertex, --num);
+			float y2 = uivertex.position.y;
 			float num2 = y - y2;
 			for (;;)
 			{
-				vertex.color = Color32.Lerp(this._bottomColor, this._topColor, (vertex.position.y - y2) / num2);
+				uivertex.color = Color32.Lerp(this._bottomColor, this._topColor, (uivertex.position.y - y2) / num2);
 				if (this._useRootAlpha)
 				{
-					vertex.color.a = (byte)(base.graphic.color.a * 255f);
+					uivertex.color.a = (byte)(base.graphic.color.a * 255f);
 				}
-				vh.SetUIVertex(vertex, num);
+				vh.SetUIVertex(uivertex, num);
 				if (--num < 0)
 				{
 					break;
 				}
-				vh.PopulateUIVertex(ref vertex, num);
+				vh.PopulateUIVertex(ref uivertex, num);
 			}
 		}
 

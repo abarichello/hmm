@@ -23,19 +23,94 @@ namespace HeavyMetalMachines.Frontend
 		private void OnValueChanged(bool isOnValue)
 		{
 			base.interactable = !isOnValue;
-			base.colors = new ColorBlock
+			ColorBlock colors = base.colors;
+			ColorBlock colorBlock = default(ColorBlock);
+			colorBlock.colorMultiplier = colors.colorMultiplier;
+			colorBlock.disabledColor = ((!isOnValue) ? this._disabledColor : colors.normalColor);
+			colorBlock.fadeDuration = colors.fadeDuration;
+			colorBlock.highlightedColor = colors.highlightedColor;
+			colorBlock.normalColor = colors.normalColor;
+			colorBlock.pressedColor = colors.pressedColor;
+			colors = colorBlock;
+			base.colors = colors;
+		}
+
+		protected override void DoStateTransition(Selectable.SelectionState state, bool instant)
+		{
+			base.DoStateTransition(state, instant);
+			switch (state)
 			{
-				colorMultiplier = base.colors.colorMultiplier,
-				disabledColor = ((!isOnValue) ? this._disabledColor : base.colors.normalColor),
-				fadeDuration = base.colors.fadeDuration,
-				highlightedColor = base.colors.highlightedColor,
-				normalColor = base.colors.normalColor,
-				pressedColor = base.colors.pressedColor
-			};
+			case 0:
+				this.ColorNormal(instant);
+				break;
+			case 1:
+				this.ColorHover(instant);
+				break;
+			case 2:
+				this.ColorPressed(instant);
+				break;
+			case 3:
+				this.ColorDisabled(instant);
+				break;
+			}
+		}
+
+		private void ColorHover(bool instant)
+		{
+			for (int i = 0; i < this._graphicColorData.Length; i++)
+			{
+				this._graphicColorData[i].SetColorHighlighted(instant);
+			}
+			for (int j = 0; j < this._spriteSwappers.Length; j++)
+			{
+				this._spriteSwappers[j].SetColorHighlighted();
+			}
+		}
+
+		private void ColorNormal(bool instant)
+		{
+			for (int i = 0; i < this._graphicColorData.Length; i++)
+			{
+				this._graphicColorData[i].SetColorNormal(instant);
+			}
+			for (int j = 0; j < this._spriteSwappers.Length; j++)
+			{
+				this._spriteSwappers[j].SetColorNormal();
+			}
+		}
+
+		private void ColorPressed(bool instant)
+		{
+			for (int i = 0; i < this._graphicColorData.Length; i++)
+			{
+				this._graphicColorData[i].SetColorPressed(instant);
+			}
+			for (int j = 0; j < this._spriteSwappers.Length; j++)
+			{
+				this._spriteSwappers[j].SetColorPressed();
+			}
+		}
+
+		private void ColorDisabled(bool instant)
+		{
+			for (int i = 0; i < this._graphicColorData.Length; i++)
+			{
+				this._graphicColorData[i].SetColorDisabled(instant);
+			}
+			for (int j = 0; j < this._spriteSwappers.Length; j++)
+			{
+				this._spriteSwappers[j].SetColorDisabled();
+			}
 		}
 
 		private bool _allowSwitchOff;
 
 		private Color _disabledColor;
+
+		[SerializeField]
+		private UiButtonSpriteSwapper[] _spriteSwappers = new UiButtonSpriteSwapper[0];
+
+		[SerializeField]
+		private SelectableGraphicColorData[] _graphicColorData = new SelectableGraphicColorData[0];
 	}
 }

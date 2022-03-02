@@ -12,7 +12,7 @@ namespace HeavyMetalMachines
 		public IFuture AddKeyframe(byte keyframetype, int frameId, int previousFrameId, int time, byte[] data)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1008, 9, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1009, 8, new object[]
 			{
 				keyframetype,
 				frameId,
@@ -26,7 +26,7 @@ namespace HeavyMetalMachines
 		public IFuture UpdateState(byte statetype, byte[] data)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1008, 10, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1009, 9, new object[]
 			{
 				statetype,
 				data

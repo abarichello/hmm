@@ -12,7 +12,7 @@ namespace HeavyMetalMachines.BI
 		public IFuture ReceivePlayerExperienceData(ExperienceDataSet data)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1054, 12, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1079, 12, new object[]
 			{
 				data
 			});

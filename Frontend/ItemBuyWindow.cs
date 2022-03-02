@@ -1,24 +1,49 @@
 ﻿using System;
 using System.Collections;
+using System.Diagnostics;
 using Assets.ClientApiObjects;
 using Assets.ClientApiObjects.Components;
-using ClientAPI;
-using Commons.Swordfish.Exceptions;
-using Commons.Swordfish.Util;
-using HeavyMetalMachines.Swordfish.Player;
+using ClientAPI.Objects;
+using HeavyMetalMachines.DataTransferObjects.Exceptions;
+using HeavyMetalMachines.DataTransferObjects.Util;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Localization;
+using HeavyMetalMachines.Store;
+using HeavyMetalMachines.Store.Business;
+using HeavyMetalMachines.Store.Business.GetStoreItem;
+using HeavyMetalMachines.Store.Business.ObserveStoreItem;
+using HeavyMetalMachines.Store.Business.PurchaseStoreItem;
+using HeavyMetalMachines.Store.Business.PurchaseStoreItem.Exceptions;
 using HeavyMetalMachines.VFX;
+using Hoplon.Input.UiNavigation;
+using Hoplon.Localization.TranslationTable;
+using Hoplon.Serialization;
+using JetBrains.Annotations;
 using Pocketverse;
 using Swordfish.Common.exceptions;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
 	public class ItemBuyWindow : GameHubBehaviour
 	{
+		private UiNavigationGroupHolder UiNavigationGroupHolder
+		{
+			get
+			{
+				return this._uiNavigationGroupHolder;
+			}
+		}
+
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
+		public event Action StoreItemDeactivated;
+
 		private void OnEnable()
 		{
 			GameHubBehaviour.Hub.Store.OnTransactionReceived += this.OnTransactionReceivedFromSW;
-			GameHubBehaviour.Hub.State.ListenToStateChanged += this.LeavingMainmenu;
+			GameHubBehaviour.Hub.State.ListenToStateChanged += this.LeavingMainMenu;
 		}
 
 		private void OnDisable()
@@ -29,45 +54,49 @@ namespace HeavyMetalMachines.Frontend
 				{
 					GameHubBehaviour.Hub.Store.OnTransactionReceived -= this.OnTransactionReceivedFromSW;
 				}
-				GameHubBehaviour.Hub.State.ListenToStateChanged -= this.LeavingMainmenu;
+				GameHubBehaviour.Hub.State.ListenToStateChanged -= this.LeavingMainMenu;
 			}
 		}
 
-		private void LeavingMainmenu(GameState changedState)
+		private void LeavingMainMenu(GameState changedState)
 		{
 			this._onCloseWindow = null;
 			this.SetWaitingWindow(false);
 			this.CloseWindow();
 		}
 
-		private void OnBuyClick(int type)
+		[UsedImplicitly]
+		public void OnBuyClick(int type)
 		{
-			this.buyType = type;
-			int num = 0;
-			int num2 = 0;
+			this._buyType = ((type != 1) ? ItemBuyWindow.BuyType.Soft : ItemBuyWindow.BuyType.Hard);
 			Guid id = this._itemType.Id;
-			GameHubBehaviour.Hub.Store.GetItemPrice(id, out num, out num2, false);
-			num *= this._qnty;
-			num2 *= this._qnty;
+			IStoreBusinessFactory storeBusinessFactory = this._diContainer.Resolve<IStoreBusinessFactory>();
+			IGetStoreItem getStoreItem = storeBusinessFactory.CreateGetStoreItem();
+			StoreItem storeItem = getStoreItem.Get(id);
+			long num = storeItem.SoftPrice;
+			long num2 = storeItem.HardPrice;
+			ILocalBalanceStorage localBalanceStorage = this._diContainer.Resolve<ILocalBalanceStorage>();
+			num *= (long)this._quantity;
+			num2 *= (long)this._quantity;
 			StoreConfirmationWindow storeConfirmationWindow;
 			SingletonMonoBehaviour<PanelController>.Instance.ShowModalWindow<StoreConfirmationWindow>(out storeConfirmationWindow);
-			if (type == 1)
+			if (this._buyType == ItemBuyWindow.BuyType.Hard)
 			{
-				if ((long)num2 > GameHubBehaviour.Hub.Store.HardCurrency)
+				if (num2 > localBalanceStorage.HardCurrency)
 				{
-					storeConfirmationWindow.ShowConfirmationMessage(Language.Get("No_Funds_HardCoin", TranslationSheets.Store), Language.Get("SIM", TranslationSheets.MainMenuGui), Language.Get("CANCELAR", TranslationSheets.MainMenuGui), this._onGoToShopCash);
+					storeConfirmationWindow.ShowConfirmationMessage(Language.Get("No_Funds_HardCoin", TranslationContext.Store), Language.Get("SIM", TranslationContext.MainMenuGui), Language.Get("CANCELAR", TranslationContext.MainMenuGui), this._onGoToShopCash);
 					return;
 				}
 			}
-			else if (num > GameHubBehaviour.Hub.Store.SoftCurrency)
+			else if (num > (long)localBalanceStorage.SoftCurrency)
 			{
-				storeConfirmationWindow.ShowOkConfirmationMessage(Language.Get("No_Funds_SoftCoin", "Store"), Language.Get("Ok", "Store"), this._onGoToShopCash);
+				storeConfirmationWindow.ShowOkConfirmationMessage(Language.Get("No_Funds_SoftCoin", TranslationContext.Store), Language.Get("Ok", TranslationContext.Store), this._onGoToShopCash);
 				return;
 			}
-			storeConfirmationWindow.ShowBoughtMessage(Language.Get("Bought_Confirmation", "Store"), Language.Get("Bought_Confirmation_OK", "Store"), Language.Get("Bought_Confirmation_Cancel", "Store"), new System.Action(this.OnDoBuy));
+			storeConfirmationWindow.ShowBoughtMessage(Language.Get("Bought_Confirmation", TranslationContext.Store), Language.Get("Bought_Confirmation_OK", TranslationContext.Store), Language.Get("Bought_Confirmation_Cancel", TranslationContext.Store), new Action(this.OnDoBuy));
 		}
 
-		private void OnDoBuy()
+		public void OnDoBuy()
 		{
 			if (this._waitingForTransaction)
 			{
@@ -76,11 +105,25 @@ namespace HeavyMetalMachines.Frontend
 			this.SetButtonsActive(false);
 			this.SetWaitingWindow(true);
 			this._waitingForTransaction = true;
-			if (this.buyType == 1)
+			IStoreBusinessFactory storeBusinessFactory = this._diContainer.Resolve<IStoreBusinessFactory>();
+			StoreItem storeItem = storeBusinessFactory.CreateGetStoreItem().Get(this._itemType.Id);
+			ItemCategoryScriptableObject itemCategoryScriptableObject = GameHubBehaviour.Hub.InventoryColletion.AllItemCategories[this._itemType.ItemCategoryId];
+			Inventory inventoryByKind = GameHubBehaviour.Hub.User.Inventory.GetInventoryByKind(itemCategoryScriptableObject.Kind);
+			if (this._buyType == ItemBuyWindow.BuyType.Hard)
 			{
 				if (this._itemType != null)
 				{
-					GameHubBehaviour.Hub.Store.BuyItemUsingHardCoins(this._itemType, this._qnty, new SwordfishClientApi.ParameterizedCallback<long>(this.OnBoughtWithHardCoinsSuccessfull), new SwordfishClientApi.ErrorCallback(this.OnBoughtFailure));
+					HardCurrencyPurchase purchase = new HardCurrencyPurchase
+					{
+						StoreItemId = this._itemType.Id,
+						SeenUnitPrice = storeItem.HardPrice,
+						Quantity = (long)this._quantity,
+						InventoryId = inventoryByKind.Id
+					};
+					ObservableExtensions.Subscribe<PurchaseResult>(storeBusinessFactory.CreatePurchaseStoreItem().PurchaseWithHardCurrency(purchase), new Action<PurchaseResult>(this.OnBoughtSuccessful), delegate(Exception exception)
+					{
+						this.OnBoughtFailure(this._itemType.Id, exception);
+					});
 				}
 				else
 				{
@@ -89,7 +132,16 @@ namespace HeavyMetalMachines.Frontend
 			}
 			else if (this._itemType != null)
 			{
-				GameHubBehaviour.Hub.Store.BuyItemTypeUsingSoftCurrency(this._itemType, new SwordfishClientApi.ParameterizedCallback<long>(this.OnBoughtSuccessfull), new SwordfishClientApi.ErrorCallback(this.OnBoughtFailure));
+				SoftCurrencyPurchase purchase2 = new SoftCurrencyPurchase
+				{
+					StoreItemId = this._itemType.Id,
+					SeenUnitPrice = storeItem.SoftPrice,
+					InventoryId = inventoryByKind.Id
+				};
+				ObservableExtensions.Subscribe<PurchaseResult>(storeBusinessFactory.CreatePurchaseStoreItem().PurchaseWithSoftCurrency(purchase2), new Action<PurchaseResult>(this.OnBoughtSuccessful), delegate(Exception exception)
+				{
+					this.OnBoughtFailure(this._itemType.Id, exception);
+				});
 			}
 			else
 			{
@@ -106,6 +158,10 @@ namespace HeavyMetalMachines.Frontend
 
 		private void OnBoughtWithHardCoinsSuccessfull(object state, long transactionId)
 		{
+			ItemBuyWindow.Log.DebugFormat("Item bought with hard coins successfully. {0}", new object[]
+			{
+				transactionId
+			});
 			base.StartCoroutine(this.WaitToClosePurchasedSkinWindowAsync());
 		}
 
@@ -116,18 +172,28 @@ namespace HeavyMetalMachines.Frontend
 				ItemBuyWindow.Log.Error("Transaction callback received was NOT expected. Ignoring it.");
 				return;
 			}
-			this.DoBoughtEnd(true, itemId);
+			ItemBuyWindow.Log.Debug("Transaction callback received. Will show feedback window.");
+			this.DoBoughtEnd(true, itemId, null);
 		}
 
-		private void OnBoughtSuccessfull(object state, long itemId)
+		private void OnBoughtSuccessful(PurchaseResult purchaseResult)
 		{
-			this.DoBoughtEnd(true, itemId);
+			ItemBuyWindow.Log.InfoFormat("OnBoughtSuccessful itemId:{0}", new object[]
+			{
+				purchaseResult.PurchasedItem.Id
+			});
+			this.DoBoughtEnd(true, purchaseResult.PurchasedItem.Id, null);
 			base.StartCoroutine(this.WaitToClosePurchasedSkinWindowAsync());
 		}
 
-		private void DoBoughtEnd(bool success, long itemId)
+		private void DoBoughtEnd(bool success, long itemId, Exception exception = null)
 		{
 			this._waitingForTransaction = false;
+			ItemBuyWindow.Log.DebugFormat("XXX DoBoughtEnd success:{0} itemId:{1}", new object[]
+			{
+				success,
+				itemId
+			});
 			if (success)
 			{
 				if (itemId == -1L)
@@ -135,21 +201,29 @@ namespace HeavyMetalMachines.Frontend
 					ItemBuyWindow.Log.Error("CANNOT HAVE SUCCESS AND HAVE ITEMID = -1 !!!!");
 					return;
 				}
-				SwordfishStore.BalanceType balanceType = (this.buyType != 1) ? SwordfishStore.BalanceType.Soft : SwordfishStore.BalanceType.Hard;
+				SwordfishStore.BalanceType balanceType = (this._buyType != ItemBuyWindow.BuyType.Hard) ? SwordfishStore.BalanceType.Soft : SwordfishStore.BalanceType.Hard;
 				GameHubBehaviour.Hub.Store.GetBalance(null, balanceType);
-				GameHubBehaviour.Hub.User.Inventory.ReloadItem(itemId, delegate
+				this.SetWaitingWindow(false);
+				this.ConfigureFeedBack(delegate
 				{
-					this.SetWaitingWindow(false);
-					this.ConfigureFeedBack(delegate
-					{
-						base.StartCoroutine(this.AnimateFeedBack());
-					});
+					base.StartCoroutine(this.AnimateFeedBack());
 				});
 			}
 			else
 			{
 				this.SetWaitingWindow(false);
-				this.ShowErrorWindow();
+				if (exception is StoreItemDeactivatedException)
+				{
+					this.ShowErrorWindow("WARNING_ITEM_DEACTIVATED");
+				}
+				else if (exception is StoreItemPriceChangedException)
+				{
+					this.ShowErrorWindow("WARNING_PRICE_ERROR");
+				}
+				else
+				{
+					this.ShowErrorWindow("Buy_Item_Error");
+				}
 			}
 		}
 
@@ -160,19 +234,20 @@ namespace HeavyMetalMachines.Frontend
 			yield break;
 		}
 
-		private void ConfigureFeedBack(System.Action whenDone = null)
+		private void ConfigureFeedBack(Action whenDone = null)
 		{
 			this.hardCoinButton.SetActive(false);
 			this.softCoinButton.SetActive(false);
-			int num = (int)this._itemType.ItemTypePrices[0].Price;
-			int referenceHardPrice = this._itemType.ReferenceHardPrice;
 			string name = this._itemType.Name;
 			string baseSKU = this._itemType.BaseSKU;
 			string text = this._itemType.ItemCategoryId.ToString();
-			string text2 = (this.buyType != 1) ? "SC" : "HC";
-			int num2 = (this.buyType != 1) ? num : referenceHardPrice;
-			UI2DSprite ui2DSprite = (this.buyType != 1) ? this.softCoinStamp : this.hardCoinStamp;
-			GameObject go = (this.buyType != 1) ? this.softCoinGroup : this.hardCoinGroup;
+			IStoreBusinessFactory storeBusinessFactory = this._diContainer.Resolve<IStoreBusinessFactory>();
+			IGetStoreItem getStoreItem = storeBusinessFactory.CreateGetStoreItem();
+			StoreItem storeItem = getStoreItem.Get(this._itemType.Id);
+			string text2 = (this._buyType != ItemBuyWindow.BuyType.Hard) ? "SC" : "HC";
+			long num = (this._buyType != ItemBuyWindow.BuyType.Hard) ? storeItem.SoftPrice : storeItem.HardPrice;
+			UI2DSprite ui2DSprite = (this._buyType != ItemBuyWindow.BuyType.Hard) ? this.softCoinStamp : this.hardCoinStamp;
+			GameObject go = (this._buyType != ItemBuyWindow.BuyType.Hard) ? this.softCoinGroup : this.hardCoinGroup;
 			ui2DSprite.gameObject.SetActive(true);
 			ui2DSprite.alpha = 0f;
 			ui2DSprite.transform.localScale = new Vector3(2f, 2f, 1f);
@@ -200,49 +275,62 @@ namespace HeavyMetalMachines.Frontend
 				text4,
 				baseSKU
 			});
-			GameHubBehaviour.Hub.Swordfish.Log.BILogClientMsg(ClientBITags.BuyItemComplete, string.Format("Sku={0} ItemName={1} ItemCategory={2} ItemPrice={3}", new object[]
+			GameHubBehaviour.Hub.Swordfish.Log.BILogClientMsg(21, string.Format("Sku={0} ItemName={1} ItemCategory={2} ItemPrice={3}", new object[]
 			{
 				text5,
 				name,
 				text,
-				num2
+				num
 			}), true);
 		}
 
-		private void OnBoughtFailure(object state, Exception exception)
+		private void OnBoughtFailure(Guid itemTypeId, Exception exception)
 		{
-			ItemBuyWindow.Log.Error("OnBoughtFailure " + exception.ToString());
+			if (exception is StoreItemDeactivatedException || exception is StoreItemPriceChangedException)
+			{
+				ItemBuyWindow.Log.WarnFormat("Could not complete purchase. {0}", new object[]
+				{
+					exception.Message
+				});
+			}
+			else
+			{
+				ItemBuyWindow.Log.Error("OnBoughtFailure " + exception);
+			}
 			if (exception is SwordfishException)
 			{
-				SwordfishExceptionJson swordfishExceptionJson = (SwordfishExceptionJson)((JsonSerializeable<T>)exception.Message);
-				if (swordfishExceptionJson != null && swordfishExceptionJson.ExceptionType == SwordfishExceptionType.DuplicatedItem)
+				SwordfishExceptionJson swordfishExceptionJson = (SwordfishExceptionJson)((JsonSerializeable<!0>)exception.Message);
+				if (swordfishExceptionJson != null && swordfishExceptionJson.ExceptionType == null)
 				{
 					ItemBuyWindow.Log.WarnFormat("SwordfishException: DuplicatedItem. The software will assume it was just bought", new object[0]);
-					Guid guid = (Guid)state;
 					this._waitingForTransaction = false;
-					ItemTypeScriptableObject itemTypeScriptableObject = GameHubBehaviour.Hub.InventoryColletion.AllItemTypes[guid];
+					ItemTypeScriptableObject itemTypeScriptableObject = GameHubBehaviour.Hub.InventoryColletion.AllItemTypes[itemTypeId];
 					InventoryBag.InventoryKind inventoryKind = InventoryMapper.CategoriesToInventoryKind[itemTypeScriptableObject.ItemCategoryId];
 					InventoryAdapter inventoryAdapterByKind = GameHubBehaviour.Hub.User.Inventory.GetInventoryAdapterByKind(inventoryKind);
-					GameHubBehaviour.Hub.User.Inventory.ReloadItemByItemTypeId(guid, inventoryAdapterByKind.Inventory.Id, delegate(long itemId)
+					GameHubBehaviour.Hub.User.Inventory.ReloadItemByItemTypeId(itemTypeId, inventoryAdapterByKind.Inventory.Id, delegate(long itemId)
 					{
-						this.DoBoughtEnd(itemId >= 0L, itemId);
-						base.StartCoroutine(this.WaitToClosePurchasedSkinWindowAsync());
+						this.DoBoughtEnd(false, itemId, exception);
+						this.StartCoroutine(this.WaitToClosePurchasedSkinWindowAsync());
 					});
 					return;
 				}
 			}
-			this.DoBoughtEnd(false, -1L);
+			else if (exception is StoreItemDeactivatedException && this.StoreItemDeactivated != null)
+			{
+				this.StoreItemDeactivated();
+			}
+			this.DoBoughtEnd(false, -1L, exception);
 			this.CloseWindow();
 		}
 
-		private void ShowErrorWindow()
+		private void ShowErrorWindow(string messageKey = "Buy_Item_Error")
 		{
 			Guid confirmWindowGuid = Guid.NewGuid();
 			ConfirmWindowProperties properties = new ConfirmWindowProperties
 			{
 				Guid = confirmWindowGuid,
-				QuestionText = Language.Get("Buy_Item_Error", "Store"),
-				OkButtonText = Language.Get("Ok", "Store"),
+				QuestionText = Language.Get(messageKey, TranslationContext.Store),
+				OkButtonText = Language.Get("Ok", TranslationContext.Store),
 				OnOk = delegate()
 				{
 					this.SetButtonsActive(true);
@@ -252,17 +340,28 @@ namespace HeavyMetalMachines.Frontend
 			GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.OpenConfirmWindow(properties);
 		}
 
-		public void ShowBuyWindow(ItemTypeScriptableObject itemType, System.Action onBoughtFinished, System.Action onBuyWindowClosed, System.Action onGoToShopCash, int qnty, bool portrait)
+		public void ShowBuyWindow(IItemType itemType, Action onBoughtFinished, Action onBuyWindowClosed, Action onGoToShopCash, int qnty, bool portrait)
 		{
-			this._description.SetActive(portrait);
-			this._description2.SetActive(!portrait);
+			if (itemType.ItemCategoryId == InventoryMapper.EmoteCategoryGuid)
+			{
+				this._description.SetActive(false);
+				this._description2.SetActive(false);
+				this._description3.SetActive(true);
+			}
+			else
+			{
+				this._description.SetActive(portrait);
+				this._description2.SetActive(!portrait);
+				this._description3.SetActive(false);
+			}
 			this._itemType = itemType;
-			this._qnty = qnty;
+			this._quantity = qnty;
 			base.gameObject.SetActive(true);
 			this.WindowGroupGameObject.SetActive(true);
 			this.SetButtonsActive(true);
-			bool isSoftPurchasable = itemType.IsSoftPurchasable;
-			bool isHardPurchasable = itemType.IsHardPurchasable;
+			StoreItem storeItem = this._diContainer.Resolve<IStoreBusinessFactory>().CreateGetStoreItem().Get(itemType.Id);
+			bool isSoftPurchasable = storeItem.IsSoftPurchasable;
+			bool isHardPurchasable = storeItem.IsHardPurchasable;
 			string name = itemType.Name;
 			string text = itemType.Id.ToString();
 			bool isCharacter = false;
@@ -270,11 +369,11 @@ namespace HeavyMetalMachines.Frontend
 			ShopItemTypeComponent component = itemType.GetComponent<ShopItemTypeComponent>();
 			if (null == component)
 			{
-				this.SetupBuyWindow(name, text, isHardPurchasable, isSoftPurchasable, isCharacter, qnty);
+				this.SetupBuyWindow(name, text, itemType.ItemCategoryId, isHardPurchasable, isSoftPurchasable, isCharacter, qnty, portrait);
 			}
 			else
 			{
-				this.SetupBuyWindow(itemType, component, qnty);
+				this.SetupBuyWindow(itemType, component, qnty, portrait);
 			}
 			ItemBuyWindow.Log.InfoFormat("Buying item={0} id={1}", new object[]
 			{
@@ -282,21 +381,34 @@ namespace HeavyMetalMachines.Frontend
 				text
 			});
 			string msg = string.Format("ItemType={0} Category={1}", text, arg);
-			GameHubBehaviour.Hub.Swordfish.Log.BILogClientMsg(ClientBITags.OpenBuyItemWindow, msg, true);
+			GameHubBehaviour.Hub.Swordfish.Log.BILogClientMsg(36, msg, true);
 			this._onCloseWindow = onBuyWindowClosed;
 			this._onBoughtFinished = onBoughtFinished;
 			this._onGoToShopCash = onGoToShopCash;
+			this.UiNavigationGroupHolder.AddHighPriorityGroup();
 		}
 
-		private void SetupBuyWindow(string itemName, string id, bool isHardPurchase, bool isSoftPurchase, bool isCharacter, int quantity)
+		private void SetupBuyWindow(string itemName, string id, Guid categoryId, bool isHardPurchase, bool isSoftPurchase, bool isCharacter, int quantity, bool portrait)
 		{
-			this.SetupBuyWindowImages(isCharacter, itemName);
-			this.SetupBuyWindowTranslation(isCharacter, itemName, quantity);
+			if (categoryId == InventoryMapper.EmoteCategoryGuid)
+			{
+				this.SetupBuyWindowImages(isCharacter, itemName, this.spritesheet);
+				this.SetupBuyWindowTranslation(isCharacter, itemName, quantity, this.previewItemName3, this.previewItemDescription3);
+			}
+			else if (portrait)
+			{
+				this.SetupBuyWindowImages(isCharacter, itemName, (HMMUI2DDynamicTexture)this.icon);
+				this.SetupBuyWindowTranslation(isCharacter, itemName, quantity, this.previewItemName, this.previewItemDescription);
+			}
+			else
+			{
+				this.SetupBuyWindowImages(isCharacter, itemName, (HMMUI2DDynamicTexture)this.icon2);
+				this.SetupBuyWindowTranslation(isCharacter, itemName, quantity, this.previewItemName2, this.previewItemDescription2);
+			}
 			if (isSoftPurchase)
 			{
 				this.softCoinGroup.SetActive(true);
 				this.softCoinButton.SetActive(true);
-				UICamera.hoveredObject = this.softCoinButton;
 				TweenAlpha.Begin(this.softCoinGroup, 0.5f, 1f);
 			}
 			else
@@ -307,7 +419,6 @@ namespace HeavyMetalMachines.Frontend
 			{
 				this.hardCoinGroup.SetActive(true);
 				this.hardCoinButton.SetActive(true);
-				UICamera.hoveredObject = this.hardCoinButton;
 				TweenAlpha.Begin(this.hardCoinGroup, 0.5f, 1f);
 			}
 			else
@@ -316,132 +427,149 @@ namespace HeavyMetalMachines.Frontend
 			}
 			this.hardCoinStamp.gameObject.SetActive(false);
 			this.softCoinStamp.gameObject.SetActive(false);
-			this.SetupBuyWindowPriecesLabel(id, quantity);
+			this.SetupPricing(new Guid(id), quantity);
 			this.SetupBuyWindowButtons();
 		}
 
-		private void SetupBuyWindow(ItemTypeScriptableObject itemType, ShopItemTypeComponent shopComponent, int quantity)
+		private void SetupBuyWindow(IItemType itemType, ShopItemTypeComponent shopComponent, int quantity, bool portrait)
 		{
-			this.SetupBuyWindowImages(shopComponent);
-			this.SetupBuyWindowTranslation(shopComponent, quantity);
-			bool isSoftPurchasable = itemType.IsSoftPurchasable;
+			if (itemType.ItemCategoryId == InventoryMapper.EmoteCategoryGuid)
+			{
+				this.SetupBuyWindowImages(shopComponent, this.spritesheet);
+				this.SetupBuyWindowTranslation(itemType, quantity, this.previewItemName3, this.previewItemDescription3);
+			}
+			else if (portrait)
+			{
+				this.SetupBuyWindowImages(shopComponent, (HMMUI2DDynamicTexture)this.icon);
+				this.SetupBuyWindowTranslation(itemType, quantity, this.previewItemName, this.previewItemDescription);
+			}
+			else
+			{
+				this.SetupBuyWindowImages(shopComponent, (HMMUI2DDynamicTexture)this.icon2);
+				this.SetupBuyWindowTranslation(itemType, quantity, this.previewItemName2, this.previewItemDescription2);
+			}
+			StoreItem storeItem = this._diContainer.Resolve<IStoreBusinessFactory>().CreateGetStoreItem().Get(itemType.Id);
+			bool isSoftPurchasable = storeItem.IsSoftPurchasable;
 			this.softCoinGroup.SetActive(isSoftPurchasable);
 			if (isSoftPurchasable)
 			{
 				this.softCoinButton.SetActive(true);
-				UICamera.hoveredObject = this.softCoinButton;
 				TweenAlpha.Begin(this.softCoinGroup, 0.5f, 1f);
 			}
-			bool isHardPurchasable = itemType.IsHardPurchasable;
+			bool isHardPurchasable = storeItem.IsHardPurchasable;
 			this.hardCoinGroup.SetActive(isHardPurchasable);
 			if (isHardPurchasable)
 			{
 				this.hardCoinButton.SetActive(true);
-				UICamera.hoveredObject = this.hardCoinButton;
 				TweenAlpha.Begin(this.hardCoinGroup, 0.5f, 1f);
 			}
 			this.hardCoinStamp.gameObject.SetActive(false);
 			this.softCoinStamp.gameObject.SetActive(false);
-			this.SetupBuyWindowPriecesLabel(itemType.Id.ToString(), quantity);
+			this.SetupPricing(itemType.Id, quantity);
 			this.SetupBuyWindowButtons();
 		}
 
-		private void SetupBuyWindowPriecesLabel(string itemID, int quantity)
+		private void SetupPricing(Guid itemId, int quantity)
 		{
-			int num = 0;
-			int num2 = 0;
-			GameHubBehaviour.Hub.Store.GetItemPrice(new Guid(itemID), out num, out num2, false);
-			num *= quantity;
-			num2 *= quantity;
-			this.softCoinLabel.text = num.ToString();
-			this.hardCoinLabel.text = num2.ToString();
-			this.playerSoftBalanceLabel.text = GameHubBehaviour.Hub.Store.SoftCurrency.ToString();
-			this.playerHardBalanceLabel.text = GameHubBehaviour.Hub.Store.HardCurrency.ToString();
+			IStoreBusinessFactory storeBusinessFactory = this._diContainer.Resolve<IStoreBusinessFactory>();
+			IGetStoreItem getStoreItem = storeBusinessFactory.CreateGetStoreItem();
+			StoreItem storeItem = getStoreItem.Get(itemId);
+			this.SetupBuyWindowPricesLabel(storeItem, quantity);
+			IObserveStoreItem observeStoreItem = storeBusinessFactory.CreateObserveStoreItem();
+			IObservable<StoreItem> observable = observeStoreItem.CreateObservable(itemId);
+			this._storeItemObservation = ObservableExtensions.Subscribe<StoreItem>(observable, delegate(StoreItem storeItemPrices)
+			{
+				this.SetupBuyWindowPricesLabel(storeItemPrices, quantity);
+			});
 		}
 
-		private void SetupBuyWindowImages(bool isCharacter, string itemName)
+		private void SetupBuyWindowPricesLabel(StoreItem storeItem, int quantity)
+		{
+			ILocalBalanceStorage localBalanceStorage = this._diContainer.Resolve<ILocalBalanceStorage>();
+			long num = storeItem.SoftPrice;
+			long num2 = storeItem.HardPrice;
+			num *= (long)quantity;
+			num2 *= (long)quantity;
+			this.softCoinLabel.text = num.ToString();
+			this.hardCoinLabel.text = num2.ToString();
+			this.playerSoftBalanceLabel.text = localBalanceStorage.SoftCurrency.ToString();
+			this.playerHardBalanceLabel.text = localBalanceStorage.HardCurrency.ToString();
+		}
+
+		private void SetupBuyWindowImages(bool isCharacter, string itemName, HMMUI2DDynamicTexture dynamicTexture)
 		{
 			if (isCharacter)
 			{
-				((HMMUI2DDynamicTexture)this.icon).TextureName = itemName + "_skin_00";
+				dynamicTexture.TextureName = itemName + "_skin_00";
 				((HMMUI2DDynamicTexture)this.icon2).TextureName = itemName + "_skin_00";
 			}
 			else
 			{
-				((HMMUI2DDynamicTexture)this.icon).TextureName = itemName;
-				((HMMUI2DDynamicTexture)this.icon2).TextureName = itemName;
+				dynamicTexture.TextureName = itemName;
 			}
 		}
 
-		private void SetupBuyWindowImages(ShopItemTypeComponent shopComponent)
+		private void SetupBuyWindowImages(ShopItemTypeComponent shopComponent, HMMUI2DDynamicTexture dynamicTexture)
 		{
-			((HMMUI2DDynamicTexture)this.icon).TextureName = shopComponent.IconAssetName;
-			((HMMUI2DDynamicTexture)this.icon2).TextureName = shopComponent.IconAssetName;
+			dynamicTexture.TextureName = shopComponent.IconAssetName;
 		}
 
-		private void SetupBuyWindowTranslation(bool isCharacter, string itemName, int quantity)
+		private void SetupBuyWindowTranslation(bool isCharacter, string itemName, int quantity, UILabel itemNameLabel, UILabel itemDescriptionLabel)
 		{
 			string text = string.Format("{0}_name", itemName);
 			string text2 = string.Format("{0}_description", itemName);
-			TranslationSheets translationSheet;
+			ContextTag context;
 			if (isCharacter)
 			{
-				translationSheet = TranslationSheets.CharactersBaseInfo;
+				context = TranslationContext.CharactersBaseInfo;
 				text = text.ToUpper();
 				text2 = text2.ToUpper();
 			}
 			else
 			{
-				translationSheet = TranslationSheets.Items;
+				context = TranslationContext.Items;
 			}
-			string format = Language.Get(text, translationSheet);
-			string format2 = Language.Get(text2, translationSheet);
-			string text3 = string.Format(format, quantity);
-			string text4 = string.Format(format2, quantity);
-			this.previewItemName.text = text3;
-			this.previewItemName2.text = text3;
-			this.previewItemDescription.text = text4;
-			this.previewItemDescription2.text = text4;
+			string formatted = Language.GetFormatted(text, context, new object[]
+			{
+				quantity
+			});
+			string formatted2 = Language.GetFormatted(text2, context, new object[]
+			{
+				quantity
+			});
+			itemNameLabel.text = formatted;
+			itemDescriptionLabel.text = formatted2;
 		}
 
-		private void SetupBuyWindowTranslation(ShopItemTypeComponent shopComponent, int quantity)
+		private void SetupBuyWindowTranslation(IItemType itemType, int quantity, UILabel itemNameLabel, UILabel itemDescriptionLabel)
 		{
-			string format = Language.Get(shopComponent.TitleDraft, TranslationSheets.Items);
-			string format2 = Language.Get(shopComponent.DescriptionDraft, TranslationSheets.Items);
-			string text = string.Format(format, quantity);
-			string text2 = string.Format(format2, quantity);
-			this.previewItemName.text = text;
-			this.previewItemName2.text = text;
-			this.previewItemDescription.text = text2;
-			this.previewItemDescription2.text = text2;
+			ShopItemTypeComponent component = itemType.GetComponent<ShopItemTypeComponent>();
+			SkinPrefabItemTypeComponent skinPrefabItemTypeComponent;
+			ShopDetailsComponent shopDetailsComponent;
+			string text;
+			string text2;
+			if (itemType.TryGetComponent<SkinPrefabItemTypeComponent>(out skinPrefabItemTypeComponent) && itemType.TryGetComponent<ShopDetailsComponent>(out shopDetailsComponent))
+			{
+				text = Language.Get(skinPrefabItemTypeComponent.CardSkinDraft, TranslationContext.Items);
+				text2 = Language.Get(shopDetailsComponent.SkinQuoteTextDraf, TranslationContext.Items);
+			}
+			else
+			{
+				text = Language.GetFormatted(component.TitleDraft, TranslationContext.Items, new object[]
+				{
+					quantity
+				});
+				text2 = Language.GetFormatted(component.DescriptionDraft, TranslationContext.Items, new object[]
+				{
+					quantity
+				});
+			}
+			itemNameLabel.text = text;
+			itemDescriptionLabel.text = text2;
 		}
 
 		private void SetupBuyWindowButtons()
 		{
-			if (this.softCoinGroup.activeSelf)
-			{
-				UICamera.controllerNavigationObject = this.softCoinButton;
-				if (this.hardCoinGroup.activeSelf)
-				{
-					this.softCoinButton.GetComponent<UIKeyNavigation>().onRight = this.hardCoinButton;
-				}
-				else
-				{
-					this.softCoinButton.GetComponent<UIKeyNavigation>().onRight = null;
-				}
-			}
-			if (this.hardCoinGroup.activeSelf)
-			{
-				UICamera.controllerNavigationObject = this.hardCoinButton;
-				if (this.softCoinGroup.activeSelf)
-				{
-					this.hardCoinButton.GetComponent<UIKeyNavigation>().onLeft = this.softCoinButton;
-				}
-				else
-				{
-					this.hardCoinButton.GetComponent<UIKeyNavigation>().onLeft = null;
-				}
-			}
 			this._uiGrid.Reposition();
 		}
 
@@ -461,11 +589,18 @@ namespace HeavyMetalMachines.Frontend
 			}
 			this.SetButtonsActive(true);
 			base.gameObject.SetActive(false);
+			Debug.Log("[RTS] ItemBuyWindow CloseWindow");
+			if (this._storeItemObservation != null)
+			{
+				this._storeItemObservation.Dispose();
+				this._storeItemObservation = null;
+			}
 			if (this._onCloseWindow != null)
 			{
 				this._onCloseWindow();
 				this._onCloseWindow = null;
 			}
+			this.UiNavigationGroupHolder.RemoveHighPriorityGroup();
 		}
 
 		private IEnumerator WaitToClosePurchasedSkinWindowAsync()
@@ -478,13 +613,14 @@ namespace HeavyMetalMachines.Frontend
 
 		private void SetWaitingWindow(bool waiting)
 		{
+			ItemBuyWindow.Log.Debug(string.Format("enable/disable waitingWindow BuyWindow {0}, hash: {1}, InstanceID: {2} ", waiting, this.GetHashCode(), base.GetInstanceID()));
 			if (waiting)
 			{
 				GameHubBehaviour.Hub.GuiScripts.SharedPreGameWindow.ShowWaitingWindow(base.GetType());
 			}
 			else
 			{
-				GameHubBehaviour.Hub.GuiScripts.SharedPreGameWindow.HideWaitinWindow(base.GetType());
+				GameHubBehaviour.Hub.GuiScripts.SharedPreGameWindow.HideWaitingWindow(base.GetType());
 			}
 		}
 
@@ -498,9 +634,18 @@ namespace HeavyMetalMachines.Frontend
 		[SerializeField]
 		private UILabel previewItemDescription2;
 
+		[SerializeField]
+		private UILabel previewItemName3;
+
+		[SerializeField]
+		private UILabel previewItemDescription3;
+
 		public UITexture icon;
 
 		public UITexture icon2;
+
+		[SerializeField]
+		private AnimatedNguiTexture spritesheet;
 
 		[SerializeField]
 		private GameObject _description;
@@ -508,13 +653,16 @@ namespace HeavyMetalMachines.Frontend
 		[SerializeField]
 		private GameObject _description2;
 
-		private ItemTypeScriptableObject _itemType;
+		[SerializeField]
+		private GameObject _description3;
 
-		private int _qnty;
+		private IItemType _itemType;
 
-		private System.Action _onBoughtFinished;
+		private int _quantity;
 
-		private System.Action _onCloseWindow;
+		private Action _onBoughtFinished;
+
+		private Action _onCloseWindow;
 
 		public UI2DSprite softCoinStamp;
 
@@ -541,8 +689,6 @@ namespace HeavyMetalMachines.Frontend
 
 		public UILabel playerHardBalanceLabel;
 
-		private int buyType;
-
 		public GameObject WindowGroupGameObject;
 
 		[Header("[Purchased Skin Window]")]
@@ -550,12 +696,29 @@ namespace HeavyMetalMachines.Frontend
 
 		[Header("[Purchased Skin Audio]")]
 		[SerializeField]
-		protected FMODAsset SfxUiStoreItemBuy;
+		protected AudioEventAsset SfxUiStoreItemBuy;
 
-		private System.Action _onGoToShopCash;
+		[Header("[Ui Navigation]")]
+		[SerializeField]
+		private UiNavigationGroupHolder _uiNavigationGroupHolder;
+
+		[InjectOnClient]
+		private DiContainer _diContainer;
+
+		private IDisposable _storeItemObservation;
+
+		private Action _onGoToShopCash;
 
 		private bool _waitingForTransaction;
 
 		private static readonly BitLogger Log = new BitLogger(typeof(ItemBuyWindow));
+
+		private ItemBuyWindow.BuyType _buyType;
+
+		private enum BuyType
+		{
+			Soft,
+			Hard
+		}
 	}
 }

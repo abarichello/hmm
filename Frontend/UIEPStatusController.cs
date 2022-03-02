@@ -131,7 +131,7 @@ namespace HeavyMetalMachines.Frontend
 		public Animator GadgetAnimator;
 
 		[Header("[Audio]")]
-		public FMODAsset EnoughEpAudioFmodAsset;
+		public AudioEventAsset EnoughEpAudioFmodAsset;
 
 		private bool _playSound;
 

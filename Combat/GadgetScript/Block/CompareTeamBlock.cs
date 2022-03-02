@@ -6,6 +6,7 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat.GadgetScript.Block
 {
+	[Obsolete("Obsolete! Use FilterBlock")]
 	[CreateAssetMenu(menuName = "GadgetScript/Block/Parameter/CompareTeam")]
 	public class CompareTeamBlock : BaseBlock
 	{
@@ -18,12 +19,7 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 			}
 		}
 
-		protected override bool CheckSanity(IGadgetContext gadgetContext, IEventContext eventContext)
-		{
-			return !((IHMMGadgetContext)gadgetContext).IsClient || true;
-		}
-
-		protected override IBlock InnerExecute(IGadgetContext gadgetContext, IEventContext eventContext)
+		public override IBlock Execute(IGadgetContext gadgetContext, IEventContext eventContext)
 		{
 			IHMMEventContext ihmmeventContext = (IHMMEventContext)eventContext;
 			if (((IHMMGadgetContext)gadgetContext).IsServer)
@@ -42,11 +38,6 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 			return this._teamNotEqualBlock;
 		}
 
-		public override bool UsesParameterWithId(int parameterId)
-		{
-			return false;
-		}
-
 		[SerializeField]
 		private BaseBlock _teamNotEqualBlock;
 
@@ -60,9 +51,9 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 		private static BoolParameter _resultParameter;
 
 		[Serializable]
-		private class Comparison : IParameterComparison, IUsedParametersArray
+		private class Comparison : IParameterComparison
 		{
-			public bool Compare(IParameterContext context)
+			public bool Compare(object context)
 			{
 				bool result = false;
 				ICombatObject value = this._combat.GetValue(context);
@@ -96,8 +87,8 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 			[SerializeField]
 			private CombatObjectParameter _otherCombat;
 
-			[SerializeField]
 			[Tooltip("This is only used if the Other Combat is not set.")]
+			[SerializeField]
 			private TeamKind _team;
 		}
 	}

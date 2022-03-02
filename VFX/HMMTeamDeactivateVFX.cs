@@ -22,9 +22,16 @@ namespace HeavyMetalMachines.VFX
 				HMMTeamDeactivateVFX.Log.Warn("A TargetFXInfo.Owner is null on " + base.name);
 				return;
 			}
-			TeamKind team = GameHubBehaviour.Hub.Players.GetPlayerOrBotsByObjectId(this._targetFXInfo.Owner.ObjId).Team;
-			VFXTeam vfxteam = (team == GameHubBehaviour.Hub.Players.CurrentPlayerTeam) ? VFXTeam.Ally : VFXTeam.Enemy;
-			this.TargetGameObject.SetActive(vfxteam == this.TargetTeam);
+			if (this.PrevizMode)
+			{
+				this.TargetGameObject.SetActive(this.CurrentTeam == this.TargetTeam);
+			}
+			else
+			{
+				TeamKind team = GameHubBehaviour.Hub.Players.GetPlayerOrBotsByObjectId(this._targetFXInfo.Owner.ObjId).Team;
+				VFXTeam vfxteam = (team == GameHubBehaviour.Hub.Players.CurrentPlayerTeam) ? VFXTeam.Ally : VFXTeam.Enemy;
+				this.TargetGameObject.SetActive(vfxteam == this.TargetTeam);
+			}
 		}
 
 		protected override void WillDeactivate()

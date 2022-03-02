@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.Matches;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Match
@@ -29,6 +30,23 @@ namespace HeavyMetalMachines.Match
 			default:
 				return TeamKind.Zero;
 			}
+		}
+
+		public static MatchTeam GetMatchTeam(this TeamKind teamKind)
+		{
+			if (teamKind == TeamKind.Neutral)
+			{
+				return 2;
+			}
+			if (teamKind == TeamKind.Blue)
+			{
+				return 0;
+			}
+			if (teamKind != TeamKind.Red)
+			{
+				throw new Exception(string.Format("Cannot convert team kind {0} into a MatchTeam.", teamKind));
+			}
+			return 1;
 		}
 	}
 }

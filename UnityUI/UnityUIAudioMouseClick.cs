@@ -7,7 +7,7 @@ using UnityEngine.UI;
 
 namespace HeavyMetalMachines.UnityUI
 {
-	public class UnityUIAudioMouseClick : MonoBehaviour, IPointerUpHandler, IEventSystemHandler
+	public class UnityUIAudioMouseClick : MonoBehaviour, IPointerClickHandler, IEventSystemHandler
 	{
 		protected void Awake()
 		{
@@ -16,7 +16,7 @@ namespace HeavyMetalMachines.UnityUI
 			this._instanceId = base.gameObject.GetInstanceID();
 		}
 
-		public void OnPointerUp(PointerEventData eventData)
+		public void OnPointerClick(PointerEventData eventData)
 		{
 			if (this._selectableId != -1 && !this._selectable.IsInteractable())
 			{
@@ -27,14 +27,14 @@ namespace HeavyMetalMachines.UnityUI
 			{
 				if (hovered[i].GetInstanceID() == this._instanceId)
 				{
-					this._sfxController.Play(this.asset, base.transform, 1f, this.parameterBytes, 0, this._forceResetTimeline);
+					this._sfxController.Play(this.asset, base.transform, 1f, UnityUIAudioMouseClick._parameter, 0, this._forceResetTimeline);
 					break;
 				}
 			}
 		}
 
 		[SerializeField]
-		private FMODAsset asset;
+		private AudioEventAsset asset;
 
 		[SerializeField]
 		private SFXController _sfxController;
@@ -42,7 +42,7 @@ namespace HeavyMetalMachines.UnityUI
 		[SerializeField]
 		private bool _forceResetTimeline = true;
 
-		private byte[] parameterBytes = new byte[0];
+		private static readonly byte[] _parameter = new byte[0];
 
 		private Selectable _selectable;
 

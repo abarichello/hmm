@@ -49,7 +49,7 @@ namespace HeavyMetalMachines.VFX
 			{
 				num += num2;
 			}
-			this._light.intensity = 0.5f * this._initialIntensity * (1f - Mathf.Cos(6.28318548f * num * num2));
+			this._light.intensity = 0.5f * this._initialIntensity * (1f - Mathf.Cos(6.2831855f * num * num2));
 		}
 
 		[Tooltip("The light color of your own team (blue team).")]

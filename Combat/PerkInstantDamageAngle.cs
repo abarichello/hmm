@@ -14,7 +14,7 @@ namespace HeavyMetalMachines.Combat
 			}
 			this._angle = this.Angle;
 			this._range = ((this.Range != 0f) ? this.Range : this.Effect.Data.Range);
-			BarrierUtils.OverlapSphereRaycastFromCenter(this.Effect.Data.Origin, this._range, 1077058560, PerkInstantDamageAngle._objects);
+			BarrierUtils.OverlapSphereRaycastFromCenter(this.Effect.Data.Origin, this._range, 1077054464, PerkInstantDamageAngle._objects);
 			for (int i = 0; i < PerkInstantDamageAngle._objects.Count; i++)
 			{
 				BarrierUtils.CombatHit combatHit = PerkInstantDamageAngle._objects[i];

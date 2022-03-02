@@ -3,31 +3,39 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using Assets.ClientApiObjects;
 using Assets.ClientApiObjects.Components;
+using Assets.Customization;
 using ClientAPI;
 using ClientAPI.Objects;
-using Commons.Swordfish.Battlepass;
-using Commons.Swordfish.Inventory;
-using Commons.Swordfish.Util;
+using HeavyMetalMachines.Customization.Business;
+using HeavyMetalMachines.DataTransferObjects.Battlepass;
+using HeavyMetalMachines.DataTransferObjects.Inventory;
+using HeavyMetalMachines.DataTransferObjects.Result;
+using HeavyMetalMachines.DataTransferObjects.Util;
 using HeavyMetalMachines.Frontend;
+using HeavyMetalMachines.Items.DataTransferObjects;
 using HeavyMetalMachines.Swordfish;
-using HeavyMetalMachines.Swordfish.Player;
+using Hoplon.Serialization;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
-using UnityEngine.SceneManagement;
+using Zenject;
 
 namespace HeavyMetalMachines.Customization
 {
 	[CreateAssetMenu(menuName = "UnityUI/CustomizationInventoryComponent")]
-	public class CustomizationInventoryComponent : GameHubScriptableObject
+	public class CustomizationInventoryComponent : GameHubScriptableObject, IGetCustomizationChange, IGetCustomizationHoverChange
 	{
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		public event Action<PlayerCustomizationSlot> OnItemEquiped;
+		public event ItemEquippedEventHandler OnReceivedItemEquipChangedCallback;
 
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<bool> OnHasNewItemsStateChanged;
 
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		public event System.Action OnSkinTabHasNewItemsStateChanged;
+		public event Action OnSkinTabHasNewItemsStateChanged;
+
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
+		public event Action<Guid, int> OnCategoryItemSeenCountChanged;
 
 		public bool HasNewItems
 		{
@@ -40,23 +48,26 @@ namespace HeavyMetalMachines.Customization
 		private void OnEnable()
 		{
 			MainMenu.PlayerReloadedEvent += this.OnPlayerDataReloaded;
+			this._onItemEquipChangedSubject = new Subject<ItemChangeRequestState>();
+			this._onItemHoverChangedSubject = new Subject<CustomizationInventoryCellItemData>();
 		}
 
 		private void OnDisable()
 		{
 			MainMenu.PlayerReloadedEvent -= this.OnPlayerDataReloaded;
+			this._onItemEquipChangedSubject = null;
+			this._onItemHoverChangedSubject = null;
 		}
 
-		public void LoadInventoryScene(System.Action onCloseInventoryCallback)
+		[Obsolete("Use MainMenuTree.InventoryNode")]
+		public void LoadInventoryScene(Action onCloseInventoryCallback)
 		{
-			this.OnCloseInventoryCallback = onCloseInventoryCallback;
-			SceneManager.LoadSceneAsync(this._inventorySceneName, LoadSceneMode.Additive);
+			CustomizationInventoryComponent.Log.Warn("Obsolete LoadInventoryScene. Use MainMenuTree.InventoryNode");
 		}
 
 		public void RegisterView(ICustomizationInventoryView view)
 		{
 			this._customizationInventoryView = view;
-			this.ShowCustomizationInventoryWindow();
 		}
 
 		public void ShowCustomizationInventoryWindow()
@@ -67,35 +78,55 @@ namespace HeavyMetalMachines.Customization
 			}
 		}
 
+		[Obsolete("Use MainMenuPresenterTree")]
 		public void HideCustomizationInventoryWindow(bool imediate = false)
 		{
-			if (!this._customizationInventoryView.IsVisible())
-			{
-				return;
-			}
-			this._customizationInventoryView.SetVisibility(false, imediate);
-			SceneManager.UnloadSceneAsync(this._inventorySceneName);
-			this._categoryInventory.Clear();
-			this._customizationInventoryView = null;
-			if (this.OnCloseInventoryCallback != null)
-			{
-				this.OnCloseInventoryCallback();
-			}
-			this.OnCloseInventoryCallback = null;
+			CustomizationInventoryComponent.Log.Warn("Obsolete HideCustomizationInventoryWindow. Use MainMenuPresenterTree");
 		}
 
-		public CustomizationInventoryCellItemData GetItem(Guid categoryId, Guid itemTypeId)
+		public void CustomizationWindowUnloaded()
 		{
+			this._categoryInventory.Clear();
+			this._customizationInventoryView = null;
+		}
+
+		public CustomizationInventoryCellItemData GetItem(Guid itemTypeId)
+		{
+			ItemTypeScriptableObject itemTypeScriptableObject;
+			try
+			{
+				itemTypeScriptableObject = GameHubScriptableObject.Hub.InventoryColletion.AllItemTypes[itemTypeId];
+			}
+			catch (KeyNotFoundException ex)
+			{
+				CustomizationInventoryComponent.Log.ErrorFormat("keyNotFoundException. id={0}, ex={1}", new object[]
+				{
+					itemTypeId,
+					ex
+				});
+				return null;
+			}
+			catch (Exception ex2)
+			{
+				CustomizationInventoryComponent.Log.ErrorFormat("Exception. id={0}, ex={1}", new object[]
+				{
+					itemTypeId,
+					ex2
+				});
+				return null;
+			}
+			ItemCategoryScriptableObject itemCategoryScriptableObject = GameHubScriptableObject.Hub.InventoryColletion.AllItemCategories[itemTypeScriptableObject.ItemCategoryId];
+			Guid id = itemCategoryScriptableObject.Id;
 			CustomizationInventoryCategoryData customizationInventoryCategoryData;
 			CustomizationInventoryCellItemData result;
-			if (this._categoryInventory.TryGetValue(categoryId, out customizationInventoryCategoryData) && customizationInventoryCategoryData.ItemsDictionary.TryGetValue(itemTypeId, out result))
+			if (this._categoryInventory.TryGetValue(id, out customizationInventoryCategoryData) && customizationInventoryCategoryData.ItemsDictionary.TryGetValue(itemTypeId, out result))
 			{
 				return result;
 			}
 			return null;
 		}
 
-		private CustomizationInventoryCategoryData GetCategoryData(Guid categoryId)
+		public CustomizationInventoryCategoryData GetCategoryData(Guid categoryId)
 		{
 			CustomizationInventoryCategoryData result;
 			if (!this._categoryInventory.TryGetValue(categoryId, out result))
@@ -121,12 +152,24 @@ namespace HeavyMetalMachines.Customization
 		{
 			this._categoriesIds.Add(categoryId);
 			ItemCategoryScriptableObject itemCategory = this.GetItemCategory(categoryId);
-			string categoryName = (!itemCategory) ? "Unnamed category" : Language.Get(itemCategory.TitleDraft, TranslationSheets.Inventory);
-			CustomizationInventoryCategoryData customizationInventoryCategoryData = new CustomizationInventoryCategoryData(categoryId, categoryName);
-			customizationInventoryCategoryData.CustomizationSlot = ((!itemCategory) ? PlayerCustomizationSlot.None : itemCategory.CustomizationSlot);
+			string categoryName = (!itemCategory) ? "Unnamed category" : itemCategory.LocalizedName;
+			IGetCustomizationSlot customizationSlotSelector;
+			if (itemCategory.CustomizationSlots.Count > 1)
+			{
+				customizationSlotSelector = new MultipleCustomizationSlotSelector(itemCategory, GameHubScriptableObject.Hub.User.Inventory.Customizations);
+			}
+			else if (itemCategory.CustomizationSlots.Count == 1)
+			{
+				customizationSlotSelector = new SingleCustomizationSlotSelector(itemCategory);
+			}
+			else
+			{
+				customizationSlotSelector = new StandardCustomizationSlotSelector();
+			}
+			CustomizationInventoryCategoryData customizationInventoryCategoryData = new CustomizationInventoryCategoryData(categoryId, categoryName, itemCategory.CustomizationSlots, customizationSlotSelector);
 			customizationInventoryCategoryData.IsLore = (itemCategory.Name == "Lore");
 			this._categoryInventory[categoryId] = customizationInventoryCategoryData;
-			if (customizationInventoryCategoryData.CustomizationSlot != PlayerCustomizationSlot.Skin)
+			if (customizationInventoryCategoryData.CategoryId != InventoryMapper.SkinsCategoryGuid)
 			{
 				ItemTypeScriptableObject defaultCategoryItem = GameHubScriptableObject.Hub.CustomizationAssets.GetDefaultCategoryItem(categoryId);
 				CustomizationInventoryCellItemData customizationInventoryCellItemData = this.ConvertItemType(defaultCategoryItem, null);
@@ -138,14 +181,8 @@ namespace HeavyMetalMachines.Customization
 					customizationInventoryCellItemData.DateAcquired = DateTime.MinValue;
 					customizationInventoryCategoryData.AddItem(customizationInventoryCellItemData);
 				}
-				PlayerCustomizationSlot customizationSlotByCategoryId = this.GetCustomizationSlotByCategoryId(categoryId);
-				Guid guidBySlot = GameHubScriptableObject.Hub.User.Inventory.Customizations.GetGuidBySlot(customizationSlotByCategoryId);
-				if (customizationInventoryCellItemData != null && (guidBySlot == Guid.Empty || guidBySlot == customizationInventoryCellItemData.ItemTypeId))
-				{
-					customizationInventoryCategoryData.EquipItem(customizationInventoryCellItemData.ItemTypeId);
-				}
-				this.TryToAddItemData(InventoryBag.InventoryKind.Customization, categoryId, defaultItemTypeId, guidBySlot, customizationInventoryCategoryData);
-				this.TryToAddItemData(InventoryBag.InventoryKind.Collectables, categoryId, defaultItemTypeId, guidBySlot, customizationInventoryCategoryData);
+				this.TryToAddItemData(3, categoryId, defaultItemTypeId, customizationInventoryCategoryData);
+				this.TryToAddItemData(14, categoryId, defaultItemTypeId, customizationInventoryCategoryData);
 				customizationInventoryCategoryData.SortItems(CustomizationInventoryCategoryData.SortKind.AcquisitionDate, true);
 			}
 			else
@@ -157,30 +194,25 @@ namespace HeavyMetalMachines.Customization
 
 		private void TryToAddSkinItemData(CustomizationInventoryCategoryData categoryData)
 		{
-			InventoryAdapter inventoryAdapterByKind = GameHubScriptableObject.Hub.User.Inventory.GetInventoryAdapterByKind(InventoryBag.InventoryKind.Customization);
+			InventoryAdapter inventoryAdapterByKind = GameHubScriptableObject.Hub.User.Inventory.GetInventoryAdapterByKind(3);
 			if (inventoryAdapterByKind == null)
 			{
 				return;
 			}
-			List<ItemTypeScriptableObject> list = GameHubScriptableObject.Hub.InventoryColletion.CategoriesIdToItemTypes[InventoryMapper.CharactersCategoryGuid];
+			List<IItemType> list = GameHubScriptableObject.Hub.InventoryColletion.CategoriesIdToItemTypes[InventoryMapper.CharactersCategoryGuid];
+			list.Sort(new Comparison<IItemType>(this.CharacterListSort));
 			for (int i = 0; i < list.Count; i++)
 			{
-				ItemTypeScriptableObject itemTypeScriptableObject = list[i];
-				bool isExpanded;
-				if (!this._expandStateSkins.TryGetValue(itemTypeScriptableObject.Id, out isExpanded))
-				{
-					this._expandStateSkins.Add(itemTypeScriptableObject.Id, true);
-					isExpanded = true;
-				}
-				bool flag = GameHubScriptableObject.Hub.User.Inventory.HasItemOfType(itemTypeScriptableObject.Id);
-				CharacterItemTypeComponent component = itemTypeScriptableObject.GetComponent<CharacterItemTypeComponent>();
-				List<Guid> list2 = GameHubScriptableObject.Hub.InventoryColletion.CharacterToSkinGuids[itemTypeScriptableObject.Id];
+				IItemType itemType = list[i];
+				bool flag = GameHubScriptableObject.Hub.User.Inventory.HasItemOfType(itemType.Id);
+				CharacterItemTypeComponent component = itemType.GetComponent<CharacterItemTypeComponent>();
+				List<Guid> list2 = GameHubScriptableObject.Hub.InventoryColletion.CharacterToSkinGuids[itemType.Id];
 				List<CustomizationInventoryCellItemData> list3 = new List<CustomizationInventoryCellItemData>(list2.Count + 1);
-				CharacterItemTypeBag characterItemTypeBag = (CharacterItemTypeBag)((JsonSerializeable<T>)itemTypeScriptableObject.Bag);
-				ItemTypeScriptableObject itemTypeScriptableObject2 = GameHubScriptableObject.Hub.InventoryColletion.AllItemTypes[characterItemTypeBag.DefaultSkinGuid];
+				CharacterItemTypeBag characterItemTypeBag = (CharacterItemTypeBag)((JsonSerializeable<!0>)itemType.Bag);
+				ItemTypeScriptableObject itemTypeScriptableObject = GameHubScriptableObject.Hub.InventoryColletion.AllItemTypes[characterItemTypeBag.DefaultSkinGuid];
 				if (flag)
 				{
-					CustomizationInventoryCellItemData customizationInventoryCellItemData = this.ConvertItemType(itemTypeScriptableObject2, null);
+					CustomizationInventoryCellItemData customizationInventoryCellItemData = this.ConvertItemType(itemTypeScriptableObject, null);
 					if (customizationInventoryCellItemData != null)
 					{
 						categoryData.AddItem(customizationInventoryCellItemData);
@@ -190,25 +222,25 @@ namespace HeavyMetalMachines.Customization
 					{
 						CustomizationInventoryComponent.Log.WarnFormat("Missing Inventory Data for ItemType: {0}", new object[]
 						{
-							itemTypeScriptableObject2
+							itemTypeScriptableObject
 						});
 					}
 				}
 				for (int j = 0; j < list2.Count; j++)
 				{
-					ItemTypeScriptableObject itemTypeScriptableObject3 = GameHubScriptableObject.Hub.InventoryColletion.AllItemTypes[list2[j]];
+					ItemTypeScriptableObject itemTypeScriptableObject2 = GameHubScriptableObject.Hub.InventoryColletion.AllItemTypes[list2[j]];
 					Item item;
-					if (inventoryAdapterByKind.ItemTypeGuidToItem.TryGetValue(itemTypeScriptableObject3.Id, out item))
+					if (inventoryAdapterByKind.ItemTypeGuidToItem.TryGetValue(itemTypeScriptableObject2.Id, out item))
 					{
-						CustomizationInventoryCellItemData customizationInventoryCellItemData2 = this.ConvertItemType(itemTypeScriptableObject3, item);
+						CustomizationInventoryCellItemData customizationInventoryCellItemData2 = this.ConvertItemType(itemTypeScriptableObject2, item);
 						if (customizationInventoryCellItemData2 == null)
 						{
 							CustomizationInventoryComponent.Log.WarnFormat("Missing Inventory Data for ItemType: {0}", new object[]
 							{
-								itemTypeScriptableObject3
+								itemTypeScriptableObject2
 							});
 						}
-						else if (!(itemTypeScriptableObject2 != null) || !(itemTypeScriptableObject2.Id == itemTypeScriptableObject3.Id))
+						else if (!(itemTypeScriptableObject != null) || !(itemTypeScriptableObject.Id == itemTypeScriptableObject2.Id))
 						{
 							categoryData.AddItem(customizationInventoryCellItemData2);
 							list3.Add(customizationInventoryCellItemData2);
@@ -217,48 +249,42 @@ namespace HeavyMetalMachines.Customization
 				}
 				if (list3.Count > 0)
 				{
-					CustomizationInventoryCellItemSkinTabData skinTabData = new CustomizationInventoryCellItemSkinTabData
-					{
-						CharacterId = itemTypeScriptableObject.Id,
-						CharacterName = component.MainAttributes.LocalizedName,
-						IconAssetName = component.CharacterIcon64Name,
-						IsNew = this.CharacterSkinHasNewItems(inventoryAdapterByKind, itemTypeScriptableObject.Id),
-						IsExpanded = isExpanded,
-						HasCharacter = flag
-					};
-					categoryData.AddSkinTabDataItem(skinTabData, list3);
+					categoryData.AddCharacterSkinDataItems(itemType.Id, list3);
 				}
 			}
 		}
 
+		private int CharacterListSort(IItemType itemType1, IItemType itemType2)
+		{
+			CharacterItemTypeComponent component = itemType1.GetComponent<CharacterItemTypeComponent>();
+			CharacterItemTypeComponent component2 = itemType2.GetComponent<CharacterItemTypeComponent>();
+			string characterLocalizedName = component.GetCharacterLocalizedName();
+			string characterLocalizedName2 = component2.GetCharacterLocalizedName();
+			int num = characterLocalizedName.CompareTo(characterLocalizedName2);
+			if (num == 0)
+			{
+				num = itemType1.Name.CompareTo(itemType2.Name);
+			}
+			return num;
+		}
+
 		public bool UpdateSkinTabDataNewItems(CustomizationInventoryCategoryData categoryData)
 		{
-			InventoryAdapter inventoryAdapterByKind = GameHubScriptableObject.Hub.User.Inventory.GetInventoryAdapterByKind(InventoryBag.InventoryKind.Customization);
+			InventoryAdapter inventoryAdapterByKind = GameHubScriptableObject.Hub.User.Inventory.GetInventoryAdapterByKind(3);
 			if (inventoryAdapterByKind == null)
 			{
 				return false;
 			}
-			List<ItemTypeScriptableObject> list = GameHubScriptableObject.Hub.InventoryColletion.CategoriesIdToItemTypes[InventoryMapper.CharactersCategoryGuid];
-			bool flag = false;
+			List<IItemType> list = GameHubScriptableObject.Hub.InventoryColletion.CategoriesIdToItemTypes[InventoryMapper.CharactersCategoryGuid];
 			for (int i = 0; i < list.Count; i++)
 			{
-				ItemTypeScriptableObject itemTypeScriptableObject = list[i];
-				if (GameHubScriptableObject.Hub.User.Inventory.HasItemOfType(itemTypeScriptableObject.Id))
+				IItemType itemType = list[i];
+				if (this.CharacterSkinHasNewItems(inventoryAdapterByKind, itemType.Id))
 				{
-					for (int j = 0; j < categoryData.SkinTabDataItems.Count; j++)
-					{
-						CustomizationInventoryCellItemSkinTabData customizationInventoryCellItemSkinTabData = categoryData.SkinTabDataItems[j];
-						if (customizationInventoryCellItemSkinTabData.CharacterId == itemTypeScriptableObject.Id)
-						{
-							bool flag2 = this.CharacterSkinHasNewItems(inventoryAdapterByKind, itemTypeScriptableObject.Id);
-							flag |= (customizationInventoryCellItemSkinTabData.IsNew != flag2);
-							customizationInventoryCellItemSkinTabData.IsNew = flag2;
-							break;
-						}
-					}
+					return true;
 				}
 			}
-			return flag;
+			return false;
 		}
 
 		private bool CharacterSkinHasNewItems(InventoryAdapter inventoryAdapter, Guid characterId)
@@ -280,7 +306,7 @@ namespace HeavyMetalMachines.Customization
 			return false;
 		}
 
-		private void TryToAddItemData(InventoryBag.InventoryKind inventoryKind, Guid categoryId, Guid defaultItemTypeId, Guid equippedItemTypeId, CustomizationInventoryCategoryData categoryData)
+		private void TryToAddItemData(InventoryBag.InventoryKind inventoryKind, Guid categoryId, Guid defaultItemTypeId, CustomizationInventoryCategoryData categoryData)
 		{
 			InventoryAdapter inventoryAdapterByKind = GameHubScriptableObject.Hub.User.Inventory.GetInventoryAdapterByKind(inventoryKind);
 			if (inventoryAdapterByKind == null)
@@ -305,35 +331,11 @@ namespace HeavyMetalMachines.Customization
 						}
 						else
 						{
-							if (customizationInventoryCellItemData.ItemTypeId == equippedItemTypeId)
-							{
-								customizationInventoryCellItemData.IsEquipped = true;
-							}
 							categoryData.AddItem(customizationInventoryCellItemData);
 						}
 					}
 				}
 			}
-		}
-
-		private PlayerCustomizationSlot GetCustomizationSlotByCategoryId(Guid categoryId)
-		{
-			ItemCategoryScriptableObject itemCategory = this.GetItemCategory(categoryId);
-			return (!itemCategory) ? PlayerCustomizationSlot.None : itemCategory.CustomizationSlot;
-		}
-
-		private void AddItemToCategory(CustomizationInventoryCellItemData itemData)
-		{
-			Guid itemCategoryId = itemData.ItemCategoryId;
-			ItemCategoryScriptableObject itemCategory = this.GetItemCategory(itemCategoryId);
-			CustomizationInventoryCategoryData customizationInventoryCategoryData;
-			if (!this._categoryInventory.TryGetValue(itemCategoryId, out customizationInventoryCategoryData))
-			{
-				string categoryName = (!(itemCategory == null)) ? Language.Get(itemCategory.TitleDraft, TranslationSheets.Inventory) : string.Empty;
-				customizationInventoryCategoryData = new CustomizationInventoryCategoryData(itemCategoryId, categoryName);
-				this._categoryInventory[itemCategoryId] = customizationInventoryCategoryData;
-			}
-			customizationInventoryCategoryData.AddItem(itemData);
 		}
 
 		private CustomizationInventoryCellItemData ConvertItemType(ItemTypeScriptableObject itemType, Item item)
@@ -363,12 +365,11 @@ namespace HeavyMetalMachines.Customization
 			customizationInventoryCellItemData.PreviewName = inventoryItemTypeComponent.InventoryPreviewName;
 			customizationInventoryCellItemData.PreviewKind = inventoryItemTypeComponent.PreviewKind;
 			customizationInventoryCellItemData.ArtPreviewBackGroundAssetName = inventoryItemTypeComponent.ArtPreviewBackGroundAssetName;
-			customizationInventoryCellItemData.IsEquipped = false;
 			customizationInventoryCellItemData.IsSelected = false;
 			ItemTypeComponent itemTypeComponent2;
 			if (itemType.GetComponentByEnum(ItemTypeComponent.Type.SkinPrefab, out itemTypeComponent2))
 			{
-				customizationInventoryCellItemData.SkinCustomizations = ((SkinPrefabItemTypeComponent)itemTypeComponent2).SkinCustomization;
+				customizationInventoryCellItemData.SkinPrefabComponent = (SkinPrefabItemTypeComponent)itemTypeComponent2;
 			}
 			string loreTitleDraft = string.Empty;
 			string loreSubtitleDraft = string.Empty;
@@ -391,7 +392,7 @@ namespace HeavyMetalMachines.Customization
 				}
 				else
 				{
-					CustomizationItemTypeBag customizationItemTypeBag = (CustomizationItemTypeBag)((JsonSerializeable<T>)item.Bag);
+					CustomizationItemTypeBag customizationItemTypeBag = (CustomizationItemTypeBag)((JsonSerializeable<!0>)item.Bag);
 					customizationInventoryCellItemData.IsNew = !customizationItemTypeBag.Seen;
 				}
 			}
@@ -403,108 +404,200 @@ namespace HeavyMetalMachines.Customization
 			return customizationInventoryCellItemData;
 		}
 
-		public void EquipItem(Guid categoryId, Guid itemTypeId)
+		public bool GetIsItemEquiped(CustomizationInventoryCellItemData itemData)
 		{
-			CustomizationInventoryCellItemData item = this.GetItem(categoryId, itemTypeId);
-			if (item.IsEquipped)
+			if (GameHubScriptableObject.Hub.User.Inventory.Customizations.Contains(itemData.ItemTypeId))
 			{
-				this._customizationInventoryView.OnEquipItemResponse(true);
+				return true;
+			}
+			ItemTypeScriptableObject defaultCategoryItem = this._customizationsConfig.GetDefaultCategoryItem(itemData.ItemCategoryId);
+			if (defaultCategoryItem != null && defaultCategoryItem.Id == itemData.ItemTypeId)
+			{
+				CustomizationInventoryCategoryData categoryData = this.GetCategoryData(itemData.ItemCategoryId);
+				for (int i = 0; i < categoryData.CustomizationSlots.Count; i++)
+				{
+					PlayerCustomizationSlot playerCustomizationSlot = categoryData.CustomizationSlots[i];
+					Guid guidBySlot = GameHubScriptableObject.Hub.User.Inventory.Customizations.GetGuidBySlot(playerCustomizationSlot);
+					if (guidBySlot == Guid.Empty || guidBySlot == defaultCategoryItem.Id)
+					{
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+
+		public bool IsEquipable(CustomizationInventoryCellItemData itemData)
+		{
+			ItemTypeScriptableObject itemTypeScriptableObject = GameHubScriptableObject.Hub.InventoryColletion.AllItemTypes[itemData.ItemTypeId];
+			ItemCategoryScriptableObject itemCategoryScriptableObject = GameHubScriptableObject.Hub.InventoryColletion.AllItemCategories[itemTypeScriptableObject.ItemCategoryId];
+			Guid id = itemCategoryScriptableObject.Id;
+			return !(id == InventoryMapper.SkinsCategoryGuid) && !(id == InventoryMapper.LoreCategoryGuid);
+		}
+
+		public bool IsInteractable(CustomizationInventoryCellItemData itemData)
+		{
+			return !this.GetIsItemEquiped(itemData);
+		}
+
+		public bool IsUnequipable(CustomizationInventoryCellItemData itemData)
+		{
+			ItemTypeScriptableObject itemTypeScriptableObject = GameHubScriptableObject.Hub.InventoryColletion.AllItemTypes[itemData.ItemTypeId];
+			ItemCategoryScriptableObject itemCategoryScriptableObject = GameHubScriptableObject.Hub.InventoryColletion.AllItemCategories[itemTypeScriptableObject.ItemCategoryId];
+			Guid id = itemCategoryScriptableObject.Id;
+			return id == InventoryMapper.EmoteCategoryGuid || !this.GetIsItemEquiped(itemData);
+		}
+
+		public void EquipItem(Guid itemTypeId)
+		{
+			ItemTypeScriptableObject itemTypeScriptableObject = GameHubScriptableObject.Hub.InventoryColletion.AllItemTypes[itemTypeId];
+			ItemCategoryScriptableObject itemCategoryScriptableObject = GameHubScriptableObject.Hub.InventoryColletion.AllItemCategories[itemTypeScriptableObject.ItemCategoryId];
+			Guid id = itemCategoryScriptableObject.Id;
+			CustomizationInventoryCellItemData item = this.GetItem(itemTypeId);
+			CustomizationInventoryCategoryData categoryData = this.GetCategoryData(id);
+			PlayerCustomizationSlot equippingSlot = categoryData.GetEquippingSlot();
+			if (equippingSlot == null)
+			{
 				return;
 			}
-			PlayerCustomizationSlot customizationSlotByCategoryId = this.GetCustomizationSlotByCategoryId(categoryId);
-			if (customizationSlotByCategoryId == PlayerCustomizationSlot.None)
-			{
-				return;
-			}
-			CustomizationInventoryComponent.EquipItemRequestState state = new CustomizationInventoryComponent.EquipItemRequestState
-			{
-				CategoryId = categoryId,
-				ItemTypeId = itemTypeId
-			};
 			if (item.IsDefault)
 			{
 				itemTypeId = Guid.Empty;
 			}
+			ItemChangeRequestState itemChangeRequestState = new ItemChangeRequestState
+			{
+				IsEquip = true,
+				CategoryId = id,
+				ItemTypeId = itemTypeId,
+				Slot = equippingSlot
+			};
 			BattlepassCustomWS.SaveCustomizationsSelected(new CustomizationBagAdapter
 			{
-				Slot = customizationSlotByCategoryId,
+				Slot = equippingSlot,
 				TypeId = itemTypeId
-			}, state, new SwordfishClientApi.ParameterizedCallback<string>(this.OnEquipItemSuccess), new SwordfishClientApi.ErrorCallback(this.OnEquipItemError));
+			}, itemChangeRequestState, new SwordfishClientApi.ParameterizedCallback<string>(this.OnEquipItemSuccess), new SwordfishClientApi.ErrorCallback(this.OnEquipItemError));
+			this.UpdateItemEquip(itemChangeRequestState);
 		}
 
-		private void MarkItemAsEquipped(Guid categoryId, Guid itemTypeId)
+		public void UnequipItem(Guid itemTypeId)
 		{
-			CustomizationInventoryCategoryData customizationInventoryCategoryData;
-			if (!this._categoryInventory.TryGetValue(categoryId, out customizationInventoryCategoryData))
+			ItemTypeScriptableObject itemTypeScriptableObject = GameHubScriptableObject.Hub.InventoryColletion.AllItemTypes[itemTypeId];
+			ItemCategoryScriptableObject itemCategoryScriptableObject = GameHubScriptableObject.Hub.InventoryColletion.AllItemCategories[itemTypeScriptableObject.ItemCategoryId];
+			Guid id = itemCategoryScriptableObject.Id;
+			CustomizationInventoryCategoryData categoryData = this.GetCategoryData(id);
+			PlayerCustomizationSlot unequippingSlot = categoryData.GetUnequippingSlot(itemTypeId);
+			if (unequippingSlot == null)
 			{
-				CustomizationInventoryComponent.Log.ErrorFormat("Failed to mark item as equipped: No category data found with ID {0}", new object[]
-				{
-					categoryId
-				});
 				return;
 			}
-			PlayerCustomizationSlot playerCustomizationSlot = PlayerCustomizationSlot.None;
-			for (int i = 0; i < GameHubScriptableObject.Hub.InventoryColletion.ItemCategories.Length; i++)
+			ItemChangeRequestState itemChangeRequestState = new ItemChangeRequestState
 			{
-				ItemCategoryScriptableObject itemCategoryScriptableObject = GameHubScriptableObject.Hub.InventoryColletion.ItemCategories[i];
-				if (itemCategoryScriptableObject.Id == categoryId)
-				{
-					playerCustomizationSlot = itemCategoryScriptableObject.CustomizationSlot;
-				}
-			}
-			if (playerCustomizationSlot == PlayerCustomizationSlot.None)
+				IsEquip = false,
+				CategoryId = id,
+				ItemTypeId = itemTypeId,
+				Slot = unequippingSlot
+			};
+			BattlepassCustomWS.SaveCustomizationsSelected(new CustomizationBagAdapter
 			{
-				CustomizationInventoryComponent.Log.ErrorFormat("Failed to mark item as equipped: Unable to find category slot with ID {0}", new object[]
-				{
-					categoryId
-				});
-			}
-			else
-			{
-				GameHubScriptableObject.Hub.User.Inventory.Customizations.SetGuidBySlot(playerCustomizationSlot, itemTypeId);
-			}
-			if (this.OnItemEquiped != null)
-			{
-				this.OnItemEquiped(playerCustomizationSlot);
-			}
-			customizationInventoryCategoryData.EquipItem(itemTypeId);
+				Slot = unequippingSlot,
+				TypeId = Guid.Empty
+			}, itemChangeRequestState, new SwordfishClientApi.ParameterizedCallback<string>(this.OnEquipItemSuccess), new SwordfishClientApi.ErrorCallback(this.OnEquipItemError));
+			this.UpdateItemEquip(itemChangeRequestState);
+		}
+
+		private void RaiseItemEquipped(ItemChangeRequestState state)
+		{
+			this._onItemEquipChangedSubject.OnNext(state);
 		}
 
 		private void OnEquipItemSuccess(object state, string json)
 		{
-			CustomizationInventoryComponent.EquipItemRequestState equipItemRequestState = state as CustomizationInventoryComponent.EquipItemRequestState;
+			ItemChangeRequestState itemChangeRequestState = state as ItemChangeRequestState;
 			bool flag = null != this._customizationInventoryView;
-			if (equipItemRequestState == null)
+			if (itemChangeRequestState == null)
 			{
 				CustomizationInventoryComponent.Log.Error("Failed to equip item: No state object received.");
 				if (flag)
 				{
-					this._customizationInventoryView.OnEquipItemResponse(false);
+					this.OnEquipItemResponse(false, itemChangeRequestState);
 				}
 				return;
 			}
-			NetResult netResult = (NetResult)((JsonSerializeable<T>)json);
+			NetResult netResult = (NetResult)((JsonSerializeable<!0>)json);
 			if (netResult.Success)
 			{
-				this.MarkItemAsEquipped(equipItemRequestState.CategoryId, equipItemRequestState.ItemTypeId);
+				CustomizationInventoryComponent.Log.DebugFormat("Item equipped successfully. CategoryId={0} ItemTypeId={1}. Full response={2}", new object[]
+				{
+					itemChangeRequestState.CategoryId,
+					itemChangeRequestState.ItemTypeId,
+					json
+				});
+				CustomizationInventoryCategoryData customizationInventoryCategoryData;
+				if (!this._categoryInventory.TryGetValue(itemChangeRequestState.CategoryId, out customizationInventoryCategoryData))
+				{
+					CustomizationInventoryComponent.Log.ErrorFormat("Failed to mark item as equipped: No category data found with ID {0}", new object[]
+					{
+						itemChangeRequestState.CategoryId
+					});
+					if (flag)
+					{
+						this.OnEquipItemResponse(false, itemChangeRequestState);
+					}
+					return;
+				}
+				if (itemChangeRequestState.Slot == null)
+				{
+					CustomizationInventoryComponent.Log.ErrorFormat("Failed to mark item as equipped: Unable to find category slot with ID {0}", new object[]
+					{
+						itemChangeRequestState.CategoryId
+					});
+					if (flag)
+					{
+						this.OnEquipItemResponse(false, itemChangeRequestState);
+					}
+					return;
+				}
+				this.UpdateItemEquip(itemChangeRequestState);
 				if (flag)
 				{
-					this._customizationInventoryView.OnEquipItemResponse(true);
+					this.OnEquipItemResponse(true, itemChangeRequestState);
 				}
 			}
 			else
 			{
 				CustomizationInventoryComponent.Log.ErrorFormat("Failed to equip item: Attempt unsuccessful. CategoryId={0} ItemTypeId={1}. Full response={2}", new object[]
 				{
-					equipItemRequestState.CategoryId,
-					equipItemRequestState.ItemTypeId,
+					itemChangeRequestState.CategoryId,
+					itemChangeRequestState.ItemTypeId,
 					json
 				});
 				if (flag)
 				{
-					this._customizationInventoryView.OnEquipItemResponse(false);
+					this.OnEquipItemResponse(false, itemChangeRequestState);
 				}
 			}
+		}
+
+		private void OnEquipItemResponse(bool success, ItemChangeRequestState data)
+		{
+			this._customizationInventoryView.OnEquipItemResponse(success);
+			if (this.OnReceivedItemEquipChangedCallback != null)
+			{
+				this.OnReceivedItemEquipChangedCallback(data);
+			}
+		}
+
+		private void UpdateItemEquip(ItemChangeRequestState data)
+		{
+			if (data.IsEquip)
+			{
+				GameHubScriptableObject.Hub.User.Inventory.Customizations.SetGuidAndSlot(data.Slot, data.ItemTypeId);
+			}
+			else
+			{
+				GameHubScriptableObject.Hub.User.Inventory.Customizations.SetGuidAndSlot(data.Slot, Guid.Empty);
+			}
+			this.RaiseItemEquipped(data);
 		}
 
 		private void OnEquipItemError(object state, Exception exception)
@@ -513,13 +606,12 @@ namespace HeavyMetalMachines.Customization
 			{
 				exception.ToString()
 			});
-			this._customizationInventoryView.OnEquipItemResponse(false);
+			this.OnEquipItemResponse(false, (ItemChangeRequestState)state);
 		}
 
-		public int MarkItemAsSeen(CustomizationInventoryCellItemData itemData)
+		public void MarkItemAsSeen(CustomizationInventoryCellItemData itemData)
 		{
 			bool isNew = itemData.IsNew;
-			int result = 0;
 			if (isNew)
 			{
 				itemData.IsNew = false;
@@ -536,7 +628,7 @@ namespace HeavyMetalMachines.Customization
 				{
 					customizationInventoryCategoryData.NewItemsCount--;
 				}
-				result = customizationInventoryCategoryData.NewItemsCount;
+				this.TriggerItemSeenChanged(customizationInventoryCategoryData.CategoryId, customizationInventoryCategoryData.NewItemsCount);
 			}
 			else
 			{
@@ -546,7 +638,6 @@ namespace HeavyMetalMachines.Customization
 				});
 			}
 			this.UpdateHasNewItems();
-			return result;
 		}
 
 		private void UpdateHasNewItems()
@@ -612,6 +703,14 @@ namespace HeavyMetalMachines.Customization
 			return result;
 		}
 
+		private void TriggerItemSeenChanged(Guid categoryId, int count)
+		{
+			if (this.OnCategoryItemSeenCountChanged != null)
+			{
+				this.OnCategoryItemSeenCountChanged(categoryId, count);
+			}
+		}
+
 		private void TriggerHasNewItemsStateChangedCallback()
 		{
 			if (this.OnHasNewItemsStateChanged != null)
@@ -622,7 +721,7 @@ namespace HeavyMetalMachines.Customization
 
 		private void OnMarkItemAsSeenSuccess(object state, string json)
 		{
-			NetResult netResult = (NetResult)((JsonSerializeable<T>)json);
+			NetResult netResult = (NetResult)((JsonSerializeable<!0>)json);
 			long[] array = (long[])state;
 			if (!netResult.Success)
 			{
@@ -632,6 +731,10 @@ namespace HeavyMetalMachines.Customization
 				});
 				return;
 			}
+			CustomizationInventoryComponent.Log.DebugFormat("Items marked as seen successfully. Will try to update local cache. Full response={0}", new object[]
+			{
+				json
+			});
 			for (int i = 0; i < array.Length; i++)
 			{
 				this.MarkItemAsSeenInLocalCache(array[i]);
@@ -645,7 +748,7 @@ namespace HeavyMetalMachines.Customization
 			{
 				Guid key = this._categoriesIds[i];
 				CustomizationInventoryCategoryData customizationInventoryCategoryData;
-				if (this._categoryInventory.TryGetValue(key, out customizationInventoryCategoryData) && customizationInventoryCategoryData.CustomizationSlot == PlayerCustomizationSlot.Skin)
+				if (this._categoryInventory.TryGetValue(key, out customizationInventoryCategoryData) && !(customizationInventoryCategoryData.CategoryId != InventoryMapper.SkinsCategoryGuid))
 				{
 					if (this.UpdateSkinTabDataNewItems(customizationInventoryCategoryData) && this.OnSkinTabHasNewItemsStateChanged != null)
 					{
@@ -671,6 +774,10 @@ namespace HeavyMetalMachines.Customization
 			{
 				Seen = true
 			}.ToString();
+			CustomizationInventoryComponent.Log.DebugFormat("Item bag updated in local cache. ItemId={0}", new object[]
+			{
+				itemId
+			});
 		}
 
 		private void OnMarkItemAsSeenError(object state, Exception exception)
@@ -706,9 +813,25 @@ namespace HeavyMetalMachines.Customization
 			this.TriggerHasNewItemsStateChangedCallback();
 		}
 
-		public void UpdateExpandSkinState(KeyValuePair<Guid, bool> charIdExpandPair)
+		public void RaiseItemHoverChange(CustomizationInventoryCellItemData itemData)
 		{
-			this._expandStateSkins[charIdExpandPair.Key] = charIdExpandPair.Value;
+			this._onItemHoverChangedSubject.OnNext(itemData);
+		}
+
+		public IObservable<ItemChangeRequestState> OnItemEquipChanged
+		{
+			get
+			{
+				return this._onItemEquipChangedSubject;
+			}
+		}
+
+		public IObservable<CustomizationInventoryCellItemData> ObserveHoverChange
+		{
+			get
+			{
+				return this._onItemHoverChangedSubject;
+			}
 		}
 
 		public static readonly BitLogger Log = new BitLogger(typeof(CustomizationInventoryComponent));
@@ -718,21 +841,22 @@ namespace HeavyMetalMachines.Customization
 
 		private ICustomizationInventoryView _customizationInventoryView;
 
+		private Subject<ItemChangeRequestState> _onItemEquipChangedSubject;
+
+		private Subject<CustomizationInventoryCellItemData> _onItemHoverChangedSubject;
+
 		private bool _hasNewItems;
 
-		private System.Action OnCloseInventoryCallback;
+		private Action OnCloseInventoryCallback;
 
 		private Dictionary<Guid, CustomizationInventoryCategoryData> _categoryInventory = new Dictionary<Guid, CustomizationInventoryCategoryData>(5);
 
-		private Dictionary<Guid, bool> _expandStateSkins = new Dictionary<Guid, bool>(20);
-
 		private List<Guid> _categoriesIds = new List<Guid>(5);
 
-		private class EquipItemRequestState
-		{
-			public Guid CategoryId;
+		[SerializeField]
+		private CustomizationAssetsScriptableObject _customizationsConfig;
 
-			public Guid ItemTypeId;
-		}
+		[Inject]
+		private DiContainer _diContainer;
 	}
 }

@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkAreaListenToDamage : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkAreaListenToDamage : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		public override void PerkInitialized()
 		{
@@ -24,7 +24,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				return;
 			}
-			Collider[] collection = Physics.OverlapSphere(this._trans.position, this.Effect.Data.Range, 1077058560);
+			Collider[] collection = Physics.OverlapSphere(this._trans.position, this.Effect.Data.Range, 1077054464);
 			this._newInside.Clear();
 			this._newInside.AddRange(collection);
 			for (int i = 0; i < this._newInside.Count; i++)
@@ -68,7 +68,7 @@ namespace HeavyMetalMachines.Combat
 			this.RemoveListener(combat);
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			for (int i = 0; i < this._listening.Count; i++)
 			{

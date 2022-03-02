@@ -9,7 +9,7 @@ namespace HeavyMetalMachines.Tutorial.InGame
 	{
 		private void Awake()
 		{
-			Debug.Assert(ControlOptions.IsControlActionUnlocked(ControlAction.GadgetDropBomb), "Control Action GadgetDropBomb must be unlocked before this step!!!", Debug.TargetTeam.All);
+			Debug.Assert(ControlOptions.IsControlActionUnlocked(9), "Control Action GadgetDropBomb must be unlocked before this step!!!", Debug.TargetTeam.All);
 		}
 
 		protected override void StartBehaviourOnServer()

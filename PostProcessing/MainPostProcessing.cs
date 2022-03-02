@@ -1,17 +1,22 @@
 ﻿using System;
 using Pocketverse;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace HeavyMetalMachines.PostProcessing
 {
 	[RequireComponent(typeof(Camera))]
-	public class MainPostProcessing : GameHubBehaviour
+	public class MainPostProcessing : GameHubBehaviour, IGamePostProcessing
 	{
 		private void Awake()
 		{
 			this._propertyIds = new MainPostProcessing.PropertyIds();
 			this._stateStack = new CarCameraStack<PostProcessingState>(16);
-			this.Request("off", () => true, false);
+			this.Request("clean_state", () => true, false);
+			if (this._settings)
+			{
+				this._settings.ApplySettingsToPostProcessor(this);
+			}
 		}
 
 		private void OnDestroy()
@@ -26,15 +31,15 @@ namespace HeavyMetalMachines.PostProcessing
 			return (!this._stateStack.Push(identifier, condition, postProcessingState)) ? null : postProcessingState;
 		}
 
-		public void Configure()
+		private void Configure()
 		{
 			if (this._shaderMaterial == null)
 			{
-				this._shaderMaterial = new Material(this.MainPostProcessingShader);
+				this._shaderMaterial = new Material(this._mainPostProcessingShader);
 			}
 			if (this._downsampleMaterial == null)
 			{
-				this._downsampleMaterial = new Material(this.DownsampleShader);
+				this._downsampleMaterial = new Material(this._downsampleShader);
 			}
 			PostProcessingState postProcessingState = this._stateStack.Peek();
 			if (postProcessingState.Exposure.Enabled)
@@ -77,6 +82,22 @@ namespace HeavyMetalMachines.PostProcessing
 			{
 				this._shaderMaterial.DisableKeyword("SCREENCENTERFLARE_EFFECT");
 			}
+			if (postProcessingState.ScreenBlur.Enabled)
+			{
+				this._shaderMaterial.EnableKeyword("SCREEN_BLUR");
+			}
+			else
+			{
+				this._shaderMaterial.DisableKeyword("SCREEN_BLUR");
+			}
+			if (postProcessingState.Vignette.Enabled)
+			{
+				this._shaderMaterial.EnableKeyword("VIGNETTE_EFFECT");
+			}
+			else
+			{
+				this._shaderMaterial.DisableKeyword("VIGNETTE_EFFECT");
+			}
 			bool flag = postProcessingState.ScaledOverlayImage.Enabled || postProcessingState.ScreenBlur.Enabled;
 			if (flag && (this._temporaryRenderTextures == null || this._temporaryRenderTextures.Length == 0))
 			{
@@ -100,7 +121,7 @@ namespace HeavyMetalMachines.PostProcessing
 					if (!(this._temporaryRenderTextures[i] == null))
 					{
 						this._temporaryRenderTextures[i].Release();
-						UnityEngine.Object.Destroy(this._temporaryRenderTextures[i]);
+						Object.Destroy(this._temporaryRenderTextures[i]);
 					}
 				}
 				this._temporaryRenderTextures = null;
@@ -134,7 +155,7 @@ namespace HeavyMetalMachines.PostProcessing
 			}
 		}
 
-		public void OnRenderImage(RenderTexture source, RenderTexture target)
+		private void OnRenderImage(RenderTexture source, RenderTexture target)
 		{
 			this._stateStack.ShouldUpdate();
 			PostProcessingState postProcessingState = this._stateStack.Peek();
@@ -154,7 +175,7 @@ namespace HeavyMetalMachines.PostProcessing
 				Graphics.Blit(source, target);
 				return;
 			}
-			source.filterMode = FilterMode.Bilinear;
+			source.filterMode = 1;
 			if (postProcessingState.Exposure.Enabled || postProcessingState.ScaledOverlayImage.Enabled)
 			{
 				this._shaderMaterial.SetFloat(this._propertyIds.Exposure, postProcessingState.Exposure.Parameters.Strength);
@@ -170,16 +191,16 @@ namespace HeavyMetalMachines.PostProcessing
 				this._shaderMaterial.SetFloat(this._propertyIds.VerticalScale, postProcessingState.ScaledOverlayImage.Parameters.VerticalScale);
 				this._shaderMaterial.SetFloat(this._propertyIds.HorizontalScale, postProcessingState.ScaledOverlayImage.Parameters.HorizontalScale);
 				this._shaderMaterial.SetFloat(this._propertyIds.OverlaySaturation, postProcessingState.ScaledOverlayImage.Parameters.Saturation);
-				this._temporaryRenderTextures[0].filterMode = FilterMode.Bilinear;
-				this._temporaryRenderTextures[1].filterMode = FilterMode.Bilinear;
+				this._temporaryRenderTextures[0].filterMode = 1;
+				this._temporaryRenderTextures[1].filterMode = 1;
 				this.DownSample(source, this._temporaryRenderTextures[0], this._temporaryRenderTextures[1], default(Vector4));
 				this._shaderMaterial.SetTexture(this._propertyIds.DownPass, this._temporaryRenderTextures[1]);
 				this._shaderMaterial.SetFloat(this._propertyIds.ScreenCenterFlareRadius, postProcessingState.ScreenCenterFlare.Parameters.Radius);
 			}
 			if (postProcessingState.ScreenBlur.Enabled)
 			{
-				this._temporaryRenderTextures[0].filterMode = FilterMode.Bilinear;
-				this._temporaryRenderTextures[1].filterMode = FilterMode.Bilinear;
+				this._temporaryRenderTextures[0].filterMode = 1;
+				this._temporaryRenderTextures[1].filterMode = 1;
 				this.DownSample(source, this._temporaryRenderTextures[0], this._temporaryRenderTextures[1], default(Vector4));
 				this._shaderMaterial.SetTexture(this._propertyIds.DownPass, this._temporaryRenderTextures[1]);
 			}
@@ -191,21 +212,24 @@ namespace HeavyMetalMachines.PostProcessing
 			{
 				this._shaderMaterial.SetFloat(this._propertyIds.ScreenCenterFlareRadius, postProcessingState.ScreenCenterFlare.Parameters.Radius);
 			}
-			if (postProcessingState.ScreenBlur.Enabled)
+			if (postProcessingState.Vignette.Enabled)
 			{
-				this._shaderMaterial.EnableKeyword("SCREEN_BLUR");
-			}
-			else
-			{
-				this._shaderMaterial.DisableKeyword("SCREEN_BLUR");
+				this._shaderMaterial.SetVector(this._propertyIds.VignetteParams, new Vector4(postProcessingState.Vignette.Parameters.Ratio, postProcessingState.Vignette.Parameters.Radius, postProcessingState.Vignette.Parameters.Slope, postProcessingState.Vignette.Parameters.Amount));
 			}
 			this._shaderMaterial.SetFloat(this._propertyIds.ScreenBlur, postProcessingState.ScreenBlur.Parameters.Strength);
 			Graphics.Blit(source, target, this._shaderMaterial);
 		}
 
-		public Shader MainPostProcessingShader;
+		[SerializeField]
+		[FormerlySerializedAs("MainPostProcessingShader")]
+		private Shader _mainPostProcessingShader;
 
-		public Shader DownsampleShader;
+		[SerializeField]
+		[FormerlySerializedAs("DownsampleShader")]
+		private Shader _downsampleShader;
+
+		[SerializeField]
+		private PostProcessingSettings _settings;
 
 		private Material _shaderMaterial;
 
@@ -235,6 +259,7 @@ namespace HeavyMetalMachines.PostProcessing
 				this.ScreenCenterFlareRadius = Shader.PropertyToID("_ScreenCenterFlareRadius");
 				this.ScanlineStrength = Shader.PropertyToID("_ScanlineStrength");
 				this.ScreenBlur = Shader.PropertyToID("_ScreenBlur");
+				this.VignetteParams = Shader.PropertyToID("_VignetteParams");
 			}
 
 			public readonly int Threshold;
@@ -260,6 +285,8 @@ namespace HeavyMetalMachines.PostProcessing
 			public readonly int ScanlineStrength;
 
 			public readonly int ScreenBlur;
+
+			public readonly int VignetteParams;
 		}
 	}
 }

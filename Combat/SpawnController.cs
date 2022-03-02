@@ -1,14 +1,17 @@
 ﻿using System;
 using System.Diagnostics;
+using HeavyMetalMachines.Arena;
 using HeavyMetalMachines.Bank;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Playback.Snapshot;
 using HeavyMetalMachines.UpdateStream;
 using Pocketverse;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class SpawnController : StreamContent
+	public class SpawnController : StreamContent, ISpawnControllerSerialData, IBaseStreamSerialData<ISpawnControllerSerialData>
 	{
 		public GameObject Lifebar
 		{
@@ -23,9 +26,9 @@ namespace HeavyMetalMachines.Combat
 		}
 
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		public event Action<SpawnController.StateType> OnStateChanged;
+		public event Action<SpawnStateKind> OnStateChanged;
 
-		public SpawnController.StateType State
+		public SpawnStateKind State
 		{
 			get
 			{
@@ -65,28 +68,71 @@ namespace HeavyMetalMachines.Combat
 
 		public void EnableRenderer(bool isEnabled)
 		{
+			bool flag = GameHubBehaviour.Hub.Net.IsServer();
+			SpawnController.Log.DebugFormat("Show {0}. Renderer {1} RenderParent {2} LifeBar {3}", new object[]
+			{
+				isEnabled,
+				this.Renderer,
+				this.Renderer.transform.parent,
+				this.m_oLifebar
+			});
 			if (this.Renderer)
 			{
-				this.Renderer.gameObject.SetActive(isEnabled);
+				if (flag)
+				{
+					this.Renderer.gameObject.SetActive(isEnabled);
+				}
+				else
+				{
+					this.EnableRendererInClient(isEnabled);
+				}
 			}
-			bool flag = GameHubBehaviour.Hub.Net.IsServer();
 			if (this.m_oLifebar && (!flag || !isEnabled))
 			{
 				this.m_oLifebar.SetActive(isEnabled);
 			}
 			else if (isEnabled)
 			{
+				SpawnController.Log.DebugFormat("Lifebar not enabled: Lifebar {0} IsServer {1}", new object[]
+				{
+					this.m_oLifebar,
+					flag
+				});
+			}
+		}
+
+		private void EnableRendererInClient(bool isEnabled)
+		{
+			if (isEnabled && !this._isHidden)
+			{
+				this.Renderer.gameObject.SetActive(isEnabled);
+			}
+			else if (isEnabled && this._isHidden)
+			{
+				GameObject gameObject = this.Renderer.gameObject;
+				Vector3 localPosition = gameObject.transform.localPosition;
+				localPosition.y = 0f;
+				gameObject.transform.localPosition = localPosition;
+				this._isHidden = false;
+			}
+			else if (!isEnabled)
+			{
+				GameObject gameObject2 = this.Renderer.gameObject;
+				Vector3 localPosition2 = gameObject2.transform.localPosition;
+				localPosition2.y = 10000f;
+				gameObject2.transform.localPosition = localPosition2;
+				this._isHidden = true;
 			}
 		}
 
 		public bool IsSpawned()
 		{
-			return this.State == SpawnController.StateType.Spawned;
+			return this.State == SpawnStateKind.Spawned;
 		}
 
 		public bool IsUnspawned()
 		{
-			return this.State == SpawnController.StateType.Unspawned;
+			return this.State == SpawnStateKind.Unspawned;
 		}
 
 		public int GetDeathTimeRemainingMillis()
@@ -109,7 +155,7 @@ namespace HeavyMetalMachines.Combat
 
 		public int GetRespawningRemainingMillis()
 		{
-			if (this.State != SpawnController.StateType.Respawning)
+			if (this.State != SpawnStateKind.Respawning)
 			{
 				return 0;
 			}
@@ -123,7 +169,7 @@ namespace HeavyMetalMachines.Combat
 
 		public Transform GetSpawn()
 		{
-			return (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState != BombScoreBoard.State.BombDelivery) ? this.StartPosition : this.SpawnPosition;
+			return (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState != BombScoreboardState.BombDelivery) ? this.StartPosition : this.SpawnPosition;
 		}
 
 		public bool ShouldFinishDeathTime()
@@ -144,17 +190,23 @@ namespace HeavyMetalMachines.Combat
 
 		public void PreSpawn()
 		{
-			this.State = SpawnController.StateType.PreSpawned;
+			this.State = SpawnStateKind.PreSpawned;
 		}
 
 		public void Respawning()
 		{
 			this.RespawningTime = GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
-			this.State = SpawnController.StateType.Respawning;
+			this.State = SpawnStateKind.Respawning;
 		}
 
 		public void Spawn(Vector3 pos, Vector3 dir, int spawnEventId, SpawnReason reason)
 		{
+			SpawnController.Log.DebugFormat("Spawn ObjId={0} Position={1} name={2}", new object[]
+			{
+				base.Id.ObjId,
+				pos,
+				base.name
+			});
 			this._forceFinishDeathTime = false;
 			this.SpawnTime = GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
 			this.UnspawnTime = -1;
@@ -167,7 +219,7 @@ namespace HeavyMetalMachines.Combat
 				this.Combat.Movement.ForcePosition(pos, true);
 			}
 			base.transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
-			this.State = SpawnController.StateType.Spawned;
+			this.State = SpawnStateKind.Spawned;
 			this.EnableRenderer(true);
 			CombatObject component = base.gameObject.GetComponent<CombatObject>();
 			SpawnEvent spawnEvent = new SpawnEvent(component.Id.ObjId, pos, reason);
@@ -189,12 +241,12 @@ namespace HeavyMetalMachines.Combat
 			this.LastSpawnEventId = spawnEventId;
 		}
 
-		public void Unspawn(Vector3 pos, SpawnReason reason, int causerId)
+		public void Unspawn(Vector3 pos, SpawnReason reason, int causerId, int targetId)
 		{
 			this.SpawnTime = -1;
 			this.UnspawnTime = GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
-			this.State = SpawnController.StateType.Unspawned;
-			UnspawnEvent unspawnEvent = new UnspawnEvent(pos, reason, causerId);
+			this.State = SpawnStateKind.Unspawned;
+			UnspawnEvent unspawnEvent = new UnspawnEvent(pos, reason, causerId, targetId);
 			foreach (MonoBehaviour monoBehaviour in base.GetComponentsInChildren<MonoBehaviour>(true))
 			{
 				if (monoBehaviour is IObjectSpawnListener)
@@ -207,7 +259,7 @@ namespace HeavyMetalMachines.Combat
 				this.OnUnspawn(unspawnEvent);
 			}
 			CombatObject component = base.gameObject.GetComponent<CombatObject>();
-			if (!component || (component && !component.IsCreep && component.HideOnUnspawn))
+			if (!component || (component && component.HideOnUnspawn))
 			{
 				this.EnableRenderer(false);
 				if (this.ColliderObject)
@@ -228,7 +280,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				return;
 			}
-			if (this.Combat && (this.Combat.IsPlayer || this.Combat.IsBot || this.Combat.IsCreep))
+			if (this.Combat && (this.Combat.IsPlayer || this.Combat.IsBot))
 			{
 				this.ApplyArenaConfig();
 			}
@@ -240,15 +292,14 @@ namespace HeavyMetalMachines.Combat
 
 		private void ApplyArenaConfig()
 		{
-			int arenaIndex = GameHubBehaviour.Hub.Match.ArenaIndex;
-			GameArenaInfo gameArenaInfo = GameHubBehaviour.Hub.ArenaConfig.Arenas[arenaIndex];
-			this._respawnTimeMillis = (int)(gameArenaInfo.RespawnTimeSeconds * 1000f);
-			this._respawningTimeMillis = (int)(gameArenaInfo.RespawningTimeSeconds * 1000f);
+			IGameArenaInfo currentArena = GameHubBehaviour.Hub.ArenaConfig.GetCurrentArena();
+			this._respawnTimeMillis = (int)(currentArena.RespawnTimeSeconds * 1000f);
+			this._respawningTimeMillis = (int)(currentArena.RespawningTimeSeconds * 1000f);
 		}
 
 		public override int GetStreamData(ref byte[] data, bool boForceSerialization)
 		{
-			Pocketverse.BitStream writeStream = StaticBitStream.GetWriteStream();
+			BitStream writeStream = StaticBitStream.GetWriteStream();
 			writeStream.WriteCompressedInt((int)this.State);
 			writeStream.WriteCompressedInt(this.SpawnTime);
 			writeStream.WriteCompressedInt(this.UnspawnTime);
@@ -257,10 +308,17 @@ namespace HeavyMetalMachines.Combat
 
 		public override void ApplyStreamData(byte[] data)
 		{
-			Pocketverse.BitStream readStream = StaticBitStream.GetReadStream(data);
-			this._state = (SpawnController.StateType)readStream.ReadCompressedInt();
+			BitStream readStream = StaticBitStream.GetReadStream(data);
+			this._state = (SpawnStateKind)readStream.ReadCompressedInt();
 			this.SpawnTime = readStream.ReadCompressedInt();
 			this.UnspawnTime = readStream.ReadCompressedInt();
+		}
+
+		public void Apply(ISpawnControllerSerialData other)
+		{
+			this._state = other.State;
+			this.SpawnTime = other.SpawnTime;
+			this.UnspawnTime = other.UnspawnTime;
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(SpawnController));
@@ -295,7 +353,7 @@ namespace HeavyMetalMachines.Combat
 
 		public Transform SpawnPosition;
 
-		private SpawnController.StateType _state;
+		private SpawnStateKind _state;
 
 		private int _unspawnTime;
 
@@ -305,14 +363,8 @@ namespace HeavyMetalMachines.Combat
 
 		private bool _forceFinishDeathTime;
 
-		public enum StateType : byte
-		{
-			None,
-			Spawned,
-			Unspawned,
-			Pooled,
-			PreSpawned,
-			Respawning
-		}
+		private bool _isHidden;
+
+		private const float HideOffset = 10000f;
 	}
 }

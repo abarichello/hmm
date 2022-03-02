@@ -12,9 +12,6 @@ namespace HeavyMetalMachines.VFX
 		}
 
 		[SerializeField]
-		private SteamIconLoader _iconLoader;
-
-		[SerializeField]
 		private UILabel _textLabel;
 	}
 }

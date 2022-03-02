@@ -9,9 +9,10 @@ namespace HeavyMetalMachines.Combat.Gadget
 		public static bool FireSphereCastHit(this GadgetBehaviour gadgetBehaviour, float radius, float range, CombatCheckHitData hitMask, out CombatObject combat, out float distance)
 		{
 			Vector3 position = gadgetBehaviour.Combat.Transform.position;
-			Vector3 direction = gadgetBehaviour.Target - position;
-			Ray ray = new Ray(position, direction);
-			RaycastHit[] array = Physics.SphereCastAll(ray, radius, range, 1085471744);
+			Vector3 vector = gadgetBehaviour.Target - position;
+			Ray ray;
+			ray..ctor(position, vector);
+			RaycastHit[] array = Physics.SphereCastAll(ray, radius, range, 1085467648);
 			Array.Sort<RaycastHit>(array, (RaycastHit x, RaycastHit y) => x.distance.CompareTo(y.distance));
 			foreach (RaycastHit raycastHit in array)
 			{

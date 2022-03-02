@@ -24,9 +24,9 @@ namespace HeavyMetalMachines.Combat
 			this.Effect.TriggerDestroy(-1, base._trans.position, false, null, Vector3.zero, (!this.SimulateDestroyOnLifetime) ? BaseFX.EDestroyReason.Gadget : BaseFX.EDestroyReason.Lifetime, false);
 		}
 
-		public override void PerkDestroyed(DestroyEffect destroyEffect)
+		public override void PerkDestroyed(DestroyEffectMessage destroyEffectMessage)
 		{
-			base.PerkDestroyed(destroyEffect);
+			base.PerkDestroyed(destroyEffectMessage);
 			if (GameHubBehaviour.Hub.Net.IsClient())
 			{
 				return;

@@ -1,5 +1,4 @@
 ﻿using System;
-using FMod;
 using HeavyMetalMachines.Audio;
 using Pocketverse;
 using UnityEngine;
@@ -10,7 +9,7 @@ namespace HeavyMetalMachines.VFX
 	{
 		public void OnValidate()
 		{
-			this.parameterBytes = FMODAudioManager.GetBytes(this.parameterName);
+			this._parameterNameBytes = FmodUtilities.GetBytes(this.parameterName);
 		}
 
 		protected override void PlayAudio(Transform target, float volume)
@@ -31,7 +30,7 @@ namespace HeavyMetalMachines.VFX
 				});
 				return;
 			}
-			this._sfxController.Play(base.castAsset, target, volume, this.parameterBytes, this.parameterValue, this.forceResetTimeline);
+			this._sfxController.Play(base.castAsset, target, volume, this._parameterNameBytes, this.parameterValue, this.forceResetTimeline);
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(ParameterizedAudioVFX));
@@ -46,9 +45,9 @@ namespace HeavyMetalMachines.VFX
 		private bool forceResetTimeline;
 
 		[SerializeField]
-		private byte[] parameterBytes;
+		private SFXController _sfxController;
 
 		[SerializeField]
-		private SFXController _sfxController;
+		private byte[] _parameterNameBytes;
 	}
 }

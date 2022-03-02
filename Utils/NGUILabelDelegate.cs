@@ -47,8 +47,8 @@ namespace HeavyMetalMachines.Utils
 			}
 		}
 
-		[SerializeField]
 		[TextArea(3, 20)]
+		[SerializeField]
 		private string _text;
 
 		private UILabel _selfLabel;

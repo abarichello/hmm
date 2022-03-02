@@ -27,9 +27,9 @@ namespace HeavyMetalMachines.Combat
 			this.CheckArea();
 		}
 
-		public override void PerkDestroyed(DestroyEffect destroyEffect)
+		public override void PerkDestroyed(DestroyEffectMessage destroyEffectMessage)
 		{
-			base.PerkDestroyed(destroyEffect);
+			base.PerkDestroyed(destroyEffectMessage);
 			for (int i = 0; i < this._combats.Count; i++)
 			{
 				this._combats[i].Controller.ListenToEP -= this.OnEPSpent;
@@ -40,7 +40,7 @@ namespace HeavyMetalMachines.Combat
 
 		private void CheckArea()
 		{
-			Collider[] array = Physics.OverlapSphere(this._transform.position, this.Effect.Data.Range, 1077058560);
+			Collider[] array = Physics.OverlapSphere(this._transform.position, this.Effect.Data.Range, 1077054464);
 			this._combatsNew.Clear();
 			foreach (Collider comp in array)
 			{

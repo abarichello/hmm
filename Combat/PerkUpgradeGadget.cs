@@ -4,7 +4,7 @@ using Pocketverse;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkUpgradeGadget : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkUpgradeGadget : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		public override void PerkInitialized()
 		{
@@ -32,7 +32,7 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (this._gadget && this._gadget.GetLevel(this.Upgrade) > this._initialUpgradeLevel)
 			{

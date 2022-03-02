@@ -61,14 +61,6 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
-		public bool Creeps
-		{
-			get
-			{
-				return this.HitCreeps;
-			}
-		}
-
 		public bool Players
 		{
 			get
@@ -106,8 +98,6 @@ namespace HeavyMetalMachines.Combat
 		public bool HitTurrets = true;
 
 		public bool HitBuildings = true;
-
-		public bool HitCreeps = true;
 
 		public bool HitPlayers = true;
 

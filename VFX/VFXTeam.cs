@@ -5,6 +5,7 @@ namespace HeavyMetalMachines.VFX
 	public enum VFXTeam
 	{
 		Ally,
-		Enemy
+		Enemy,
+		Neutral
 	}
 }

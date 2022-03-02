@@ -33,8 +33,7 @@ namespace HeavyMetalMachines.Tutorial.InGame
 			}
 			else
 			{
-				this._botStarter.BotAIController.Horizontal = 0f;
-				this._botStarter.BotAIController.Vertical = 0f;
+				this._botStarter.BotAIController.StopBot(true);
 				if (this.OnPathFinisheCompleteBehaviour)
 				{
 					this.CompleteBehaviourAndSync();

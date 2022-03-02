@@ -1,11 +1,12 @@
 ﻿using System;
+using HeavyMetalMachines.AI.Steering;
 using HeavyMetalMachines.Combat;
 using Pocketverse;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Car
 {
-	public class CarInput : GameHubBehaviour, IObjectSpawnListener
+	public class CarInput : GameHubBehaviour, IObjectSpawnListener, ISteerringInput
 	{
 		public Vector3 MousePosition
 		{
@@ -15,10 +16,27 @@ namespace HeavyMetalMachines.Car
 			}
 		}
 
+		public Vector3 MouseDirection
+		{
+			get
+			{
+				return this.LastInputs.MouseDir;
+			}
+		}
+
+		public bool IsThrottling
+		{
+			get
+			{
+				return this.LastInputs.Up || this.LastInputs.Down || this.LastInputs.DrivingStyle == CarInput.DrivingStyleKind.Bot;
+			}
+		}
+
 		private void Awake()
 		{
 			this._trans = base.transform;
 			this._movement = base.GetComponent<CarMovement>();
+			this._combat = base.GetComponent<CombatObject>();
 			this.SetAngle(this.DirectionalAngle);
 		}
 
@@ -71,28 +89,36 @@ namespace HeavyMetalMachines.Car
 			}
 		}
 
-		public void BotInput(float hor, float ver, bool drift)
+		public void SteerInput(float hor, float ver)
 		{
 			if (this.DebugStopUpdating)
 			{
 				return;
 			}
+			this.LastInputs.MousePos = this._trans.position + this._trans.forward * 20f;
 			this.LastInputs.DrivingStyle = CarInput.DrivingStyleKind.Bot;
 			this.LastInputs.Dir = new Vector2(hor, ver);
 			this.UpdateInput();
 		}
 
-		public void Input(PlayerController.InputMap inputs, bool immobilized)
+		public void SteerInput(Vector3 position, bool forward)
 		{
 			if (this.DebugStopUpdating)
 			{
 				return;
 			}
-			if (immobilized)
+			this.LastInputs.MousePos = position;
+			this.LastInputs.Dir = (position - base.transform.position).normalized.ToVector2XZ();
+			this.LastInputs.DrivingStyle = CarInput.DrivingStyleKind.FollowMouse;
+			this.LastInputs.Up = forward;
+			this.LastInputs.Down = false;
+			this.UpdateInput();
+		}
+
+		public void Input(PlayerController.InputMap inputs)
+		{
+			if (this.DebugStopUpdating)
 			{
-				this.LastInputs.Clear();
-				this.TargetH = 0f;
-				this.TargetV = 0f;
 				return;
 			}
 			this.LastInputs.Copy(inputs);
@@ -102,20 +128,22 @@ namespace HeavyMetalMachines.Car
 		public void SetAngle(float angle)
 		{
 			this.DirectionalAngle = angle;
-			this._angleRad = angle * 0.0174532924f;
+			this._angleRad = angle * 0.017453292f;
 			this._angleCos = Mathf.Cos(this._angleRad);
 			this._angleSin = Mathf.Sin(this._angleRad);
 		}
 
 		public Vector2 InverseConvert(Vector2 worldAim)
 		{
-			Vector2 result = new Vector2(worldAim.x * this._angleCos + worldAim.y * this._angleSin, worldAim.y * this._angleCos - worldAim.x * this._angleSin);
+			Vector2 result;
+			result..ctor(worldAim.x * this._angleCos + worldAim.y * this._angleSin, worldAim.y * this._angleCos - worldAim.x * this._angleSin);
 			return result;
 		}
 
 		public Vector2 ConvertAim(Vector2 screenAim)
 		{
-			Vector2 result = new Vector2(screenAim.x * this._angleCos - screenAim.y * this._angleSin, screenAim.x * this._angleSin + screenAim.y * this._angleCos);
+			Vector2 result;
+			result..ctor(screenAim.x * this._angleCos - screenAim.y * this._angleSin, screenAim.x * this._angleSin + screenAim.y * this._angleCos);
 			return result;
 		}
 
@@ -126,14 +154,23 @@ namespace HeavyMetalMachines.Car
 
 		private void UpdateInput()
 		{
+			StatusKind currentStatus = this._combat.Attributes.CurrentStatus;
+			bool flag = currentStatus.HasFlag(StatusKind.Immobilized);
+			if (flag)
+			{
+				this.LastInputs.Clear();
+				this.TargetH = 0f;
+				this.TargetV = 0f;
+				return;
+			}
 			switch (this.LastInputs.DrivingStyle)
 			{
 			case CarInput.DrivingStyleKind.Simulator:
 			{
 				this.TargetH = this.LastInputs.Dir.x;
 				this.TargetV = this.LastInputs.Dir.y;
-				bool flag = !Mathf.Approximately(this.TargetH, 0f);
-				if (flag)
+				bool flag2 = !Mathf.Approximately(this.TargetH, 0f);
+				if (flag2)
 				{
 					this._keyboardPressedTime += Time.deltaTime;
 					this._keyboardReleasedTime = 0f;
@@ -143,9 +180,9 @@ namespace HeavyMetalMachines.Car
 					this._keyboardPressedTime = 0f;
 					this._keyboardReleasedTime += Time.deltaTime;
 				}
-				if ((flag && this._keyboardPressedTime < this.KeyboardMaxAngSpeedTime) || (!flag && this._keyboardReleasedTime < this.KeyboardAngRecoveryTime))
+				if ((flag2 && this._keyboardPressedTime < this.KeyboardMaxAngSpeedTime) || (!flag2 && this._keyboardReleasedTime < this.KeyboardAngRecoveryTime))
 				{
-					float num = (!flag) ? Mathf.Sign(this._movement.LastAngularVelocity) : Mathf.Sign(this.TargetH);
+					float num = (!flag2) ? Mathf.Sign(this._movement.LastAngularVelocity) : Mathf.Sign(this.TargetH);
 					this.TargetH = this._movement.MaxSafeAngularSpeed / this._movement.MaxAngularSpeed * num * Mathf.Sign(this.TargetV);
 				}
 				break;
@@ -179,26 +216,10 @@ namespace HeavyMetalMachines.Car
 			if (style == CarInput.DrivingStyleKind.Controller)
 			{
 				this.TargetV = Mathf.Abs(this.LastInputs.Speed) * (float)((!this.LastInputs.ReverseGear) ? 1 : -1);
-				if (this.LastInputs.ReverseGear)
-				{
-					this._lastReverse = Time.time;
-				}
-				else if (this.TargetV > 0f)
-				{
-					this._lastReverse = 0f;
-				}
 			}
 			else
 			{
 				this.TargetV = ((!this.LastInputs.Up) ? ((float)((!this.LastInputs.Down) ? 0 : -1)) : (1f - ((!this.LastInputs.Down) ? 0f : this.MouseReverseSpeedReduction)));
-				if (this.LastInputs.Down && !this.LastInputs.Up)
-				{
-					this._lastReverse = Time.time;
-				}
-				else if (this.LastInputs.Up)
-				{
-					this._lastReverse = 0f;
-				}
 			}
 			if (this.LastInputs.Dir == Vector2.zero)
 			{
@@ -206,7 +227,7 @@ namespace HeavyMetalMachines.Car
 				this.TargetY = 0f;
 				return;
 			}
-			bool flag = this.TargetV < 0f || (this._lastReverse > 0f && 1f > Time.time - this._lastReverse);
+			bool flag = this.TargetV < 0f;
 			float num = (!flag) ? this._trans.rotation.eulerAngles.y : (this._trans.rotation.eulerAngles.y - 180f);
 			if (num > 180f)
 			{
@@ -227,20 +248,23 @@ namespace HeavyMetalMachines.Car
 				this.TargetY += 360f;
 			}
 			this.TargetH = Mathf.Min(Mathf.Abs(this.TargetY) / this.ControllerAngleForMaxAngleSpeed, 1f) * Mathf.Sign(this.TargetY);
-			if (this._movement.CarInfo.GirosFlingHelper)
+			if (Mathf.Abs(this.TargetY) > 90f)
 			{
-				if ((this.TargetV != 0f || flag) && Mathf.Abs(this.TargetY) > 90f)
+				if (this._movement.CarInfo.GirosFlingHelper)
 				{
-					this.TargetV = (Mathf.Abs(this.TargetY) - 90f) / 90f * (float)((!flag) ? -1 : 1);
-					if (this._movement.LastAngularVelocity != 0f)
+					if (!Mathf.Approximately(this.TargetV, 0f) || flag)
 					{
-						this.TargetH = Mathf.Abs(this.TargetH) * Mathf.Sign(this._movement.LastAngularVelocity);
+						this.TargetV *= (Mathf.Abs(this.TargetY) - 90f) / 90f * (float)((!flag) ? -1 : 1);
 					}
 				}
-			}
-			else if (!Mathf.Approximately(0f, this._movement.LastAngularVelocity) && Mathf.Abs(this.TargetY) > 90f)
-			{
-				this.TargetH = Mathf.Abs(this.TargetH) * Mathf.Sign(this._movement.LastAngularVelocity);
+				else if (!Mathf.Approximately(this._movement.LastAngularVelocity, 0f))
+				{
+					this.TargetV = 0f;
+				}
+				if (!Mathf.Approximately(0f, this._movement.LastAngularVelocity))
+				{
+					this.TargetH = Mathf.Abs(this.TargetH) * Mathf.Sign(this._movement.LastAngularVelocity);
+				}
 			}
 		}
 
@@ -280,8 +304,6 @@ namespace HeavyMetalMachines.Car
 
 		public float MouseReverseSpeedReduction;
 
-		public float TurretAngle;
-
 		public float TargetH;
 
 		public float TargetV;
@@ -302,15 +324,13 @@ namespace HeavyMetalMachines.Car
 
 		private CarMovement _movement;
 
+		private CombatObject _combat;
+
 		private float _keyboardPressedTime;
 
 		private float _keyboardReleasedTime;
 
 		private PlayerController.InputMap LastInputs = new PlayerController.InputMap();
-
-		private const float ReverseLingerTime = 1f;
-
-		private float _lastReverse;
 
 		public enum DrivingStyleKind
 		{

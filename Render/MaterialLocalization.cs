@@ -18,7 +18,7 @@ namespace HeavyMetalMachines.Render
 			int num2 = -1;
 			while (++num < this.Textures.Length && num2 == -1)
 			{
-				if (this.Textures[num].Language == Language.CurrentLanguage())
+				if (this.Textures[num].Language == Language.CurrentLanguage)
 				{
 					num2 = num;
 				}

@@ -4,7 +4,6 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	[RequireComponent(typeof(Rigidbody))]
 	public class PerkAttachToDummy : PerkAttachToObject
 	{
 		protected override Vector3 TargetInterpolatedPosition
@@ -27,7 +26,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				return targetIdentifiable.transform;
 			}
-			Transform dummy = bitComponentInChildren.GetDummy(this.dummyKind, this.customDummyName);
+			Transform dummy = bitComponentInChildren.GetDummy(this.dummyKind, this.customDummyName, this);
 			if (dummy == null)
 			{
 				return targetIdentifiable.transform;

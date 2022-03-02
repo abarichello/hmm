@@ -1,9 +1,12 @@
 ﻿using System;
 using Assets.ClientApiObjects;
 using Assets.ClientApiObjects.Specializations;
-using Commons.Swordfish.Battlepass;
+using HeavyMetalMachines.BI;
+using HeavyMetalMachines.DataTransferObjects.Battlepass;
+using HeavyMetalMachines.DataTransferObjects.Inventory;
+using HeavyMetalMachines.DataTransferObjects.Progression;
 using HeavyMetalMachines.Infra.ScriptableObjects;
-using HeavyMetalMachines.Swordfish.Player;
+using Hoplon.Serialization;
 using Pocketverse;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -31,7 +34,7 @@ namespace HeavyMetalMachines.Battlepass
 			}
 			this._onMetalpassUnlockPremium = onUnlockPremium;
 			this._onMetalpassShopClosed = onBuyWindowClosed;
-			SceneManager.LoadSceneAsync("UI_ADD_BattlepassShop", LoadSceneMode.Additive);
+			SceneManager.LoadSceneAsync("UI_ADD_BattlepassShop", 1);
 			this._premiumShopSceneLoad = true;
 		}
 
@@ -42,16 +45,18 @@ namespace HeavyMetalMachines.Battlepass
 
 		public void OnHidePremiumShopWindowAnimationEnded()
 		{
+			this._onMetalpassUnlockPremium = null;
+			this._onMetalpassShopClosed = null;
 			SceneManager.UnloadSceneAsync("UI_ADD_BattlepassShop");
 			this._premiumShopSceneLoad = false;
 		}
 
-		public void RegisterPremiumShopWindow(IBattlepassPremiumShopView premiumShopView)
+		public void RegisterPremiumShopWindow(IBattlepassPremiumShopView premiumShopView, BattlepassSeason battlepassSeason)
 		{
 			this._battlepassPremiumShopView = premiumShopView;
 			int level = this._battlepassProgressScriptableObject.Progress.Level;
 			ItemTypeScriptableObject[] packages;
-			if (level >= 49)
+			if (level >= GameHubScriptableObject.Hub.SharedConfigs.Battlepass.Levels.Length - 1)
 			{
 				packages = new ItemTypeScriptableObject[]
 				{
@@ -66,10 +71,9 @@ namespace HeavyMetalMachines.Battlepass
 					this._unlockPremiumBattlepassItemTypes[this._battlepassComponent.GetPackageIndexRelevantToBattlepassLevel(level, GameHubScriptableObject.Hub.SharedConfigs.Battlepass.Levels.Length - 1, this._unlockPremiumBattlepassItemTypes.Length)]
 				};
 			}
-			BattlepassConfig battlepass = GameHubScriptableObject.Hub.SharedConfigs.Battlepass;
-			DateTime endDate = battlepass.GetEndDate();
+			DateTime endSeasonDateTime = battlepassSeason.EndSeasonDateTime;
 			TimeSpan t = new TimeSpan(this._battlepassComponent.GetSfClockOffset());
-			TimeSpan remainingTime = endDate - (DateTime.UtcNow + t);
+			TimeSpan remainingTime = endSeasonDateTime - (DateTime.UtcNow + t);
 			this._battlepassPremiumShopView.Setup(packages, remainingTime);
 			this._battlepassPremiumShopView.SetVisibility(true);
 		}
@@ -97,7 +101,7 @@ namespace HeavyMetalMachines.Battlepass
 			if (itemTypeScriptableObject is PackageItemTypeScriptableObject)
 			{
 				PackageItemTypeScriptableObject packageItemTypeScriptableObject = (PackageItemTypeScriptableObject)itemTypeScriptableObject;
-				PackageItemTypeBag packageItemTypeBag = (PackageItemTypeBag)((JsonSerializeable<T>)packageItemTypeScriptableObject.Bag);
+				PackageItemTypeBag packageItemTypeBag = (PackageItemTypeBag)((JsonSerializeable<!0>)packageItemTypeScriptableObject.Bag);
 				for (int i = 0; i < packageItemTypeBag.itens.Length; i++)
 				{
 					PackageItem packageItem = packageItemTypeBag.itens[i];
@@ -111,7 +115,7 @@ namespace HeavyMetalMachines.Battlepass
 				}
 			}
 			this._buyPremiumComfirmed = false;
-			GameHubScriptableObject.Hub.GuiScripts.SharedPreGameWindow.ItemBuyWindow.ShowBuyWindow(itemTypeScriptableObject, new Action(this.OnBuyPremiumConfirmed), new Action(this.OnBuyPremiumClosed), new Action(this.GoToShopCashFromPremiumShop), 1, true);
+			GameHubScriptableObject.Hub.GuiScripts.SharedPreGameWindow.ItemBuyWindow.ShowBuyWindow(itemTypeScriptableObject, new Action(this.OnBuyPremiumConfirmed), new Action(this.OnBuyPremiumClosed), new Action(this.GoToShopCashFromPremiumShop), 1, this._isBuyImagePortrait);
 		}
 
 		private void OnBuyPremiumConfirmed()
@@ -135,9 +139,13 @@ namespace HeavyMetalMachines.Battlepass
 
 		private void GoToShopCashFromPremiumShop()
 		{
+			ClientShopBILogger.LegacyLog(GameHubScriptableObject.Hub, 5, 6);
 			this.HidePremiumShopWindow();
 			this._battlepassComponent.OnGoToShopCash();
 		}
+
+		[SerializeField]
+		private bool _isBuyImagePortrait = true;
 
 		private static readonly BitLogger Log = new BitLogger(typeof(BattlepassPremiumShopComponent));
 

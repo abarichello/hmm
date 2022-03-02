@@ -26,13 +26,13 @@ namespace HeavyMetalMachines.Audio
 			}
 		}
 
-		public FMODAsset Engine_Player;
+		public AudioEventAsset Engine_Player;
 
-		public FMODAsset Engine_Others;
+		public AudioEventAsset Engine_Others;
 
-		public FMODAsset Hitted_Player;
+		public AudioEventAsset Hitted_Player;
 
-		public FMODAsset Hitted_Others;
+		public AudioEventAsset Hitted_Others;
 
 		public AnimationCurve[] RpmGearCurves;
 

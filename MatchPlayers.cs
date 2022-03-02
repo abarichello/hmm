@@ -1,15 +1,27 @@
 ﻿using System;
 using System.Collections.Generic;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids;
-using HeavyMetalMachines.BotAI;
+using HeavyMetalMachines.Characters;
+using HeavyMetalMachines.Combat.GadgetScript;
+using HeavyMetalMachines.DataTransferObjects.Progression;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Matches;
+using HeavyMetalMachines.Playback;
 using Pocketverse;
 using UnityEngine;
 
 namespace HeavyMetalMachines
 {
-	public class MatchPlayers : KeyStateParser, IMatchPlayers
+	public class MatchPlayers : KeyStateParser, IMatchPlayers, IMatchPlayersDispatcher
 	{
+		public MatchPlayers()
+		{
+			this.Players = new List<PlayerData>(8);
+			this.Bots = new List<PlayerData>(8);
+			this.PlayersAndBots = new List<PlayerData>(8);
+			this.Narrators = new List<PlayerData>(4);
+		}
+
 		public override StateType Type
 		{
 			get
@@ -18,7 +30,7 @@ namespace HeavyMetalMachines
 			}
 		}
 
-		public override void Update(Pocketverse.BitStream stream)
+		public override void Update(BitStream stream)
 		{
 			this._serial = stream.ReadCompressedInt();
 			int num = 0;
@@ -26,6 +38,10 @@ namespace HeavyMetalMachines
 			{
 				num = this.Bots.Count;
 			}
+			MatchPlayers.Log.DebugFormat("Received updated Players={0}", new object[]
+			{
+				this._serial
+			});
 			while (stream.ReadBool())
 			{
 				byte key = stream.ReadByte();
@@ -74,19 +90,29 @@ namespace HeavyMetalMachines
 				return;
 			}
 			this._serial++;
-			Pocketverse.BitStream stream = base.GetStream();
+			MatchPlayers.Log.DebugFormat("Sending single player={1} serial={0}", new object[]
+			{
+				this._serial,
+				playerOrBotsByObjectId.PlayerAddress
+			});
+			BitStream stream = base.GetStream();
 			stream.WriteCompressedInt(this._serial);
 			stream.WriteBool(true);
 			stream.WriteByte(playerOrBotsByObjectId.PlayerAddress);
 			playerOrBotsByObjectId.WriteToBitStream(stream);
 			stream.WriteBool(false);
-			GameHubObject.Hub.PlaybackManager.SendFullState(1, this.Type, stream.ToArray());
+			this._serverDispatcher.SendSnapshot(1, this.Type.Convert(), this._serverDispatcher.GetNextFrameId(), -1, this._gameTime.GetPlaybackTime(), stream.ToArray());
 		}
 
 		public void SendPlayers(byte to)
 		{
 			this._serial++;
-			Pocketverse.BitStream stream = base.GetStream();
+			MatchPlayers.Log.DebugFormat("Sending players={0} to={1}", new object[]
+			{
+				this._serial,
+				to
+			});
+			BitStream stream = base.GetStream();
 			stream.WriteCompressedInt(this._serial);
 			for (int i = 0; i < this.AllDatas.Count; i++)
 			{
@@ -96,7 +122,7 @@ namespace HeavyMetalMachines
 				playerData.WriteToBitStream(stream);
 			}
 			stream.WriteBool(false);
-			GameHubObject.Hub.PlaybackManager.SendFullState(to, this.Type, stream.ToArray());
+			this._serverDispatcher.SendSnapshot(1, this.Type.Convert(), this._serverDispatcher.GetNextFrameId(), -1, this._gameTime.GetPlaybackTime(), stream.ToArray());
 		}
 
 		public PlayerData CurrentPlayerData
@@ -115,8 +141,8 @@ namespace HeavyMetalMachines
 				}
 				if (hub.Net.IsServer())
 				{
-					MatchPlayers.Log.FatalFormat("Trying to access currentPlayerData on server side!", new object[0]);
-					this._currentPlayerData = new PlayerData("-1", -1, TeamKind.Zero, byte.MaxValue, -1, true, false, new BattlepassProgress());
+					MatchPlayers.Log.FatalFormatStackTrace("Trying to access currentPlayerData on server side!", new object[0]);
+					this._currentPlayerData = new PlayerData("-1", -1, TeamKind.Zero, byte.MaxValue, -1, true, 0, false, new BattlepassProgress());
 					return this._currentPlayerData;
 				}
 				byte myAddress = hub.Net.GetMyAddress();
@@ -139,6 +165,13 @@ namespace HeavyMetalMachines
 				}
 				return this.CurrentPlayerData.Team;
 			}
+		}
+
+		public TeamKind GetTeamKindById(int playerId)
+		{
+			PlayerData playerData = null;
+			this._playersAndBotsId.TryGetValue(playerId, out playerData);
+			return playerData.Team;
 		}
 
 		public int RedMMR
@@ -170,6 +203,11 @@ namespace HeavyMetalMachines
 			{
 				this._redMMR = GameHubObject.Hub.Config.GetIntValue(ConfigAccess.RedMMR);
 				this._blueMMR = GameHubObject.Hub.Config.GetIntValue(ConfigAccess.BlueMMR);
+				MatchPlayers.Log.DebugFormat("SkipSwordfish Average MMR Blue={0} Red={1}", new object[]
+				{
+					this._blueMMR,
+					this._redMMR
+				});
 				return;
 			}
 			int num = 0;
@@ -210,10 +248,27 @@ namespace HeavyMetalMachines
 			{
 				this._blueMMR = int.MaxValue;
 			}
+			MatchPlayers.Log.DebugFormat("Average MMR Blue={0} Red={1}", new object[]
+			{
+				this._blueMMR,
+				this._redMMR
+			});
 		}
+
+		public List<PlayerData> Players { get; private set; }
+
+		public List<PlayerData> Bots { get; private set; }
+
+		public List<PlayerData> PlayersAndBots { get; private set; }
+
+		public List<PlayerData> Narrators { get; private set; }
 
 		public void AddPlayer(PlayerData data)
 		{
+			MatchPlayers.Log.DebugFormat("Adding player={0}", new object[]
+			{
+				data.PlayerAddress
+			});
 			this.Players.Add(data);
 			this.Clients.Add(data);
 			this.AddToStructures(data);
@@ -221,6 +276,10 @@ namespace HeavyMetalMachines
 
 		public void AddBot(PlayerData data)
 		{
+			MatchPlayers.Log.DebugFormat("Adding bot={0}", new object[]
+			{
+				data.PlayerAddress
+			});
 			this.Bots.Add(data);
 			this.AddToStructures(data);
 		}
@@ -247,10 +306,27 @@ namespace HeavyMetalMachines
 
 		public void AddNarrator(PlayerData data)
 		{
+			MatchPlayers.Log.DebugFormat("Adding narrator={0}", new object[]
+			{
+				data.PlayerAddress
+			});
 			this.Narrators.Add(data);
 			this.AllDatas.Add(data);
 			this.Clients.Add(data);
 			this._allByAddress[data.PlayerAddress] = data;
+		}
+
+		public void RemoveNarrator(byte address)
+		{
+			PlayerData playerData;
+			if (!this._allByAddress.TryGetValue(address, out playerData) || !playerData.IsNarrator)
+			{
+				return;
+			}
+			this.Narrators.Remove(playerData);
+			this.AllDatas.Remove(playerData);
+			this.Clients.Remove(playerData);
+			this._allByAddress.Remove(address);
 		}
 
 		public PlayerData GetPlayer(TeamKind team, int slot)
@@ -258,6 +334,42 @@ namespace HeavyMetalMachines
 			for (int i = 0; i < this.Players.Count; i++)
 			{
 				PlayerData playerData = this.Players[i];
+				if (!(playerData == null))
+				{
+					if (playerData.Team == team && playerData.TeamSlot == slot)
+					{
+						return playerData;
+					}
+				}
+			}
+			return null;
+		}
+
+		public PlayerData GetPlayerOrBot(MatchClient matchClient)
+		{
+			for (int i = 0; i < this.Players.Count; i++)
+			{
+				PlayerData playerData = this.Players[i];
+				if (!(playerData == null))
+				{
+					if (playerData.IsBot && playerData.BotId == matchClient.BotId)
+					{
+						return playerData;
+					}
+					if (playerData.PlayerId == matchClient.PlayerId)
+					{
+						return playerData;
+					}
+				}
+			}
+			return null;
+		}
+
+		public PlayerData GetPlayerOrBot(TeamKind team, int slot)
+		{
+			for (int i = 0; i < this.PlayersAndBots.Count; i++)
+			{
+				PlayerData playerData = this.PlayersAndBots[i];
 				if (!(playerData == null))
 				{
 					if (playerData.Team == team && playerData.TeamSlot == slot)
@@ -317,33 +429,20 @@ namespace HeavyMetalMachines
 		public PlayerData GetAnyRandomlyByTeam(TeamKind team)
 		{
 			List<PlayerData> list = (team != TeamKind.Blue) ? this.RedTeamPlayersAndBots : this.BlueTeamPlayersAndBots;
-			int objId = list[UnityEngine.Random.Range(0, list.Count)].CharacterInstance.ObjId;
+			int objId = list[Random.Range(0, list.Count)].CharacterInstance.ObjId;
 			return this.GetPlayerOrBotsByObjectId(objId);
 		}
 
-		public BotAIGoal.BotDifficulty GetBotDifficulty(TeamKind team)
+		public bool IsTeamBotOnly(List<PlayerData> playerDatas)
 		{
-			int num = 0;
-			if (team != TeamKind.Red)
+			for (int i = 0; i < playerDatas.Count; i++)
 			{
-				if (team == TeamKind.Blue)
+				if (!playerDatas[i].IsBot)
 				{
-					num = GameHubObject.Hub.Players.RedMMR;
+					return false;
 				}
 			}
-			else
-			{
-				num = GameHubObject.Hub.Players.BlueMMR;
-			}
-			if (num < GameHubObject.Hub.SharedConfigs.EasyBotsMMRCap)
-			{
-				return BotAIGoal.BotDifficulty.Easy;
-			}
-			if (num < GameHubObject.Hub.SharedConfigs.MediumBotsMMRCap)
-			{
-				return BotAIGoal.BotDifficulty.Medium;
-			}
-			return BotAIGoal.BotDifficulty.Hard;
+			return true;
 		}
 
 		public bool IsSomeoneDisconnected(TeamKind teamKind = TeamKind.Zero)
@@ -402,6 +501,8 @@ namespace HeavyMetalMachines
 			this._playersAndBotsId.Clear();
 			this.Narrators.Clear();
 			this.AllDatas.Clear();
+			BaseParameter.ClearRegisteredParameters();
+			PlayerCarFactory.ClearCharacterInfoDictionary();
 		}
 
 		public static BitLogger Log = new BitLogger(typeof(MatchPlayers));
@@ -419,14 +520,6 @@ namespace HeavyMetalMachines
 		public readonly List<PlayerData> Clients = new List<PlayerData>(8);
 
 		public readonly List<PlayerData> AllDatas = new List<PlayerData>(4);
-
-		public readonly List<PlayerData> Narrators = new List<PlayerData>(4);
-
-		public readonly List<PlayerData> Players = new List<PlayerData>(8);
-
-		public readonly List<PlayerData> Bots = new List<PlayerData>(8);
-
-		public readonly List<PlayerData> PlayersAndBots = new List<PlayerData>(8);
 
 		public readonly List<PlayerData> BlueTeamPlayersAndBots = new List<PlayerData>(4);
 

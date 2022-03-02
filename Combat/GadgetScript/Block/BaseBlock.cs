@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Reflection;
+using HeavyMetalMachines.Infra.Context;
 using Hoplon.GadgetScript;
 using Pocketverse;
 using UnityEngine;
@@ -8,27 +10,32 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 {
 	public abstract class BaseBlock : ScriptableObject, IBlock, IContent
 	{
-		public IBlock Execute(IGadgetContext gadgetContext, IEventContext eventContext)
-		{
-			if (!this.CheckSanity(gadgetContext, eventContext))
-			{
-				return null;
-			}
-			return this.InnerExecute(gadgetContext, eventContext);
-		}
-
-		protected abstract bool CheckSanity(IGadgetContext gadgetContext, IEventContext eventContext);
-
-		protected abstract IBlock InnerExecute(IGadgetContext gadgetContext, IEventContext eventContext);
-
-		public abstract bool UsesParameterWithId(int parameterId);
-
 		public int Id
 		{
 			get
 			{
 				return this._blockId;
 			}
+		}
+
+		public abstract IBlock Execute(IGadgetContext gadgetContext, IEventContext eventContext);
+
+		public void Initialize(ref IList<BaseBlock> referencedBlocks, IHMMContext context)
+		{
+			FieldInfo[] fields = base.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+			for (int i = 0; i < fields.Length; i++)
+			{
+				BaseBlock baseBlock = fields[i].GetValue(this) as BaseBlock;
+				if (null != baseBlock)
+				{
+					referencedBlocks.Add(baseBlock);
+				}
+			}
+			this.InternalInitialize(ref referencedBlocks, context);
+		}
+
+		protected virtual void InternalInitialize(ref IList<BaseBlock> referencedBlocks, IHMMContext context)
+		{
 		}
 
 		public static IBlock GetBlock(int id)
@@ -50,31 +57,21 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 			}
 		}
 
-		public bool LogThisBlock
+		public string Name
 		{
 			get
 			{
-				return !this._dontLogThisBlock;
+				return (!string.IsNullOrEmpty(this._name)) ? this._name : base.name;
+			}
+			set
+			{
+				this._name = value;
 			}
 		}
 
 		protected virtual void OnEnable()
 		{
 			BaseBlock._blocks[this._blockId] = this;
-		}
-
-		protected void LogSanitycheckError(string message)
-		{
-			BaseBlock.Log.ErrorFormat("Sanity check error detected on block: {0} - {1}", new object[]
-			{
-				base.name,
-				message
-			});
-		}
-
-		protected bool CheckIsParameterWithId(BaseParameter parameter, int id)
-		{
-			return parameter != null && parameter.ContentId == id;
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(BaseBlock));
@@ -86,7 +83,7 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 		private int _blockId;
 
 		[SerializeField]
-		private bool _dontLogThisBlock;
+		private string _name;
 
 		[Header("Blocks")]
 		[SerializeField]

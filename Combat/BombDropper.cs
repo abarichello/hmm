@@ -55,6 +55,15 @@ namespace HeavyMetalMachines.Combat
 			}
 			else if (combat.IsPlayer && combat.Team != this._teamOwner)
 			{
+				foreach (StatusKind status in this._statusesToApply)
+				{
+					ModifierInfo info = new ModifierInfo
+					{
+						Status = status,
+						LifeTime = 0.1f
+					};
+					combat.ModifierController.AddModifier(new ModifierData(info), null, -1, false);
+				}
 				combat.BombGadget.Disable(BombGadget.DisableReason.Dropper);
 				GameHubBehaviour.Hub.BombManager.DisableBombGrabber(combat);
 			}
@@ -62,6 +71,12 @@ namespace HeavyMetalMachines.Combat
 
 		[SerializeField]
 		private TeamKind _teamOwner;
+
+		[SerializeField]
+		private StatusKind[] _statusesToApply = new StatusKind[]
+		{
+			StatusKind.OnDropper
+		};
 
 		[SerializeField]
 		private bool _dropWhenBombTouch;

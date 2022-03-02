@@ -1,21 +1,23 @@
 ﻿using System;
 using HeavyMetalMachines.Frontend;
 using HeavyMetalMachines.Utils;
-using SharedUtils.Loading;
+using Hoplon.Unity.Loading;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.VFX
 {
 	public class UIBundleWindow
 	{
-		public UIBundleWindow(string bundleName)
+		public UIBundleWindow(string bundleName, DiContainer container)
 		{
+			this._container = container;
 			this.windowName = bundleName;
 		}
 
 		public void LoadWindow(Transform parentTransform, UIBundleWindow.OnLoadDelegate onLoadCallbackDelegate, Action onLoadFailed)
 		{
-			UnityEngine.Debug.Log(string.Format("UIBundleWindow OPEN Obj:{0} UIBundleWindowHash:{1}", this.windowName, this.GetHashCode()));
+			Debug.Log(string.Format("UIBundleWindow OPEN Obj:{0} UIBundleWindowHash:{1}", this.windowName, this.GetHashCode()));
 			if (this._isLoading)
 			{
 				return;
@@ -29,12 +31,21 @@ namespace HeavyMetalMachines.VFX
 				return;
 			}
 			this._isLoading = true;
-			this._loadingToken = LoadingManager.GetLoadingToken(typeof(UIBundleWindow));
-			ResourcesContent.Content asset = LoadingManager.ResourceContent.GetAsset(this.windowName);
-			this._loadingToken.AddLoadable(new ResourcesLoadable(asset));
-			UnityEngine.Debug.Log(string.Format("UIBundleWindow will start loading it's token. Hash:{0} Count:{1} WindowAssetName:{2}", this._loadingToken.GetHashCode(), this._loadingToken.loadableContent.Count, asset.AssetName));
-			this._loadingToken.StartLoading(delegate
+			this._loadingToken = new LoadingToken(typeof(UIBundleWindow));
+			Content asset = Loading.Content.GetAsset(this.windowName);
+			this._loadingToken.AddLoadable(Loading.GetResourceLoadable(asset));
+			Debug.Log(string.Format("UIBundleWindow will start loading it's token. Hash:{0} Count:{1} WindowAssetName:{2}", this._loadingToken.GetHashCode(), this._loadingToken.LoadableContent.Count, asset.AssetName));
+			Loading.Engine.LoadToken(this._loadingToken, delegate(LoadingResult result)
 			{
+				if (LoadStatusExtensions.IsError(result.Status))
+				{
+					Debug.LogErrorFormat("UIBundleWindow ({0}) load failed with status: {1}", new object[]
+					{
+						this.windowName,
+						result.Status
+					});
+					return;
+				}
 				this.OnLoadWindowBundle(parentTransform, onLoadCallbackDelegate, onLoadFailed);
 			});
 		}
@@ -42,9 +53,9 @@ namespace HeavyMetalMachines.VFX
 		private void OnLoadWindowBundle(Transform parentTransform, UIBundleWindow.OnLoadDelegate onLoadCallbackDelegate, Action onLoadFailed)
 		{
 			this._isLoading = false;
-			ResourcesContent.Content asset = LoadingManager.ResourceContent.GetAsset(this.windowName);
+			Content asset = Loading.Content.GetAsset(this.windowName);
 			Transform transform = asset.Asset as Transform;
-			HeavyMetalMachines.Utils.Debug.Assert(transform, string.Format("UIBundleWindow - Invalid Asset [{0}]", asset.AssetName), HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+			Debug.Assert(transform, string.Format("UIBundleWindow - Invalid Asset [{0}]", asset.AssetName), Debug.TargetTeam.All);
 			if (!transform)
 			{
 				if (onLoadFailed != null)
@@ -54,7 +65,7 @@ namespace HeavyMetalMachines.VFX
 				return;
 			}
 			transform.gameObject.SetActive(false);
-			this._windowTransform = UnityEngine.Object.Instantiate<Transform>(transform, Vector3.zero, Quaternion.identity);
+			this._windowTransform = this._container.InstantiatePrefab(transform, Vector3.zero, Quaternion.identity, null).transform;
 			this._windowTransform.name = "[GuiBundle]" + transform.name;
 			this._isLoaded = true;
 			if (this._unloadAfterLoad)
@@ -86,24 +97,24 @@ namespace HeavyMetalMachines.VFX
 
 		public void UnloadWindow()
 		{
-			UnityEngine.Debug.Log(string.Format("UIBundleWindow CLOSE Obj:{0} UIBundleWindowHash{1}", this.windowName, this.GetHashCode()));
+			Debug.Log(string.Format("UIBundleWindow CLOSE Obj:{0} UIBundleWindowHash{1}", this.windowName, this.GetHashCode()));
 			if (this._isLoading)
 			{
 				this._unloadAfterLoad = true;
 				return;
 			}
-			UnityEngine.Debug.Log(string.Format("UIBundleWindow UnloadWindow2 Obj:{0} UIBundleWindowHash{1}", this.windowName, this.GetHashCode()));
+			Debug.Log(string.Format("UIBundleWindow UnloadWindow2 Obj:{0} UIBundleWindowHash{1}", this.windowName, this.GetHashCode()));
 			this._unloadAfterLoad = false;
 			if (!this._isLoaded)
 			{
 				return;
 			}
-			UnityEngine.Debug.Log(string.Format("UIBundleWindow UnloadWindow3 Obj:{0} UIBundleWindowHash{1}", this.windowName, this.GetHashCode()));
-			UnityEngine.Object.Destroy(this._windowTransform.gameObject);
-			this._loadingToken.Unload();
+			Debug.Log(string.Format("UIBundleWindow UnloadWindow3 Obj:{0} UIBundleWindowHash{1}", this.windowName, this.GetHashCode()));
+			Object.Destroy(this._windowTransform.gameObject);
+			Loading.Engine.UnloadToken(this._loadingToken);
 			this._windowTransform = null;
 			this._isLoaded = false;
-			UnityEngine.Debug.Log(string.Format("UIBundleWindow UnloadWindow4 Obj:{0} UIBundleWindowHash{1}", this.windowName, this.GetHashCode()));
+			Debug.Log(string.Format("UIBundleWindow UnloadWindow4 Obj:{0} UIBundleWindowHash{1}", this.windowName, this.GetHashCode()));
 		}
 
 		public bool IsLoading()
@@ -111,18 +122,18 @@ namespace HeavyMetalMachines.VFX
 			return this._isLoading;
 		}
 
-		public static void OpenWindow(Transform parentTransform, string windowBundleName, ref UIBundleWindow bundleWindow, UIBundleWindow.OnLoadDelegate onLoadDelegate, Action onLoadFailed)
+		public static void OpenWindow(DiContainer contanier, Transform parentTransform, string windowBundleName, ref UIBundleWindow bundleWindow, UIBundleWindow.OnLoadDelegate onLoadDelegate, Action onLoadFailed)
 		{
 			if (bundleWindow == null)
 			{
-				bundleWindow = new UIBundleWindow(windowBundleName);
+				bundleWindow = new UIBundleWindow(windowBundleName, contanier);
 			}
 			bundleWindow.LoadWindow(parentTransform, onLoadDelegate, onLoadFailed);
 		}
 
 		public static void CloseWindow(Transform windowTransform, ref UIBundleWindow bundleWindow)
 		{
-			UnityEngine.Debug.Log(string.Format("UIBundleWindow STATIC CLOSE Obj:{0} UIBundleWindowHash:{1}", (bundleWindow == null) ? "null name" : bundleWindow.windowName, (bundleWindow == null) ? "warning, null ref" : bundleWindow.GetHashCode().ToString()));
+			Debug.Log(string.Format("UIBundleWindow STATIC CLOSE Obj:{0} UIBundleWindowHash:{1}", (bundleWindow == null) ? "null name" : bundleWindow.windowName, (bundleWindow == null) ? "warning, null ref" : bundleWindow.GetHashCode().ToString()));
 			if (windowTransform != null)
 			{
 				HudWindow component = windowTransform.GetComponent<HudWindow>();
@@ -139,13 +150,15 @@ namespace HeavyMetalMachines.VFX
 
 		private Transform _windowTransform;
 
-		private LoadingManager.LoadingToken _loadingToken;
+		private LoadingToken _loadingToken;
 
 		private bool _isLoading;
 
 		private bool _isLoaded;
 
 		private bool _unloadAfterLoad;
+
+		private DiContainer _container;
 
 		private string windowName;
 

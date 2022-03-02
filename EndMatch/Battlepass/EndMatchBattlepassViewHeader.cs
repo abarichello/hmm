@@ -24,7 +24,7 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 			this._maxLevelLabel.gameObject.SetActive(flag);
 			this._currentLevelLabel.text = (headerData.OldLevel + 1).ToString("0");
 			this._nextLevelLabel.text = (num + 1).ToString("0");
-			float t = 1f;
+			float num2 = 1f;
 			if (flag)
 			{
 				this._levelProgressLabel.text = string.Format("{0} / {1}", headerData.MaxXpPerLevel[num], headerData.MaxXpPerLevel[num]);
@@ -32,10 +32,10 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 			else
 			{
 				this._levelProgressLabel.text = string.Format("{0} / {1}", headerData.OldLevelProgressXp, headerData.MaxXpPerLevel[num]);
-				t = (float)headerData.OldLevelProgressXp / (float)headerData.MaxXpPerLevel[num];
+				num2 = (float)headerData.OldLevelProgressXp / (float)headerData.MaxXpPerLevel[num];
 			}
 			this._totalRewardXpLabel.text = "0";
-			this._levelProgressTexture.width = (int)Mathf.Lerp((float)this._levelProgressMin, (float)this._levelProgressMax, t);
+			this._levelProgressTexture.width = (int)Mathf.Lerp((float)this._levelProgressMin, (float)this._levelProgressMax, num2);
 			this.ResetTransfusionComponents();
 			this._headerBonusesGrid.hideInactive = false;
 			List<Transform> childList = this._headerBonusesGrid.GetChildList();
@@ -124,11 +124,11 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 			NGUIWidgetAlpha[] componentsInChildren = this._transfusionAnimation.GetComponentsInChildren<NGUIWidgetAlpha>();
 			for (int i = 0; i < componentsInChildren.Length; i++)
 			{
-				componentsInChildren[i].alpha = 0f;
+				componentsInChildren[i].Alpha = 0f;
 			}
 		}
 
-		private IEnumerator CountXp(int startXp, int targetXp, float duration, UILabel label, FMODAsset asset, string formatedString = "{0}", int maxCapXp = -1)
+		private IEnumerator CountXp(int startXp, int targetXp, float duration, UILabel label, AudioEventAsset asset, string formatedString = "{0}", int maxCapXp = -1)
 		{
 			if (this._audioToken != null && !this._audioToken.IsInvalidated())
 			{
@@ -301,10 +301,10 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 
 		[Header("[Audio]")]
 		[SerializeField]
-		private FMODAsset _xpAccumulationAsset;
+		private AudioEventAsset _xpAccumulationAsset;
 
 		[SerializeField]
-		private FMODAsset _xpBarProgressAsset;
+		private AudioEventAsset _xpBarProgressAsset;
 
 		private FMODAudioManager.FMODAudio _audioToken;
 

@@ -1,30 +1,37 @@
 ﻿using System;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids;
-using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Arena;
+using HeavyMetalMachines.Infra.Context;
 using Pocketverse;
 
 namespace HeavyMetalMachines
 {
-	public class PlayerRaceStartCursorLockController : GameHubObject, IRaceStartCursorLockController, IDisposable
+	public class PlayerRaceStartCursorLockController : GameHubObject, IDisposable
 	{
-		public PlayerRaceStartCursorLockController()
+		public PlayerRaceStartCursorLockController(IConfigLoader config)
 		{
-			this.Initialize();
+			this.Initialize(config);
 		}
 
-		private void Initialize()
+		private void Initialize(IConfigLoader config)
 		{
 			GameHubObject.Hub.BombManager.ListenToPhaseChange += this.OnPhaseChange;
-			GameHubObject.Hub.GuiScripts.LoadingVersus.OnPreHideLoading += this.OnLockCursorEvent;
+			if (GameHubObject.Hub.GuiScripts)
+			{
+				GameHubObject.Hub.GuiScripts.LoadingVersus.OnPreHideLoading += this.OnLockCursorEvent;
+			}
 			LogoTransition.OnAnimationMiddle += this.OnLockCursorEvent;
 			this._cursorLockTimer.UseUnscaledTime = true;
-			this._isRaceStartCursorLockEnabled = GameHubObject.Hub.Config.GetBoolValue(ConfigAccess.RaceStartCursorLockEnable, true);
+			this._isRaceStartCursorLockEnabled = config.GetBoolValue(ConfigAccess.RaceStartCursorLockEnable, true);
 		}
 
 		public void Dispose()
 		{
 			GameHubObject.Hub.BombManager.ListenToPhaseChange -= this.OnPhaseChange;
-			GameHubObject.Hub.GuiScripts.LoadingVersus.OnPreHideLoading -= this.OnLockCursorEvent;
+			if (GameHubObject.Hub.GuiScripts)
+			{
+				GameHubObject.Hub.GuiScripts.LoadingVersus.OnPreHideLoading -= this.OnLockCursorEvent;
+			}
 			LogoTransition.OnAnimationMiddle -= this.OnLockCursorEvent;
 		}
 
@@ -46,9 +53,9 @@ namespace HeavyMetalMachines
 			this.UnlockCursorByOffset();
 		}
 
-		private void OnPhaseChange(BombScoreBoard.State state)
+		private void OnPhaseChange(BombScoreboardState state)
 		{
-			if (state == BombScoreBoard.State.BombDelivery)
+			if (state == BombScoreboardState.BombDelivery)
 			{
 				this.UnlockCursorByOffset();
 			}
@@ -78,7 +85,7 @@ namespace HeavyMetalMachines
 
 		private bool IsValidBombGameStateToLockCursor()
 		{
-			return GameHubObject.Hub.BombManager.CurrentBombGameState == BombScoreBoard.State.Warmup || GameHubObject.Hub.BombManager.CurrentBombGameState == BombScoreBoard.State.Shop || GameHubObject.Hub.BombManager.CurrentBombGameState == BombScoreBoard.State.PreBomb;
+			return GameHubObject.Hub.BombManager.CurrentBombGameState == BombScoreboardState.Warmup || GameHubObject.Hub.BombManager.CurrentBombGameState == BombScoreboardState.Shop || GameHubObject.Hub.BombManager.CurrentBombGameState == BombScoreboardState.PreBomb;
 		}
 
 		private bool IsInvalidGuiStateToLockCursor()
@@ -96,16 +103,20 @@ namespace HeavyMetalMachines
 			{
 				return;
 			}
-			GameArenaInfo currentArena = GameHubObject.Hub.ArenaConfig.GetCurrentArena();
-			if (currentArena.CursorLockTimeInSeconds <= 0f)
+			IGameArenaInfo currentArena = GameHubObject.Hub.ArenaConfig.GetCurrentArena();
+			if (currentArena == null || currentArena.CursorLockTimeInSeconds <= 0f)
 			{
-				PlayerRaceStartCursorLockController.Log.Info("Cursor lock is not enabled for current arena.");
+				PlayerRaceStartCursorLockController.Log.Debug("Cursor lock is not enabled for current arena.");
 				return;
 			}
 			GameHubObject.Hub.CursorManager.LockCursorByOffset(currentArena.CursorLockOffset.x, currentArena.CursorLockOffset.y);
 			float num = currentArena.CursorLockTimeInSeconds * 1000f;
 			this._cursorLockTimer.PeriodMillis = (int)num;
 			this._cursorLockTimer.Reset();
+			PlayerRaceStartCursorLockController.Log.DebugFormat("Triggering CURSOR LOCK. Lock time is {0} milliseconds", new object[]
+			{
+				num
+			});
 		}
 
 		private void UnlockCursorByOffset()
@@ -118,6 +129,7 @@ namespace HeavyMetalMachines
 			{
 				return;
 			}
+			PlayerRaceStartCursorLockController.Log.Debug("Triggering CURSOR UNLOCK.");
 			GameHubObject.Hub.CursorManager.UnlockCursorByOffset();
 		}
 

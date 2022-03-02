@@ -15,10 +15,6 @@ namespace HeavyMetalMachines
 			{
 				shooterVelocity = shooter.GetComponent<Rigidbody>().velocity;
 			}
-			else if (shooter.IsCreep)
-			{
-				shooterVelocity = shooter.Creep.Velocity;
-			}
 			else
 			{
 				shooterVelocity = Vector3.zero;
@@ -27,10 +23,6 @@ namespace HeavyMetalMachines
 			if (target.IsPlayer)
 			{
 				targetVelocity = target.GetComponent<Rigidbody>().velocity;
-			}
-			else if (target.IsCreep)
-			{
-				targetVelocity = target.Creep.Velocity;
 			}
 			else
 			{
@@ -48,10 +40,6 @@ namespace HeavyMetalMachines
 			{
 				targetVelocity = target.GetComponent<Rigidbody>().velocity;
 			}
-			else if (target.IsCreep)
-			{
-				targetVelocity = target.Creep.Velocity;
-			}
 			else
 			{
 				targetVelocity = Vector3.zero;
@@ -63,8 +51,8 @@ namespace HeavyMetalMachines
 		{
 			Vector3 vector = targetVelocity - shooterVelocity;
 			Vector3 targetRelativePosition = targetPosition - shooterPosition;
-			float d = CombatUtils.FirstOrderInterceptTime(shotSpeed, targetRelativePosition, vector);
-			return targetPosition + d * vector;
+			float num = CombatUtils.FirstOrderInterceptTime(shotSpeed, targetRelativePosition, vector);
+			return targetPosition + num * vector;
 		}
 
 		private static float FirstOrderInterceptTime(float shotSpeed, Vector3 targetRelativePosition, Vector3 targetRelativeVelocity)
@@ -77,33 +65,33 @@ namespace HeavyMetalMachines
 			float num = sqrMagnitude - shotSpeed * shotSpeed;
 			if (Mathf.Abs(num) < 0.001f)
 			{
-				float a = -targetRelativePosition.sqrMagnitude / (2f * Vector3.Dot(targetRelativeVelocity, targetRelativePosition));
-				return Mathf.Max(a, 0f);
+				float num2 = -targetRelativePosition.sqrMagnitude / (2f * Vector3.Dot(targetRelativeVelocity, targetRelativePosition));
+				return Mathf.Max(num2, 0f);
 			}
-			float num2 = 2f * Vector3.Dot(targetRelativeVelocity, targetRelativePosition);
+			float num3 = 2f * Vector3.Dot(targetRelativeVelocity, targetRelativePosition);
 			float sqrMagnitude2 = targetRelativePosition.sqrMagnitude;
-			float num3 = num2 * num2 - 4f * num * sqrMagnitude2;
-			if (num3 > 0f)
+			float num4 = num3 * num3 - 4f * num * sqrMagnitude2;
+			if (num4 > 0f)
 			{
-				float num4 = (-num2 + Mathf.Sqrt(num3)) / (2f * num);
-				float num5 = (-num2 - Mathf.Sqrt(num3)) / (2f * num);
-				if (num4 <= 0f)
+				float num5 = (-num3 + Mathf.Sqrt(num4)) / (2f * num);
+				float num6 = (-num3 - Mathf.Sqrt(num4)) / (2f * num);
+				if (num5 <= 0f)
 				{
-					return Mathf.Max(num5, 0f);
+					return Mathf.Max(num6, 0f);
 				}
-				if (num5 > 0f)
+				if (num6 > 0f)
 				{
-					return Mathf.Min(num4, num5);
+					return Mathf.Min(num5, num6);
 				}
-				return num4;
+				return num5;
 			}
 			else
 			{
-				if (num3 < 0f)
+				if (num4 < 0f)
 				{
 					return 0f;
 				}
-				return Mathf.Max(-num2 / (2f * num), 0f);
+				return Mathf.Max(-num3 / (2f * num), 0f);
 			}
 		}
 	}

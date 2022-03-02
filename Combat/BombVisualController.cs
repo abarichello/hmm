@@ -1,70 +1,91 @@
 ﻿using System;
+using Assets.ClientApiObjects.Components;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids;
 using FMod;
 using HeavyMetalMachines.Frontend;
+using HeavyMetalMachines.GameCamera.Behaviour;
+using HeavyMetalMachines.Infra.Context;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
 using HeavyMetalMachines.Match;
 using HeavyMetalMachines.Render;
 using NewParticleSystem;
 using Pocketverse;
 using Pocketverse.Util;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace HeavyMetalMachines.Combat
 {
 	public class BombVisualController : GameHubBehaviour
 	{
-		private CombatObject _CurrentCombatObject
+		private CombatObject CurrentCombatObject
 		{
 			get
 			{
-				if (this._currentPlayerCombatObject == null)
+				if (this._currentPlayerCombatObject != null)
 				{
-					this._currentPlayerCombatObject = GameHubBehaviour.Hub.Players.CurrentPlayerData.CharacterInstance.GetBitComponent<CombatObject>();
+					return this._currentPlayerCombatObject;
 				}
+				this._currentPlayerCombatObject = GameHubBehaviour.Hub.Players.CurrentPlayerData.CharacterInstance.GetBitComponent<CombatObject>();
 				return this._currentPlayerCombatObject;
 			}
 		}
 
-		public static BombVisualController GetInstance(bool allowInstantiate = false)
+		private static string BombPrefabName
 		{
-			BombVisualController result = null;
-			if (BombVisualController.instance)
+			get
 			{
-				result = BombVisualController.instance;
-			}
-			if (!BombVisualController.instance && allowInstantiate)
-			{
-				Transform transform = (Transform)GameHubBehaviour.Hub.Resources.CacheInstantiate(BombVisualController.BombAssetName, typeof(Transform), Vector3.zero, Quaternion.identity);
-				if (transform)
+				if (!string.IsNullOrEmpty(BombVisualController._bombPrefabName))
 				{
-					BombVisualController.instance = transform.GetComponent<BombVisualController>();
-					result = BombVisualController.instance;
-					transform.gameObject.SetActive(false);
+					return BombVisualController._bombPrefabName;
 				}
+				BombSkinItemTypeComponent component = GameHubBehaviour.Hub.BombManager.Rules.BombInfo.Skin.GetComponent<BombSkinItemTypeComponent>();
+				BombVisualController._bombPrefabName = component.BombPrefabName;
+				return BombVisualController._bombPrefabName;
 			}
-			return result;
+		}
+
+		public static BombVisualController GetInstance()
+		{
+			return BombVisualController._instance;
+		}
+
+		public static BombVisualController CreateInstance()
+		{
+			if (BombVisualController._instance != null)
+			{
+				if (!GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.HORTA))
+				{
+					BombVisualController.Log.ErrorFormat("This should not happen during normal client playback", new object[0]);
+				}
+				BombVisualController.DestroyInstance();
+			}
+			Transform transform = (Transform)GameHubBehaviour.Hub.Resources.CacheInstantiate(BombVisualController.BombPrefabName, typeof(Transform), Vector3.zero, Quaternion.identity);
+			transform.gameObject.SetActive(false);
+			BombVisualController._instance = transform.GetComponent<BombVisualController>();
+			return BombVisualController._instance;
 		}
 
 		private void Awake()
 		{
-			this._maxSpeedSqr = this.Indicator.MaximumSpeedThreshold * this.Indicator.MaximumSpeedThreshold;
-			this._minSpeedSqr = this.Indicator.MinimumSpeedThreshold * this.Indicator.MinimumSpeedThreshold;
+			this._maxSpeedSqr = this._indicator.MaximumSpeedThreshold * this._indicator.MaximumSpeedThreshold;
+			this._minSpeedSqr = this._indicator.MinimumSpeedThreshold * this._indicator.MinimumSpeedThreshold;
 			MeshRenderer[] componentsInChildren = base.GetComponentsInChildren<MeshRenderer>();
 			if (componentsInChildren != null && componentsInChildren.Length > 0)
 			{
 				for (int i = 0; i < componentsInChildren.Length; i++)
 				{
-					if (componentsInChildren[i] != this.Indicator.ArrowRenderer)
+					if (componentsInChildren[i] != this._indicator.ArrowRenderer)
 					{
-						this._bombMaterialInstance = UnityEngine.Object.Instantiate<Material>(componentsInChildren[i].material);
+						this._bombMaterial = Object.Instantiate<Material>(componentsInChildren[i].material);
 						break;
 					}
 				}
 				for (int j = 0; j < componentsInChildren.Length; j++)
 				{
-					if (componentsInChildren[j] != this.Indicator.ArrowRenderer)
+					if (componentsInChildren[j] != this._indicator.ArrowRenderer)
 					{
-						componentsInChildren[j].material = this._bombMaterialInstance;
+						componentsInChildren[j].material = this._bombMaterial;
 					}
 				}
 			}
@@ -76,13 +97,13 @@ namespace HeavyMetalMachines.Combat
 
 		private void OnDestroy()
 		{
-			UnityEngine.Object.Destroy(this._bombMaterialInstance);
+			Object.Destroy(this._bombMaterial);
 		}
 
 		private void OnEnable()
 		{
-			this.gameGUI = GameHubBehaviour.Hub.State.Current.GetStateGuiController<GameGui>();
-			this.idleLoopToken = FMODAudioManager.PlayAt(this.idleLoopAudio, base.transform);
+			this._gameGUI = GameHubBehaviour.Hub.State.Current.GetStateGuiController<GameGui>();
+			this._idleLoopToken = FMODAudioManager.PlayAt(this._idleLoopAudio, base.transform);
 			GameHubBehaviour.Hub.BombManager.ListenToMatchUpdate += this.OnMatchUpdated;
 			GameHubBehaviour.Hub.BombManager.ListenToPhaseChange += this.OnPhaseChange;
 			GameHubBehaviour.Hub.BombManager.ClientListenToBombDrop += this.OnBombDropped;
@@ -93,16 +114,16 @@ namespace HeavyMetalMachines.Combat
 
 		private void OnDisable()
 		{
-			if (this.borderLine)
+			if (this._borderLine)
 			{
-				this.openRadius = 0f;
-				Shader.SetGlobalFloat(this._propertyIds.OpenRadius, this.openRadius);
+				this._openRadius = 0f;
+				Shader.SetGlobalFloat(this._propertyIds.OpenRadius, this._openRadius);
 				this.StopVisualTeam();
 			}
-			if (this.idleLoopToken != null)
+			if (this._idleLoopToken != null)
 			{
-				this.idleLoopToken.Stop();
-				this.idleLoopToken = null;
+				this._idleLoopToken.Stop();
+				this._idleLoopToken = null;
 			}
 			GameHubBehaviour.Hub.BombManager.ListenToPhaseChange -= this.OnPhaseChange;
 			GameHubBehaviour.Hub.BombManager.ListenToMatchUpdate -= this.OnMatchUpdated;
@@ -112,27 +133,30 @@ namespace HeavyMetalMachines.Combat
 			GameHubBehaviour.Hub.BombManager.OnDisputeFinished -= this.OnDisputeFinished;
 		}
 
-		private static void Destroy()
+		public static void DestroyInstance()
 		{
-			if (BombVisualController.instance)
+			if (!BombVisualController._instance)
 			{
-				BombVisualController.instance.SetCombatObject(null);
-				BombVisualController.instance.StopVisualTeam();
-				GameHubBehaviour.Hub.Resources.ReturnToCache(BombVisualController.BombAssetName, BombVisualController.instance.transform);
-				BombVisualController.instance = null;
+				return;
 			}
+			BombVisualController._instance.SetCombatObject(null);
+			BombVisualController._instance.StopVisualTeam();
+			BombVisualController._instance.OnDisable();
+			GameHubBehaviour.Hub.Resources.ReturnToCache(BombVisualController.BombPrefabName, BombVisualController._instance.transform);
+			BombVisualController._instance = null;
 		}
 
-		private ModifierData[] CreateBombModData()
+		private static ModifierData[] CreateBombModData()
 		{
+			ModifierInfo modifierInfo = new ModifierInfo
+			{
+				HitOwner = true,
+				HitBomb = true,
+				Status = StatusKind.Invulnerable
+			};
 			ModifierInfo[] infos = new ModifierInfo[]
 			{
-				new ModifierInfo
-				{
-					HitOwner = true,
-					HitBomb = true,
-					Status = StatusKind.Invulnerable
-				}
+				modifierInfo
 			};
 			return ModifierData.CreateData(infos);
 		}
@@ -141,9 +165,9 @@ namespace HeavyMetalMachines.Combat
 		{
 			if (bombTransform)
 			{
-				this.BombCombatObject = bombTransform.GetComponent<Identifiable>();
+				this._bombCombatObject = bombTransform.GetComponent<Identifiable>();
 				base.gameObject.SetActive(true);
-				ModifierData[] datas = this.CreateBombModData();
+				ModifierData[] datas = BombVisualController.CreateBombModData();
 				CombatObject component = bombTransform.GetComponent<CombatObject>();
 				component.Controller.AddPassiveModifiers(datas, component, -1);
 			}
@@ -151,8 +175,8 @@ namespace HeavyMetalMachines.Combat
 			{
 				base.gameObject.SetActive(false);
 			}
-			this.currentState = BombVisualController.State.FollowingTarget;
-			if (this.borderLine)
+			this._currentState = BombVisualController.State.FollowingTarget;
+			if (this._borderLine)
 			{
 				this.SetVisualTeam(TeamType.None);
 			}
@@ -173,63 +197,52 @@ namespace HeavyMetalMachines.Combat
 
 		public void SetVisualTeam(TeamType newTeam)
 		{
-			for (int i = 0; i < this.TeamVisuals[(int)this.CurrentVisualTeam].Particles.Length; i++)
+			for (int i = 0; i < this._teamVisuals[(int)this._currentVisualTeam].Particles.Length; i++)
 			{
-				this.TeamVisuals[(int)this.CurrentVisualTeam].Particles[i].Stop();
+				this._teamVisuals[(int)this._currentVisualTeam].Particles[i].Stop();
 			}
-			for (int j = 0; j < this.TeamVisuals[(int)newTeam].Particles.Length; j++)
+			for (int j = 0; j < this._teamVisuals[(int)newTeam].Particles.Length; j++)
 			{
-				this.TeamVisuals[(int)newTeam].Particles[j].Play();
+				this._teamVisuals[(int)newTeam].Particles[j].Play();
 			}
-			this._bombMaterialInstance.SetColor(this._propertyIds.GlowColor, this.TeamVisuals[(int)newTeam].ColorA);
-			this.Indicator.ArrowRenderer.material.SetColor(this._propertyIds.TintColor, this.TeamVisuals[(int)newTeam].ColorB);
-			this.borderLine.SetColors(this.TeamVisuals[(int)newTeam].ColorA, this.TeamVisuals[(int)newTeam].ColorB);
-			if (this.JammingArea)
+			this._bombMaterial.SetColor(this._propertyIds.GlowColor, this._teamVisuals[(int)newTeam].ColorA);
+			this._indicator.ArrowRenderer.material.SetColor(this._propertyIds.TintColor, this._teamVisuals[(int)newTeam].ColorB);
+			this._borderLine.SetColors(this._teamVisuals[(int)newTeam].ColorA, this._teamVisuals[(int)newTeam].ColorB);
+			if (this._jammingArea)
 			{
-				this.JammingArea.SetActive(newTeam == TeamType.None && !GameHubBehaviour.Hub.BombManager.IsDisputeStarted);
+				this._jammingArea.SetActive(newTeam == TeamType.None && !GameHubBehaviour.Hub.BombManager.IsDisputeStarted);
 			}
-			this.CurrentVisualTeam = newTeam;
+			this._currentVisualTeam = newTeam;
 		}
 
 		public void StopVisualTeam()
 		{
-			for (int i = 0; i < this.TeamVisuals[(int)this.CurrentVisualTeam].Particles.Length; i++)
+			for (int i = 0; i < this._teamVisuals[(int)this._currentVisualTeam].Particles.Length; i++)
 			{
-				this.TeamVisuals[(int)this.CurrentVisualTeam].Particles[i].Stop();
+				this._teamVisuals[(int)this._currentVisualTeam].Particles[i].Stop();
 			}
-			this.JammingArea.SetActive(false);
+			this._jammingArea.SetActive(false);
 		}
 
-		public void AudioLoopChanged(int loopState)
+		public void AudioLoopChanged(float loopState)
 		{
-			if (this.idleLoopToken != null && !this.idleLoopToken.IsInvalidated())
+			if (this._idleLoopToken == null)
 			{
-				this.idleLoopToken.SetParameter(this.AudioLoopParameter, (float)loopState);
+				return;
 			}
+			if (this._idleLoopToken.IsInvalidated())
+			{
+				return;
+			}
+			this._idleLoopToken.SetParameter("state", loopState);
 		}
 
 		public void Detonate(int deliveryScore)
 		{
-			this.timming = 0f;
-			if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreBoard.State.Replay)
-			{
-				CarCamera.Singleton.SetTarget("BombExplosionReplay", delegate()
-				{
-					bool flag = LogoTransition.IsPlaying() && !LogoTransition.HasTriggeredMiddleEvent();
-					bool flag2 = GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreBoard.State.Replay;
-					return flag || flag2;
-				}, base.transform, false, false, false);
-			}
-			else
-			{
-				CarCamera.Singleton.SetTarget("BombExplosion", delegate()
-				{
-					BombScoreBoard.State state = GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState;
-					return state == BombScoreBoard.State.BombDelivery || state == BombScoreBoard.State.PreReplay;
-				}, base.transform, false, false, false);
-			}
-			this.currentState = BombVisualController.State.ChangingToDetonator;
-			BombVisualController.Destroy();
+			this._timing = 0f;
+			this._bombScoreCamera.LookAtExplosion(base.transform);
+			this._currentState = BombVisualController.State.ChangingToDetonator;
+			BombVisualController.DestroyInstance();
 		}
 
 		private void LateUpdate()
@@ -240,17 +253,58 @@ namespace HeavyMetalMachines.Combat
 			float sqrMagnitude = lastVelocity.sqrMagnitude;
 			if (sqrMagnitude >= this._minSpeedSqr)
 			{
-				this.Indicator.Pivot.transform.localRotation = Quaternion.LookRotation(lastVelocity);
+				this._indicator.Pivot.transform.localRotation = Quaternion.LookRotation(lastVelocity);
 			}
-			Color color = this.Indicator.ArrowRenderer.material.GetColor(this._propertyIds.TintColor);
+			Color color = this._indicator.ArrowRenderer.material.GetColor(this._propertyIds.TintColor);
 			color.a = Mathf.Clamp01((sqrMagnitude - this._minSpeedSqr) / (this._maxSpeedSqr - this._minSpeedSqr));
 			color.a = Mathf.SmoothStep(0f, 1f, color.a);
-			this.Indicator.ArrowRenderer.material.SetColor(this._propertyIds.TintColor, color);
+			this._indicator.ArrowRenderer.material.SetColor(this._propertyIds.TintColor, color);
+			if (this.rollOnIdle && GameHubBehaviour.Hub.BombManager.ActiveBomb.State == BombInstance.BombState.Idle)
+			{
+				this.RotateBomb();
+			}
+			else if (this.rollOnCarried && GameHubBehaviour.Hub.BombManager.ActiveBomb.State == BombInstance.BombState.Carried)
+			{
+				this.RotateBomb();
+			}
+			else if (this.rollOnMeteor && GameHubBehaviour.Hub.BombManager.ActiveBomb.State == BombInstance.BombState.Meteor)
+			{
+				this.RotateBomb();
+			}
+			else if (this.rollOnSpinning && GameHubBehaviour.Hub.BombManager.ActiveBomb.State == BombInstance.BombState.Spinning)
+			{
+				this.RotateBomb();
+			}
+			else if (this.lookAtCamera)
+			{
+				this.LookAtCamera();
+			}
+		}
+
+		private void LookAtCamera()
+		{
+			if (this.rotationCameraFixed)
+			{
+				return;
+			}
+			this._bombMesh.transform.LookAt(Camera.main.transform, Vector3.up);
+			this._bombMesh.transform.localEulerAngles = new Vector3(0f, this._bombMesh.transform.localEulerAngles.y + this.lookAtRotationOffset, 0f);
+			this.rotationCameraFixed = true;
+		}
+
+		private void RotateBomb()
+		{
+			Vector3 vector;
+			vector..ctor(GameHubBehaviour.Hub.BombManager.BombMovement.LastVelocity.z, 0f, -GameHubBehaviour.Hub.BombManager.BombMovement.LastVelocity.x);
+			Vector3 vector2 = vector / GameHubBehaviour.Hub.BombManager.BombRules.BombInfo.VisualRadius * 57.29578f;
+			vector2 = Vector3.ClampMagnitude(vector2, GameHubBehaviour.Hub.BombManager.BombRules.BombInfo.MaxVisualRotationSpeed);
+			this._bombMesh.transform.Rotate(vector2 * Time.deltaTime, 0);
+			this.rotationCameraFixed = false;
 		}
 
 		private void ProcessStateMachine()
 		{
-			if (this.BombCombatObject == null || !this.BombCombatObject.gameObject.activeInHierarchy)
+			if (this._bombCombatObject == null || !this._bombCombatObject.gameObject.activeInHierarchy)
 			{
 				return;
 			}
@@ -264,57 +318,57 @@ namespace HeavyMetalMachines.Combat
 				flag = GameHubBehaviour.Hub.BombManager.IsCarryingBomb(GameHubBehaviour.Hub.Players.CurrentPlayerData.CharacterInstance.ObjId);
 				if (flag)
 				{
-					float num = Vector3.SqrMagnitude(this._CurrentCombatObject.transform.position - base.transform.position);
-					if (this.idleLoopToken == null)
+					float num = Vector3.SqrMagnitude(this.CurrentCombatObject.transform.position - base.transform.position);
+					if (this._idleLoopToken == null)
 					{
 						BombVisualController.Log.Error("null idleLoopToken! HOW?!? Please link this with QAHMM-15908");
 					}
 					else
 					{
-						this.idleLoopToken.SetParameter(this.AudioPitchParameter, Mathf.Clamp01(num / this._bombTensionAudioNormalizer));
+						this._idleLoopToken.SetParameter("cord", Mathf.Clamp01(num / this._bombTensionAudioNormalizer));
 					}
 				}
 			}
-			this.openRadius = ((!flag) ? Mathf.Clamp01(this.openRadius - Time.deltaTime * 2f) : Mathf.Clamp01(this.openRadius + Time.deltaTime * 2f));
-			Shader.SetGlobalFloat(this._propertyIds.OpenRadius, this.openRadius);
-			switch (this.currentState)
+			this._openRadius = ((!flag) ? Mathf.Clamp01(this._openRadius - Time.deltaTime * 2f) : Mathf.Clamp01(this._openRadius + Time.deltaTime * 2f));
+			Shader.SetGlobalFloat(this._propertyIds.OpenRadius, this._openRadius);
+			switch (this._currentState)
 			{
 			case BombVisualController.State.WaitingForTargetChange:
-				this.currentState = BombVisualController.State.ChangingTarget;
+				this._currentState = BombVisualController.State.ChangingTarget;
 				break;
 			case BombVisualController.State.ChangingTarget:
 				break;
 			case BombVisualController.State.FastChangeTarget:
-				this.currentState = BombVisualController.State.FollowingTarget;
+				this._currentState = BombVisualController.State.FollowingTarget;
 				return;
 			case BombVisualController.State.FollowingTarget:
 				return;
 			case BombVisualController.State.ChangingToDetonator:
-				this.timming += Time.deltaTime;
-				if (this.timming > 2f)
+				this._timing += Time.deltaTime;
+				if (this._timing > 2f)
 				{
-					this.timming = 0f;
-					this.currentState = BombVisualController.State.Exploding;
+					this._timing = 0f;
+					this._currentState = BombVisualController.State.Exploding;
 				}
 				return;
 			case BombVisualController.State.Exploding:
-				BombVisualController.Destroy();
-				this.currentState = BombVisualController.State.Idle;
+				BombVisualController.DestroyInstance();
+				this._currentState = BombVisualController.State.Idle;
 				return;
 			case BombVisualController.State.Idle:
 				return;
 			default:
 				return;
 			}
-			this.currentState = BombVisualController.State.FollowingTarget;
+			this._currentState = BombVisualController.State.FollowingTarget;
 		}
 
-		private void OnPhaseChange(BombScoreBoard.State state)
+		private void OnPhaseChange(BombScoreboardState state)
 		{
-			if (state != BombScoreBoard.State.BombDelivery)
+			if (state != BombScoreboardState.BombDelivery)
 			{
-				this.openRadius = 0f;
-				Shader.SetGlobalFloat(this._propertyIds.OpenRadius, this.openRadius);
+				this._openRadius = 0f;
+				Shader.SetGlobalFloat(this._propertyIds.OpenRadius, this._openRadius);
 			}
 		}
 
@@ -324,20 +378,16 @@ namespace HeavyMetalMachines.Combat
 			{
 				return;
 			}
-			FMODAudioManager.PlayOneShotAt(this.bombCompetitionAudio, base.transform.position, 0);
+			FMODAudioManager.PlayOneShotAt(this._bombCompetitionAudio, base.transform.position, 0);
 		}
 
 		private void OnBombDropped(BombInstance bombInstance, SpawnReason reason, int causer)
 		{
-			if (GameHubBehaviour.Hub.BombManager.ActiveBomb.State == BombInstance.BombState.Meteor)
-			{
-				FMODAudioManager.PlayOneShotAt(this.releasePegasusAudio, base.transform.position, 0);
-			}
-			else
-			{
-				FMODAudioManager.PlayOneShotAt(this.releaseAudio, base.transform.position, 0);
-			}
-			this.idleLoopToken.SetParameter(this.AudioPitchParameter, 0f);
+			bool flag = GameHubBehaviour.Hub.BombManager.ActiveBomb.State == BombInstance.BombState.Meteor;
+			Vector3 position = base.transform.position;
+			AudioEventAsset asset = (!flag) ? this._releaseAudio : this._releasePegasusAudio;
+			FMODAudioManager.PlayOneShotAt(asset, position, 0);
+			this._idleLoopToken.SetParameter("cord", 0f);
 		}
 
 		public void OnCollisionEvent(Vector3 position, Vector3 direction, float intensity, byte otherLayer)
@@ -347,10 +397,10 @@ namespace HeavyMetalMachines.Combat
 			case 19:
 			case 22:
 			case 24:
-				FMODAudioManager.PlayOneShotAt(this.hitBombBlockerAudio, position, 0);
+				FMODAudioManager.PlayOneShotAt(this._hitBombBlockerAudio, position, 0);
 				return;
 			}
-			FMODAudioManager.PlayOneShotAt(this.hitWallAudio, position, 0);
+			FMODAudioManager.PlayOneShotAt(this._hitWallAudio, position, 0);
 		}
 
 		public void OnMatchUpdated()
@@ -360,130 +410,222 @@ namespace HeavyMetalMachines.Combat
 			if (GameHubBehaviour.Hub.BombManager.IsSomeoneCarryingBomb())
 			{
 				combatObject = CombatRef.GetCombat(GameHubBehaviour.Hub.BombManager.ActiveBomb.BombCarriersIds[0]);
-				flag |= (combatObject.Id != this.CarrierCombatObject);
-				this.CarrierCombatObject = combatObject.Id;
+				flag |= (combatObject.Id != this._carrierCombatObject);
+				this._carrierCombatObject = combatObject.Id;
 			}
 			else
 			{
-				this.AudioLoopChanged(1);
+				this.AudioLoopChanged(1f);
 			}
-			if (flag)
+			if (!flag)
 			{
-				switch (GameHubBehaviour.Hub.BombManager.ActiveBomb.State)
-				{
-				case BombInstance.BombState.Idle:
-					this.SetVisualTeam(TeamType.None);
-					this.AudioLoopChanged(1);
-					break;
-				case BombInstance.BombState.Carried:
-					if (combatObject == null)
-					{
-						Debug.Log(string.Format("Current carrier null why!? carriers={0} carry={1} sp={2}", Arrays.ToStringWithComma(GameHubBehaviour.Hub.BombManager.ActiveBomb.BombCarriersIds.ToArray()), GameHubBehaviour.Hub.BombManager.IsSomeoneCarryingBomb(), GameHubBehaviour.Hub.BombManager.ActiveBomb.IsSpawned));
-					}
-					else
-					{
-						this.SetVisualTeam((!combatObject.IsSameTeamAsCurrentPlayer()) ? TeamType.Enemy : TeamType.Ally);
-						this.AudioLoopChanged(2);
-						this.BombAnimator.SetBool("Spin_activate", false);
-						this.BombAnimator.SetBool("Spin_deactivate", false);
-						this.BombAnimator.SetBool("fight_On", false);
-						this.BombAnimator.SetBool("fight_Off", false);
-						this.BombAnimator.SetBool("spin_atached_on", false);
-						this.BombAnimator.SetBool("spin_atached_off", false);
-						if (this._currentBombState == BombInstance.BombState.Idle)
-						{
-							FMODAudioManager.PlayOneShotAt(this.pickAudio, base.transform.position, 0);
-						}
-					}
-					break;
-				case BombInstance.BombState.Spinning:
-					this.AudioLoopChanged(3);
-					if (this._currentBombState == BombInstance.BombState.Idle)
-					{
-						FMODAudioManager.PlayOneShotAt(this.pickAudio, base.transform.position, 0);
-					}
-					break;
-				case BombInstance.BombState.Meteor:
-					this.AudioLoopChanged(3);
-					break;
-				}
-				this._currentBombState = GameHubBehaviour.Hub.BombManager.ActiveBomb.State;
+				return;
+			}
+			switch (GameHubBehaviour.Hub.BombManager.ActiveBomb.State)
+			{
+			case BombInstance.BombState.Idle:
+				this.HandleIdleBombState();
+				break;
+			case BombInstance.BombState.Carried:
+				this.HandleCarriedBombState(combatObject);
+				break;
+			case BombInstance.BombState.Spinning:
+				this.HandleSpinningBombState();
+				break;
+			case BombInstance.BombState.Meteor:
+				this.HandleMeteorBombState();
+				break;
+			default:
+				throw new ArgumentOutOfRangeException();
+			}
+			this._currentBombState = GameHubBehaviour.Hub.BombManager.ActiveBomb.State;
+		}
+
+		private void HandleIdleBombState()
+		{
+			this.SetVisualTeam(TeamType.None);
+			this.AudioLoopChanged(1f);
+		}
+
+		private void HandleCarriedBombState(CombatObject currentCarrier)
+		{
+			if (currentCarrier == null)
+			{
+				BombVisualController.Log.DebugFormat(string.Format("Current carrier null why!? carriers={0} carry={1} sp={2}", Arrays.ToStringWithComma(GameHubBehaviour.Hub.BombManager.ActiveBomb.BombCarriersIds.ToArray()), GameHubBehaviour.Hub.BombManager.IsSomeoneCarryingBomb(), GameHubBehaviour.Hub.BombManager.ActiveBomb.IsSpawned), new object[0]);
+				return;
+			}
+			this.SetVisualTeam((!currentCarrier.IsSameTeamAsCurrentPlayer()) ? TeamType.Enemy : TeamType.Ally);
+			this.AudioLoopChanged(2f);
+			this._bombAnimator.SetBool(BombVisualController.SpinActivate, true);
+			this._bombAnimator.SetBool(BombVisualController.SpinDeactivate, false);
+			this._bombAnimator.SetBool(BombVisualController.FightOn, false);
+			this._bombAnimator.SetBool(BombVisualController.FightOff, false);
+			this._bombAnimator.SetBool(BombVisualController.SpinAttachedOn, false);
+			this._bombAnimator.SetBool(BombVisualController.SpinAttachedOff, false);
+			if (this._currentBombState == BombInstance.BombState.Idle)
+			{
+				FMODAudioManager.PlayOneShotAt(this._pickAudio, base.transform.position, 0);
 			}
 		}
 
+		private void HandleSpinningBombState()
+		{
+			this.AudioLoopChanged(3f);
+			if (this._currentBombState == BombInstance.BombState.Idle)
+			{
+				FMODAudioManager.PlayOneShotAt(this._pickAudio, base.transform.position, 0);
+			}
+		}
+
+		private void HandleMeteorBombState()
+		{
+			this.AudioLoopChanged(3f);
+			if (this._currentBombState == BombInstance.BombState.Spinning)
+			{
+				this._bombAnimator.SetTrigger(this.isMeteorTrigger);
+			}
+		}
+
+		[InjectOnClient]
+		private IBombScoreCameraBehaviour _bombScoreCamera;
+
 		private static readonly BitLogger Log = new BitLogger(typeof(BombVisualController));
 
-		[NonSerialized]
-		public static readonly string BombAssetName = "SK_bomb_PF";
+		private static readonly int SpinActivate = Animator.StringToHash("Spin_activate");
 
-		private const int BombLoopNormal = 1;
+		private static readonly int SpinDeactivate = Animator.StringToHash("Spin_deactivate");
 
-		private const int BombLoopTaken = 2;
+		private static readonly int FightOn = Animator.StringToHash("fight_On");
 
-		private const int BombLoopPegasus = 3;
+		private static readonly int FightOff = Animator.StringToHash("fight_Off");
 
-		private readonly byte[] AudioLoopParameter = FMODAudioManager.GetBytes("state");
+		private static readonly int SpinAttachedOn = Animator.StringToHash("spin_atached_on");
 
-		private readonly byte[] AudioPitchParameter = FMODAudioManager.GetBytes("cord");
+		private static readonly int SpinAttachedOff = Animator.StringToHash("spin_atached_off");
 
-		public FMODAsset idleLoopAudio;
+		private static BombVisualController _instance;
 
-		public FMODAsset pickAudio;
+		private static string _bombPrefabName;
 
-		public FMODAsset releaseAudio;
+		private const float BombLoopNormalState = 1f;
 
-		public FMODAsset releasePegasusAudio;
+		private const float BombLoopTakenState = 2f;
 
-		public FMODAsset hitWallAudio;
+		private const float BombLoopPegasusState = 3f;
 
-		public FMODAsset hitBombBlockerAudio;
+		private const string AudioLoopParameter = "state";
 
-		public FMODAsset bombCompetitionAudio;
+		private const string AudioPitchParameter = "cord";
 
-		public GameObject JammingArea;
+		private GameGui _gameGUI;
 
-		public ObjectOverlay borderLine;
+		private BombVisualController.State _currentState;
 
-		public Animator BombAnimator;
+		private float _openRadius;
 
-		public BombVisualController.TeamData[] TeamVisuals = new BombVisualController.TeamData[3];
-
-		internal Identifiable BombCombatObject;
-
-		internal Identifiable CarrierCombatObject;
-
-		internal TeamType CurrentVisualTeam;
-
-		private static BombVisualController instance;
-
-		private FMODAudioManager.FMODAudio idleLoopToken;
-
-		[SerializeField]
-		private float _bombTensionAudioNormalizer;
-
-		private float openRadius;
-
-		private GameGui gameGUI;
-
-		private BombVisualController.State currentState;
-
-		private float timming;
-
-		private Vector3 offset;
-
-		private Material _bombMaterialInstance;
-
-		private BombInstance.BombState _currentBombState;
-
-		private CombatObject _currentPlayerCombatObject;
-
-		public BombVisualController.BombIndicator Indicator;
+		private float _timing;
 
 		private float _minSpeedSqr;
 
 		private float _maxSpeedSqr;
 
+		private Vector3 _offset;
+
+		private Material _bombMaterial;
+
+		private BombInstance.BombState _currentBombState;
+
 		private BombVisualController.PropertyIds _propertyIds;
+
+		private CombatObject _currentPlayerCombatObject;
+
+		private Identifiable _bombCombatObject;
+
+		private Identifiable _carrierCombatObject;
+
+		private TeamType _currentVisualTeam;
+
+		private FMODAudioManager.FMODAudio _idleLoopToken;
+
+		[FormerlySerializedAs("idleLoopAudio")]
+		[SerializeField]
+		private AudioEventAsset _idleLoopAudio;
+
+		[FormerlySerializedAs("pickAudio")]
+		[SerializeField]
+		private AudioEventAsset _pickAudio;
+
+		[FormerlySerializedAs("releaseAudio")]
+		[SerializeField]
+		private AudioEventAsset _releaseAudio;
+
+		[FormerlySerializedAs("releasePegasusAudio")]
+		[SerializeField]
+		private AudioEventAsset _releasePegasusAudio;
+
+		[FormerlySerializedAs("hitWallAudio")]
+		[SerializeField]
+		private AudioEventAsset _hitWallAudio;
+
+		[FormerlySerializedAs("hitBombBlockerAudio")]
+		[SerializeField]
+		private AudioEventAsset _hitBombBlockerAudio;
+
+		[FormerlySerializedAs("bombCompetitionAudio")]
+		[SerializeField]
+		private AudioEventAsset _bombCompetitionAudio;
+
+		[FormerlySerializedAs("JammingArea")]
+		[SerializeField]
+		private GameObject _jammingArea;
+
+		[FormerlySerializedAs("borderLine")]
+		[SerializeField]
+		private ObjectOverlay _borderLine;
+
+		[FormerlySerializedAs("BombAnimator")]
+		[SerializeField]
+		private Animator _bombAnimator;
+
+		[FormerlySerializedAs("BombMesh")]
+		[SerializeField]
+		private GameObject _bombMesh;
+
+		[FormerlySerializedAs("TeamVisuals")]
+		[SerializeField]
+		private BombVisualController.TeamData[] _teamVisuals = new BombVisualController.TeamData[3];
+
+		[FormerlySerializedAs("Indicator")]
+		[SerializeField]
+		private BombVisualController.BombIndicator _indicator;
+
+		[SerializeField]
+		private float _bombTensionAudioNormalizer;
+
+		[SerializeField]
+		private string isMeteorTrigger = "isMeteor";
+
+		[Header("Not rolling rotation fix")]
+		[SerializeField]
+		private bool lookAtCamera;
+
+		[SerializeField]
+		private float lookAtRotationOffset;
+
+		[Header("Set rolling states")]
+		[SerializeField]
+		private bool rollOnIdle;
+
+		[SerializeField]
+		private bool rollOnCarried;
+
+		[SerializeField]
+		private bool rollOnSpinning;
+
+		[SerializeField]
+		private bool rollOnMeteor;
+
+		private bool rotationCameraFixed;
 
 		private enum State
 		{

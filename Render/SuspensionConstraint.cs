@@ -18,7 +18,7 @@ namespace HeavyMetalMachines.Render
 		{
 			get
 			{
-				return base.transform.position;
+				return this.cachedTransform.position;
 			}
 		}
 
@@ -40,11 +40,12 @@ namespace HeavyMetalMachines.Render
 		private void Start()
 		{
 			this.skidMark = base.GetComponent<SkidMarkEmitter>();
+			this.cachedTransform = base.transform;
 		}
 
 		private void OnEnable()
 		{
-			if (GameHubBehaviour.Hub.Net.IsServer() && !GameHubBehaviour.Hub.Net.IsTest())
+			if (GameHubBehaviour.Hub && GameHubBehaviour.Hub.Net.IsServer() && !GameHubBehaviour.Hub.Net.IsTest())
 			{
 				base.enabled = false;
 				return;
@@ -76,14 +77,18 @@ namespace HeavyMetalMachines.Render
 				return;
 			}
 			this.UpdateWheelPhysics();
+			if (this.source == null)
+			{
+				this.Initialize();
+			}
 			Vector3 vector = this.target - this.source.position;
 			vector = this.orientation * Vector3.Dot(vector, this.orientation);
 			float num = vector.magnitude + this.targetVelocity * Time.deltaTime;
-			Vector3 a = vector / num;
+			Vector3 vector2 = vector / num;
 			if (num > this.maxStretch)
 			{
 				this.targetVelocity -= num - this.maxStretch;
-				vector = a * this.maxStretch;
+				vector = vector2 * this.maxStretch;
 				this.target = this.source.position + vector;
 				if (this.targetVelocity > 0f)
 				{
@@ -94,13 +99,13 @@ namespace HeavyMetalMachines.Render
 			}
 			if (Vector3.Dot(vector, this.orientation) < 0f)
 			{
-				vector = -a * this.minCompression;
+				vector = -vector2 * this.minCompression;
 				this.target = this.source.position + vector;
 				num = this.minCompression;
 			}
 			if (num <= this.minCompression)
 			{
-				vector = a * this.minCompression;
+				vector = vector2 * this.minCompression;
 				this.target = this.source.position + vector;
 				if (this.targetVelocity < 0f)
 				{
@@ -117,31 +122,29 @@ namespace HeavyMetalMachines.Render
 
 		private void UpdateWheelPhysics()
 		{
-			Vector3 localPosition = base.transform.localPosition;
-			MapProjectedFakeHeight.PointData pointData = MapProjectedFakeHeight.GetPointData(base.transform.position);
-			localPosition.y = pointData.height * this.wheelRadius * 0.5f + this.wheelRadius + this.minHeight;
-			if (this.skidMark)
+			Vector3 localPosition = this.cachedTransform.localPosition;
+			Vector3 vector = localPosition;
+			localPosition.y = this.wheelRadius + this.minHeight;
+			if (vector.y < localPosition.y)
 			{
-				this.skidMark.GroundType = pointData.groundType;
-			}
-			if (base.transform.localPosition.y < localPosition.y)
-			{
-				this.wheelVelocity.y = this.wheelVelocity.y + (localPosition.y - base.transform.localPosition.y) * this.SpeedFactor;
+				this.wheelVelocity.y = this.wheelVelocity.y + (localPosition.y - vector.y) * this.SpeedFactor;
 			}
 			else
 			{
 				this.wheelVelocity.y = this.wheelVelocity.y - this.gravity * Time.deltaTime;
 			}
-			base.transform.localPosition += this.wheelVelocity * Time.deltaTime;
-			if (base.transform.localPosition.y < localPosition.y && this.wheelVelocity.y < 0f)
+			vector += this.wheelVelocity * Time.deltaTime;
+			if (vector.y < localPosition.y && this.wheelVelocity.y < 0f)
 			{
-				base.transform.localPosition = localPosition;
+				vector = localPosition;
 				this.wheelVelocity.y = -this.wheelVelocity.y * this.wheelBounciness;
 			}
-			if (base.transform.position.y >= this.maxHeight && this.wheelVelocity.y > 0f)
+			if (vector.y >= this.maxHeight && this.wheelVelocity.y > 0f)
 			{
 				this.wheelVelocity.y = 0f;
+				vector..ctor(vector.x, this.maxHeight, vector.z);
 			}
+			this.cachedTransform.localPosition = vector;
 		}
 
 		public void AddForce(Vector3 force)
@@ -179,6 +182,8 @@ namespace HeavyMetalMachines.Render
 		public static readonly BitLogger Log = new BitLogger(typeof(SuspensionConstraint));
 
 		private Transform source;
+
+		private Transform cachedTransform;
 
 		private Vector3 target;
 

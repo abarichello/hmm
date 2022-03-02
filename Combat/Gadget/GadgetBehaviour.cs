@@ -5,17 +5,20 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
 using HeavyMetalMachines.Bank;
+using HeavyMetalMachines.Combat.GadgetScript;
 using HeavyMetalMachines.Event;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.Match;
 using HeavyMetalMachines.Utils;
 using HeavyMetalMachines.VFX;
 using Pocketverse;
 using Pocketverse.Util;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Combat.Gadget
 {
-	public class GadgetBehaviour : GameHubBehaviour, IObjectSpawnListener, DestroyEffect.IDestroyEffectListener
+	public class GadgetBehaviour : GameHubBehaviour, IObjectSpawnListener, DestroyEffectMessage.IDestroyEffectListener, IGadgetInput
 	{
 		public GadgetInfo Info
 		{
@@ -48,9 +51,9 @@ namespace HeavyMetalMachines.Combat.Gadget
 		{
 			get
 			{
-				if (this.Combat.CustomGadgets.ContainsKey(this.Slot))
+				if (this.Combat.HasGadgetContext((int)this.Slot))
 				{
-					return this.Combat.CustomGadgets[this.Slot].Nature;
+					return ((CombatGadget)this.Combat.GetGadgetContext((int)this.Slot)).Nature;
 				}
 				return this._info.Nature;
 			}
@@ -81,7 +84,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 				{
 					return !GameHubBehaviour.Hub.Global.LockAllPlayers && this._pressed && flag && !this.Combat.Attributes.IsGadgetDisarmed(this.Slot, this.Nature);
 				}
-				return !GameHubBehaviour.Hub.Global.LockAllPlayers && this._pressed && flag;
+				return !GameHubBehaviour.Hub.Global.LockAllPlayers && (this._pressed || this._isForcePressed) && flag;
 			}
 			set
 			{
@@ -91,10 +94,6 @@ namespace HeavyMetalMachines.Combat.Gadget
 				}
 				this.PressedThisFrame = (this.Activated && value);
 				this._pressed = (this.Activated && (this.Info.AlwaysPressed || value));
-				if (this.Combat.CustomGadgets.ContainsKey(this.Slot))
-				{
-					this.Combat.CustomGadgets[this.Slot].Pressed = this._pressed;
-				}
 				if (this._pressed)
 				{
 					this._blockPressedFalse = true;
@@ -151,7 +150,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 
 		public static Vector3 DummyPosition(CombatObject combat, FXInfo effect)
 		{
-			Transform dummy = combat.Dummy.GetDummy(effect.ShotPosAndDir.Dummy, effect.ShotPosAndDir.DummyName);
+			Transform dummy = combat.Dummy.GetDummy(effect.ShotPosAndDir.Dummy, effect.ShotPosAndDir.DummyName, null);
 			Vector3 result = dummy.position + dummy.rotation * effect.ShotPosAndDir.OffsetPos;
 			if (result.y < -0.01f)
 			{
@@ -162,7 +161,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 
 		protected Vector3 DummyForward(FXInfo effect)
 		{
-			Transform dummy = this.Combat.Dummy.GetDummy(effect.ShotPosAndDir.Dummy, effect.ShotPosAndDir.DummyName);
+			Transform dummy = this.Combat.Dummy.GetDummy(effect.ShotPosAndDir.Dummy, effect.ShotPosAndDir.DummyName, null);
 			return dummy.forward;
 		}
 
@@ -421,7 +420,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			float maxValue2 = float.MaxValue;
 			bool flag = true;
 			Identifiable result = null;
-			this.GetCombatsInArea(position, this.Radius, 1077058560, ref this.m_cpoCombatObjects);
+			this.GetCombatsInArea(position, this.Radius, 1077054464, ref this.m_cpoCombatObjects);
 			int i = 0;
 			int count = this.m_cpoCombatObjects.Count;
 			while (i < count)
@@ -569,7 +568,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			return result;
 		}
 
-		protected virtual int FireExtraGadgetOnDeath(DestroyEffect destroyEvt)
+		protected virtual int FireExtraGadgetOnDeath(DestroyEffectMessage destroyEvt)
 		{
 			if (this.Info.FireExtraOnEffectDeathOnlyIfTargetIdIsValid && destroyEvt.RemoveData.TargetId == -1)
 			{
@@ -710,8 +709,8 @@ namespace HeavyMetalMachines.Combat.Gadget
 			ModifierData[] datas = this.CreateDrainData(EffectKind.HPRepair, amount, drainPct, drainLifeAuraFeedback);
 			if (this.OnSelfRepair != null && this.Combat == combat)
 			{
-				float a = (float)combat.Data.HPMax - combat.Data.HP;
-				float amount2 = Mathf.Min(a, amount * drainPct);
+				float num = (float)combat.Data.HPMax - combat.Data.HP;
+				float amount2 = Mathf.Min(num, amount * drainPct);
 				this.OnSelfRepair(amount2);
 			}
 			combat.Controller.AddModifiers(datas, taker, -1, false);
@@ -757,10 +756,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 
 		protected void OnGadgetUsed(int eventId)
 		{
-			if (this.ServerListenToGadgetUse != null)
-			{
-				this.ServerListenToGadgetUse();
-			}
+			this.ServerInformListenToGadgetUse();
 			if (!this.Info.TurnOffOutOfCombat)
 			{
 				return;
@@ -814,6 +810,14 @@ namespace HeavyMetalMachines.Combat.Gadget
 				}
 			}
 			this.Combat.Controller.AddModifiers(this._onGadgetUsedModifiers, this.Combat, eventId, false);
+		}
+
+		protected void ServerInformListenToGadgetUse()
+		{
+			if (this.ServerListenToGadgetUse != null)
+			{
+				this.ServerListenToGadgetUse();
+			}
 		}
 
 		protected void Update()
@@ -1194,7 +1198,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			{
 				this.ListenToGadgetUpgradeChanged(this, upgradeName, upgradeInstance.Level);
 			}
-			PlaybackManager.GadgetLevel.Update(this.Combat.Id.ObjId, this.Slot, upgradeName, upgradeInstance.Level);
+			this._levelDispatcher.Update(this.Combat.Id.ObjId, this.Slot, upgradeName, upgradeInstance.Level);
 			this.SetExternalUpgradeLevel(upgradeInstance, true);
 		}
 
@@ -1220,7 +1224,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			{
 				this.ListenToGadgetUpgradeChanged(this, upgradeName, upgradeInstance.Level);
 			}
-			PlaybackManager.GadgetLevel.Update(this.Combat.Id.ObjId, this.Slot, upgradeName, upgradeInstance.Level);
+			this._levelDispatcher.Update(this.Combat.Id.ObjId, this.Slot, upgradeName, upgradeInstance.Level);
 			this.SetExternalUpgradeLevel(upgradeInstance, false);
 			return true;
 		}
@@ -1701,7 +1705,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			}
 		}
 
-		public virtual void OnDestroyEffect(DestroyEffect evt)
+		public virtual void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (evt.RemoveData.TargetEventId == this.LastWarmupId)
 			{
@@ -1755,11 +1759,11 @@ namespace HeavyMetalMachines.Combat.Gadget
 			}
 		}
 
-		protected virtual void InnerOnDestroyEffect(DestroyEffect evt)
+		protected virtual void InnerOnDestroyEffect(DestroyEffectMessage evt)
 		{
 		}
 
-		protected virtual void OnMyEffectDestroyed(DestroyEffect evt)
+		protected virtual void OnMyEffectDestroyed(DestroyEffectMessage evt)
 		{
 		}
 
@@ -1797,6 +1801,12 @@ namespace HeavyMetalMachines.Combat.Gadget
 
 		public virtual void Clear()
 		{
+			GadgetBehaviour.Log.DebugFormat("Clearing effects for gadget={0} car={1} count={2}", new object[]
+			{
+				this.Info.name,
+				this.Combat.Id.ObjId,
+				this.ExistingFiredEffects.Count
+			});
 			this.OnObjectSpawned(new SpawnEvent(this.Combat.Id.ObjId, this.Combat.Transform.position, SpawnReason.MatchStart));
 			this.Cleanup();
 			this.LastWarmupId = -1;
@@ -1882,7 +1892,20 @@ namespace HeavyMetalMachines.Combat.Gadget
 			this._gadgetState.Heat = this.CurrentHeat;
 		}
 
+		public void ForcePressed()
+		{
+			this._isForcePressed = true;
+		}
+
+		public void ForceReleased()
+		{
+			this._isForcePressed = false;
+		}
+
 		private static readonly BitLogger Log = new BitLogger(typeof(GadgetBehaviour));
+
+		[Inject]
+		private IGadgetLevelDispatcher _levelDispatcher;
 
 		public Identifiable Parent;
 
@@ -1892,6 +1915,8 @@ namespace HeavyMetalMachines.Combat.Gadget
 		private GadgetInfo _info;
 
 		public GadgetKind Kind;
+
+		private bool _isForcePressed;
 
 		[SerializeField]
 		private GadgetSlot _slot;
@@ -2006,9 +2031,9 @@ namespace HeavyMetalMachines.Combat.Gadget
 		[NonSerialized]
 		protected GadgetData.GadgetStateObject _gadgetState;
 
-		public GadgetBehaviour.UpgradeInstance[] Upgrades;
+		public GadgetBehaviour.UpgradeInstance[] Upgrades = new GadgetBehaviour.UpgradeInstance[0];
 
-		public GadgetBehaviour.UpgradeInstance[] InvisibleUpgrades;
+		public GadgetBehaviour.UpgradeInstance[] InvisibleUpgrades = new GadgetBehaviour.UpgradeInstance[0];
 
 		private bool _activated;
 
@@ -2024,8 +2049,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			NotForEnemies = false,
 			NotForWards = true,
 			NotForBuildings = true,
-			NotFurTurrets = true,
-			NotForCreeps = true
+			NotFurTurrets = true
 		};
 
 		private ModifierData[] _attachedDamage;

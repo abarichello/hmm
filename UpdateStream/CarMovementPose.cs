@@ -24,5 +24,7 @@ namespace HeavyMetalMachines.UpdateStream
 		public float SpeedZ;
 
 		public bool IsDrifting;
+
+		public float TurretAngle;
 	}
 }

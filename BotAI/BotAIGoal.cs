@@ -1,11 +1,13 @@
 ﻿using System;
+using System.Collections.Generic;
+using HeavyMetalMachines.AI.Steering;
 using HeavyMetalMachines.Utils;
 using Pocketverse;
 using UnityEngine;
 
 namespace HeavyMetalMachines.BotAI
 {
-	public class BotAIGoal : GameHubScriptableObject
+	public class BotAIGoal : GameHubScriptableObject, ISteeringBotParameters
 	{
 		public bool IsOnBotOnlyTeam
 		{
@@ -91,10 +93,58 @@ namespace HeavyMetalMachines.BotAI
 			}
 		}
 
-		private void Awake()
+		public int SqrdMinPassBombDistance
+		{
+			get
+			{
+				return this._sqrdMinPassBombDistance;
+			}
+		}
+
+		public float DirectionalSteeringSnapMultiplier
+		{
+			get
+			{
+				return this._steeringSnapMultiplier;
+			}
+		}
+
+		public IList<ISteeringBehaviourParameters> SteeringBehaviours
+		{
+			get
+			{
+				if (this._steeringBehaviours != null)
+				{
+					return this._steeringBehaviours;
+				}
+				this._steeringBehaviours = new List<ISteeringBehaviourParameters>();
+				for (int i = 0; i < this._behaviourParameters.Count; i++)
+				{
+					this._steeringBehaviours.Add(this._behaviourParameters[i]);
+				}
+				return this._steeringBehaviours;
+			}
+		}
+
+		public List<BaseBehaviourParameters> BehaviourAssets
+		{
+			get
+			{
+				List<BaseBehaviourParameters> result;
+				if ((result = this._behaviourParameters) == null)
+				{
+					result = (this._behaviourParameters = new List<BaseBehaviourParameters>());
+				}
+				return result;
+			}
+		}
+
+		private void OnEnable()
 		{
 			this.BombGadget.AttackKind = BotAIGoal.GadgetUseInfo.GadgetAttackKind.Bomb;
 		}
+
+		public float WaitForPassStateSeconds;
 
 		private bool _isOnBotOnlyTeam;
 
@@ -111,39 +161,54 @@ namespace HeavyMetalMachines.BotAI
 		public BotAIGoal.GadgetUseInfo BombGadget;
 
 		[Range(0f, 1f)]
-		[SerializeField]
 		[Tooltip("Chance of loose focus on carrier and focus on closer player por ex. also change the pursuit range!")]
+		[SerializeField]
 		private float focus = 1f;
 
 		[Range(0.2f, 2f)]
-		[SerializeField]
 		[Tooltip("Interval that the bot will think about what to do [vary between (0.5s..4s and 1s..8s)] (CheckSubState and ProcessBehaviour)")]
+		[SerializeField]
 		private float decisionInterval = 1f;
 
 		[Range(0f, 1f)]
-		[SerializeField]
 		[Tooltip("Chance of focus in healing")]
+		[SerializeField]
 		private float healing = 1f;
 
 		[Range(0f, 1f)]
-		[SerializeField]
 		[Tooltip("Chance of focus in attacking")]
+		[SerializeField]
 		private float aggressiveness = 1f;
 
 		[Range(0f, 1f)]
-		[SerializeField]
 		[Tooltip("Life percent to decide to be considered low health (drop bomb if transporter or stop supporting if supporter) TODO Rename this to mean lowHealth")]
+		[SerializeField]
 		private float dropBomb = 1f;
 
 		[Range(0f, 1f)]
-		[SerializeField]
 		[Tooltip("Change of try to ambush player")]
+		[SerializeField]
 		private float ambush = 1f;
 
 		[Range(0f, 1f)]
-		[SerializeField]
 		[Tooltip("Change of use boost")]
+		[SerializeField]
 		private float boost = 1f;
+
+		[Tooltip("How fast the spherical lerp goes from current position to target desired position during directional steering")]
+		[Range(1f, 30f)]
+		[SerializeField]
+		private float _steeringSnapMultiplier = 5f;
+
+		[SerializeField]
+		[HideInInspector]
+		private int _sqrdMinPassBombDistance = int.MaxValue;
+
+		[SerializeField]
+		[HideInInspector]
+		private List<BaseBehaviourParameters> _behaviourParameters;
+
+		private List<ISteeringBehaviourParameters> _steeringBehaviours;
 
 		public enum BotDifficulty
 		{
@@ -161,7 +226,7 @@ namespace HeavyMetalMachines.BotAI
 				get
 				{
 					float? attackAngleCos = this._attackAngleCos;
-					return ((attackAngleCos == null) ? (this._attackAngleCos = new float?(Mathf.Cos(this.AttackAngle * 0.0174532924f))) : attackAngleCos).Value;
+					return ((attackAngleCos == null) ? (this._attackAngleCos = new float?(Mathf.Cos(this.AttackAngle * 0.017453292f))) : attackAngleCos).Value;
 				}
 			}
 

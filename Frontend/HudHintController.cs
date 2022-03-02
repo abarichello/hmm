@@ -3,6 +3,8 @@ using System.Collections;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Counselor;
 using HeavyMetalMachines.Event;
+using HeavyMetalMachines.Infra.Context;
+using HeavyMetalMachines.Localization;
 using HeavyMetalMachines.Utils;
 using Pocketverse;
 using UnityEngine;
@@ -86,16 +88,16 @@ namespace HeavyMetalMachines.Frontend
 
 		private void CombatObjectOnObjectUnspawn(CombatObject obj, UnspawnEvent msg)
 		{
-			bool flag = GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreBoard.State.BombDelivery && !this._currentPlayerCombatObject.Player.IsBotControlled;
+			bool flag = GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreboardState.BombDelivery && !this._currentPlayerCombatObject.Player.IsBotControlled;
 			if (flag && this.IsHudHintActive())
 			{
-				this.ShowMessage(HudHintController.HudMessageType.Warning, Language.Get("COUNSELOR_HINT_DISABLE", TranslationSheets.Hud), this._counselorMessageToggleDelayInSec, this._counselorMessageToggleTimeoutInSec, false, null);
+				this.ShowMessage(HudHintController.HudMessageType.Warning, Language.Get("COUNSELOR_HINT_DISABLE", TranslationContext.Hud), this._counselorMessageToggleDelayInSec, this._counselorMessageToggleTimeoutInSec, false, null);
 			}
 		}
 
-		private void BombManagerOnListenToPhaseChange(BombScoreBoard.State state)
+		private void BombManagerOnListenToPhaseChange(BombScoreboardState state)
 		{
-			if (state != BombScoreBoard.State.PreReplay && state != BombScoreBoard.State.Replay)
+			if (state != BombScoreboardState.PreReplay && state != BombScoreboardState.Replay)
 			{
 				return;
 			}
@@ -117,7 +119,7 @@ namespace HeavyMetalMachines.Frontend
 			if (this._showDisableCounselorMessage && flag)
 			{
 				this._showDisableCounselorMessage = false;
-				this.ShowMessage(HudHintController.HudMessageType.Warning, Language.Get("COUNSELOR_HINT_DISABLE", TranslationSheets.Hud), this._counselorMessageDelayInSec, this._counselorMessageTimeoutInSec, false, null);
+				this.ShowMessage(HudHintController.HudMessageType.Warning, Language.Get("COUNSELOR_HINT_DISABLE", TranslationContext.Hud), this._counselorMessageDelayInSec, this._counselorMessageTimeoutInSec, false, null);
 			}
 		}
 

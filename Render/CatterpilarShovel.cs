@@ -30,7 +30,7 @@ namespace HeavyMetalMachines.Render
 			{
 				return;
 			}
-			if (Physics.Raycast(this.throwerDummy.transform.position + Vector3.up * 10f, -Vector3.up, out this.hitInfo, 20f, this.collisionMask))
+			if (Physics.Raycast(this.throwerDummy.transform.position + Vector3.up * 10f, -Vector3.up, ref this.hitInfo, 20f, this.collisionMask))
 			{
 				this.hitPos = this.hitInfo.point;
 				this.throwerPos = this.throwerDummy.transform.position;

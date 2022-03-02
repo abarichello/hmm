@@ -8,6 +8,12 @@ namespace HeavyMetalMachines.Render
 {
 	public class CarWheelsController : GameHubBehaviour
 	{
+		private void Awake()
+		{
+			this._mainTexId = Shader.PropertyToID("_MainTex_ST");
+			this._normalMapId = Shader.PropertyToID("_NormalMap_ST");
+		}
+
 		private void Start()
 		{
 			if (GameHubBehaviour.Hub != null && GameHubBehaviour.Hub.Net.IsServer() && !GameHubBehaviour.Hub.Net.IsTest())
@@ -15,36 +21,50 @@ namespace HeavyMetalMachines.Render
 				base.enabled = false;
 				return;
 			}
-			this.rb = base.transform.root.GetComponentInChildren<Rigidbody>();
-			if (this.steerRenderers != null && this.steerRenderers.Length > 0)
-			{
-				HeavyMetalMachines.Utils.Debug.Assert(this.steerRenderers[0] != null && this.steerRenderers[0].sharedMaterial != null, "Null material or renderer on " + base.gameObject.name, HeavyMetalMachines.Utils.Debug.TargetTeam.All);
-				this.steerTextureMatrix = this.steerRenderers[0].sharedMaterial.GetVector("_MainTex_ST");
-				this.steerPropertyBlock = new MaterialPropertyBlock();
-				this.steerPropertyBlock.SetVector("_MainTex_ST", this.steerTextureMatrix);
-			}
-		}
-
-		private void OnWheelSuspensionHit()
-		{
-			this.forcedEmissionDelay = 0.5f;
 		}
 
 		public void Cleanup()
 		{
 		}
 
-		private void SafeDestroy(UnityEngine.Object asset)
+		public void UpdateWheelsMaterialTeam(Color color, float intensity)
+		{
+			if (this.steerRenderers == null || this.steerRenderers.Length <= 0)
+			{
+				return;
+			}
+			Debug.Assert(this.steerRenderers[0] != null && this.steerRenderers[0].sharedMaterial != null, "Null material or renderer on " + base.gameObject.name, Debug.TargetTeam.All);
+			this.steerTextureMatrix = this.steerRenderers[0].sharedMaterial.GetVector(this._mainTexId);
+			this.steerNormalTexMatrix = this.steerRenderers[0].sharedMaterial.GetVector(this._normalMapId);
+			this.steerPropertyBlock = new MaterialPropertyBlock();
+			this.steerPropertyBlock.SetVector(this._mainTexId, this.steerTextureMatrix);
+			this.steerPropertyBlock.SetVector(this._normalMapId, this.steerNormalTexMatrix);
+			int num = Shader.PropertyToID("_Glow");
+			int num2 = Shader.PropertyToID("_GlowColor");
+			for (int i = 0; i < this.steerRenderers.Length; i++)
+			{
+				Material sharedMaterial = this.steerRenderers[i].sharedMaterial;
+				if (sharedMaterial.HasProperty(num) && sharedMaterial.HasProperty(num2))
+				{
+					this.steerRenderers[i].GetPropertyBlock(this.steerPropertyBlock);
+					this.steerPropertyBlock.SetFloat(num, intensity);
+					this.steerPropertyBlock.SetColor(num2, color);
+					this.steerRenderers[i].SetPropertyBlock(this.steerPropertyBlock);
+				}
+			}
+		}
+
+		private void SafeDestroy(Object asset)
 		{
 			if (asset != null)
 			{
 				if (Application.isPlaying)
 				{
-					UnityEngine.Object.Destroy(asset);
+					Object.Destroy(asset);
 				}
 				else
 				{
-					UnityEngine.Object.DestroyImmediate(asset);
+					Object.DestroyImmediate(asset);
 				}
 			}
 		}
@@ -70,12 +90,6 @@ namespace HeavyMetalMachines.Render
 			}
 		}
 
-		private void OnWheelAxisHitGround(float f)
-		{
-			this.forcedEmissionDelay = 0.5f;
-			this.forcedSmokeEmissionDelay = 0.5f;
-		}
-
 		private void LateUpdate()
 		{
 			if (this.carSuspensionGroup.freezePhysics)
@@ -86,25 +100,10 @@ namespace HeavyMetalMachines.Render
 			{
 				this.velocity = Mathf.Clamp(this.carMovement.VAxis * this.carMovement.MaxLinearSpeed, -8f, 8f);
 				this.turning = Mathf.Lerp(this.turning, this.carMovement.HAxis, Time.deltaTime * 5f);
-				float num = (float)((this.carMovement.HAxis <= 0f) ? ((this.carMovement.HAxis >= 0f) ? 0 : -1) : 1);
-				float num2 = (float)((this.carMovement.VAxis <= 0f) ? ((this.carMovement.VAxis >= 0f) ? 0 : -1) : 1);
-				bool flag = num2 != this.oldVAxis;
-				if (flag || (this.oldHAxis != num && num != 0f && num2 != 0f))
-				{
-					this.forcedEmissionDelay = 0.5f;
-					if (flag)
-					{
-						this.forcedSmokeEmissionDelay = 0.5f;
-					}
-				}
-				this.oldHAxis = num;
-				this.oldVAxis = num2;
-				this.forcedEmissionDelay -= Time.deltaTime;
-				this.forcedSmokeEmissionDelay -= Time.deltaTime;
 			}
-			this.SyncWhellsPosition();
-			float num3 = this.velocity / this.wheelsRadius * 57.29578f;
-			this.currentWheelsRotation += num3 * Time.deltaTime;
+			this.SyncWheelsPosition();
+			float num = this.velocity / this.wheelsRadius * 57.29578f;
+			this.currentWheelsRotation += num * Time.deltaTime;
 			if (this._updateWheelSpin)
 			{
 				if (this.LeftFrontWheel)
@@ -126,8 +125,17 @@ namespace HeavyMetalMachines.Render
 			}
 			if (this.steerPropertyBlock != null)
 			{
-				this.steerTextureMatrix.w = -this.currentWheelsRotation / 500f;
-				this.steerPropertyBlock.SetVector("_MainTex_ST", this.steerTextureMatrix);
+				if (this.invertSteerRotation)
+				{
+					this.steerTextureMatrix.w = this.currentWheelsRotation / 500f;
+				}
+				else
+				{
+					this.steerTextureMatrix.w = -this.currentWheelsRotation / 500f;
+				}
+				this.steerNormalTexMatrix = this.steerTextureMatrix;
+				this.steerPropertyBlock.SetVector(this._mainTexId, this.steerTextureMatrix);
+				this.steerPropertyBlock.SetVector(this._normalMapId, this.steerNormalTexMatrix);
 				for (int i = 0; i < this.steerRenderers.Length; i++)
 				{
 					this.steerRenderers[i].SetPropertyBlock(this.steerPropertyBlock);
@@ -135,7 +143,7 @@ namespace HeavyMetalMachines.Render
 			}
 		}
 
-		private void SyncWhellsPosition()
+		private void SyncWheelsPosition()
 		{
 			if (!this._updateWheelPosition)
 			{
@@ -169,6 +177,8 @@ namespace HeavyMetalMachines.Render
 
 		private Vector4 steerTextureMatrix;
 
+		private Vector4 steerNormalTexMatrix;
+
 		private MaterialPropertyBlock steerPropertyBlock;
 
 		public Renderer[] steerRenderers;
@@ -191,19 +201,16 @@ namespace HeavyMetalMachines.Render
 		[SerializeField]
 		private bool _updateWheelPosition = true;
 
-		private Rigidbody rb;
+		[SerializeField]
+		private bool invertSteerRotation;
+
+		private int _mainTexId;
+
+		private int _normalMapId;
 
 		private float shakeTimming;
 
 		private CarMovement carMovement;
-
-		private float forcedEmissionDelay;
-
-		private float forcedSmokeEmissionDelay;
-
-		private float oldVAxis;
-
-		private float oldHAxis;
 
 		private float angle;
 	}

@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections;
 using HeavyMetalMachines.Frontend;
+using HeavyMetalMachines.Localization;
+using Hoplon.Input.UiNavigation;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -8,6 +10,14 @@ namespace HeavyMetalMachines.PurchaseFeedback
 {
 	public class PurchaseFeedbackView : MonoBehaviour, IPurchaseFeedbackView
 	{
+		private IUiNavigationGroupHolder UiNavigationGroupHolder
+		{
+			get
+			{
+				return this._uiNavigationGroupHolder;
+			}
+		}
+
 		protected void Awake()
 		{
 			this._purchaseFeedbackComponent = this._purchaseFeedbackComponentAsset;
@@ -23,6 +33,7 @@ namespace HeavyMetalMachines.PurchaseFeedback
 			this.SetupComponents(viewData);
 			this._mainCanvas.enabled = true;
 			this._okButton.interactable = false;
+			this.UiNavigationGroupHolder.AddHighPriorityGroup();
 			base.StartCoroutine(this.ShowCoroutine());
 		}
 
@@ -36,7 +47,7 @@ namespace HeavyMetalMachines.PurchaseFeedback
 
 		public void Hide()
 		{
-			this._okButton.interactable = true;
+			this._okButton.interactable = false;
 			base.StartCoroutine(this.HideCoroutine());
 		}
 
@@ -44,12 +55,16 @@ namespace HeavyMetalMachines.PurchaseFeedback
 		{
 			yield return this.WaitForAnimation("purchaseFeedbackOut");
 			this._purchaseFeedbackComponent.OnViewClosed();
+			this.UiNavigationGroupHolder.RemoveHighPriorityGroup();
 			yield break;
 		}
 
 		private void SetupComponents(PurchaseFeedbackView.PurchasedFeedbackViewData viewData)
 		{
-			this._descriptionText.text = string.Format(Language.Get("PURCHASED_FEEDBACK_DESCRIPTION", TranslationSheets.Store), viewData.ItemHardCurrencyValue);
+			this._descriptionText.text = Language.GetFormatted("PURCHASED_FEEDBACK_DESCRIPTION", TranslationContext.Store, new object[]
+			{
+				viewData.ItemHardCurrencyValue
+			});
 			this._cashText.text = viewData.UserCurrentCurrencyValue;
 			this._itemImage.TryToLoadAsset(viewData.ItemImageAssetName);
 		}
@@ -72,7 +87,7 @@ namespace HeavyMetalMachines.PurchaseFeedback
 
 		private IPurchaseFeedbackComponent _purchaseFeedbackComponent;
 
-		[Header("[Infra]")]
+		[Header("[Components]")]
 		[SerializeField]
 		private Canvas _mainCanvas;
 
@@ -90,6 +105,9 @@ namespace HeavyMetalMachines.PurchaseFeedback
 
 		[SerializeField]
 		private Button _okButton;
+
+		[SerializeField]
+		private UiNavigationGroupHolder _uiNavigationGroupHolder;
 
 		public struct PurchasedFeedbackViewData
 		{

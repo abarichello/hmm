@@ -12,7 +12,7 @@ namespace HeavyMetalMachines.VFX
 		private IEnumerator Interpolate()
 		{
 			this.coroutineRunning = true;
-			Light light = UnityEngine.Object.FindObjectOfType<Light>();
+			Light light = Object.FindObjectOfType<Light>();
 			yield return null;
 			while (AreaVisualAttributes.mustRefresh)
 			{
@@ -64,7 +64,7 @@ namespace HeavyMetalMachines.VFX
 			result.fogIntensity = RenderSettings.fogDensity;
 			result.fogColor = RenderSettings.fogColor;
 			result.ambientColor = RenderSettings.ambientLight;
-			Light light = UnityEngine.Object.FindObjectOfType<Light>();
+			Light light = Object.FindObjectOfType<Light>();
 			if (light != null)
 			{
 				result.lightIntensity = light.intensity;

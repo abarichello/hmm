@@ -4,25 +4,23 @@ using Assets.ClientApiObjects;
 using Assets.ClientApiObjects.Components;
 using Assets.Standard_Assets.Scripts.HMM.Battlepass;
 using ClientAPI;
-using Commons.Swordfish.Battlepass;
-using Commons.Swordfish.Progression;
+using HeavyMetalMachines.DataTransferObjects.Battlepass;
+using HeavyMetalMachines.DataTransferObjects.Progression;
+using HeavyMetalMachines.DataTransferObjects.Result;
 using HeavyMetalMachines.Frontend;
 using HeavyMetalMachines.Infra.ScriptableObjects;
+using HeavyMetalMachines.Localization;
+using HeavyMetalMachines.Store.Business;
 using HeavyMetalMachines.Swordfish;
 using HeavyMetalMachines.Utils;
+using Hoplon.Serialization;
 using Pocketverse;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace HeavyMetalMachines.Battlepass
 {
 	public class BattlepassRewardComponent : GameHubScriptableObject, IBattlepassRewardComponent
 	{
-		private void Awake()
-		{
-			this._exchangeableItemChecker = new ExchangeableItemChecker(GameHubScriptableObject.Hub.User.Inventory, GameHubScriptableObject.Hub.SharedConfigs.Battlepass.SoftCoinAlreadyClaimPercentage, GameHubScriptableObject.Hub.InventoryColletion, this._hardCoinItemTypeScriptableObject.Id, this._softCoinItemTypeScriptableObject.Id);
-		}
-
 		public UnityUIBattlepassRewardView.DataReward RegisterRewardView(IBattlepassRewardView view)
 		{
 			this._battlepassRewardView = view;
@@ -36,6 +34,12 @@ namespace HeavyMetalMachines.Battlepass
 			this.PopulateDataRewards(progress, list);
 			result.Itens = list;
 			return result;
+		}
+
+		public void SetStoreBusinessFactory(IStoreBusinessFactory storeBusinessFactory)
+		{
+			this._storeBusinessFactory = storeBusinessFactory;
+			this._exchangeableItemChecker = new ExchangeableItemChecker(GameHubScriptableObject.Hub.User.Inventory, GameHubScriptableObject.Hub.SharedConfigs.Battlepass.SoftCoinAlreadyClaimPercentage, GameHubScriptableObject.Hub.InventoryColletion, this._hardCoinItemTypeScriptableObject.Id, this._softCoinItemTypeScriptableObject.Id, storeBusinessFactory);
 		}
 
 		private void PopulateDataRewards(BattlepassProgress progress, List<UnityUIBattlepassRewardView.DataPreview> dataRewardItens)
@@ -60,7 +64,7 @@ namespace HeavyMetalMachines.Battlepass
 		{
 			ProgressionInfo.RewardKind rewardKind = GetKind(battlepassReward);
 			string text = GetArguments(battlepassReward);
-			if (rewardKind == ProgressionInfo.RewardKind.None || string.IsNullOrEmpty(text))
+			if (rewardKind == null || string.IsNullOrEmpty(text))
 			{
 				return;
 			}
@@ -78,16 +82,16 @@ namespace HeavyMetalMachines.Battlepass
 			amount = 0;
 			switch (kind)
 			{
-			case ProgressionInfo.RewardKind.SoftCurrency:
+			case 1:
 				amount = int.Parse(args);
 				return new Guid?(this._softCoinItemTypeScriptableObject.Id);
-			case ProgressionInfo.RewardKind.ItemType:
+			case 2:
 				return new Guid?(new Guid(args));
-			case ProgressionInfo.RewardKind.HardCurrency:
+			case 4:
 				amount = int.Parse(args);
 				return new Guid?(this._hardCoinItemTypeScriptableObject.Id);
 			}
-			HeavyMetalMachines.Utils.Debug.Assert(false, string.Format("BattlepassComponent: Invalid PremiumRewards Kind: {0}", kind), HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+			Debug.Assert(false, string.Format("BattlepassComponent: Invalid PremiumRewards Kind: {0}", kind), Debug.TargetTeam.All);
 			return null;
 		}
 
@@ -133,44 +137,9 @@ namespace HeavyMetalMachines.Battlepass
 			listToAdd.Add(item);
 		}
 
-		public bool TryToOpenRewardsToClaim(System.Action onWindowCloseAction)
+		public bool HasRewardToClaim()
 		{
-			if (this._battlepassProgressScriptableObject.Progress.HasRewardToClaim(GameHubScriptableObject.Hub.SharedConfigs.Battlepass))
-			{
-				this.ShowRewardWindow(onWindowCloseAction);
-				return true;
-			}
-			return false;
-		}
-
-		public void ShowRewardWindow(System.Action onWindowCloseAction)
-		{
-			this._rewardsClaimed = false;
-			if (this._battlepassRewardView == null)
-			{
-				SceneManager.LoadSceneAsync("UI_ADD_BattlepassReward", LoadSceneMode.Additive);
-				if (onWindowCloseAction != null)
-				{
-					this._onRewardWindowCloseAction = (System.Action)Delegate.Combine(this._onRewardWindowCloseAction, onWindowCloseAction);
-				}
-				return;
-			}
-			if (!this._battlepassComponent.IsMetalpassWindowVisible())
-			{
-				SceneManager.UnloadSceneAsync("UI_ADD_BattlepassReward");
-				this._battlepassRewardView = null;
-				this._onRewardWindowCloseAction = null;
-				return;
-			}
-			if (!this._battlepassRewardView.IsVisible())
-			{
-				if (onWindowCloseAction != null)
-				{
-					this._onRewardWindowCloseAction = (System.Action)Delegate.Combine(this._onRewardWindowCloseAction, onWindowCloseAction);
-				}
-				this._battlepassRewardView.SetVisibility(true);
-				GameHubScriptableObject.Hub.GuiScripts.SharedPreGameWindow.ItemBuyWindow.TryCloseWindow();
-			}
+			return this._battlepassProgressScriptableObject.Progress.HasRewardToClaim(GameHubScriptableObject.Hub.SharedConfigs.Battlepass);
 		}
 
 		public void HideRewardWindow()
@@ -180,15 +149,11 @@ namespace HeavyMetalMachines.Battlepass
 				return;
 			}
 			this._battlepassRewardView.SetVisibility(false);
-			if (this._onRewardWindowCloseAction != null)
-			{
-				this._onRewardWindowCloseAction();
-				this._onRewardWindowCloseAction = null;
-			}
-			SceneManager.UnloadSceneAsync("UI_ADD_BattlepassReward");
 			this._battlepassRewardView = null;
+			BattlepassRewardComponent.Log.Debug(string.Format("HideRewardWindow: _rewardsClaimed: {0}", this._rewardsClaimed));
 			if (this._rewardsClaimed)
 			{
+				this._rewardsClaimed = false;
 				this._battlepassComponent.NotifyBattlepassTransactionSuccess();
 			}
 		}
@@ -196,67 +161,54 @@ namespace HeavyMetalMachines.Battlepass
 		public void OnRewardWindowDispose()
 		{
 			this._battlepassRewardView = null;
-			this._onRewardWindowCloseAction = null;
 		}
 
-		public void ClaimReward(int levelToClaim, bool premiumClaim)
+		public void ClaimReward(int levelToClaim, bool isPremiumClaim)
 		{
 			if (GameHubScriptableObject.Hub == null)
 			{
 				return;
 			}
-			BattlepassCustomWS.ClaimRewards(null, GameHubScriptableObject.Hub.User.PlayerSF.Id, levelToClaim, premiumClaim, new SwordfishClientApi.ParameterizedCallback<string>(this.OnClaimRewardSuccess), new SwordfishClientApi.ErrorCallback(this.OnClaimRewardError));
+			BattlepassCustomWS.ClaimRewards(null, GameHubScriptableObject.Hub.User.PlayerSF.Id, levelToClaim, isPremiumClaim, new SwordfishClientApi.ParameterizedCallback<string>(this.OnClaimRewardSuccess), new SwordfishClientApi.ErrorCallback(this.OnClaimRewardError));
+		}
+
+		public void ClaimAllRewards(List<ClaimRewardInfo> rewardsInfo, Action onClaimAllRewardsFinished)
+		{
+			if (GameHubScriptableObject.Hub == null)
+			{
+				return;
+			}
+			BattlepassCustomWS.ClaimAllRewards(onClaimAllRewardsFinished, GameHubScriptableObject.Hub.User.PlayerSF.Id, rewardsInfo, new SwordfishClientApi.ParameterizedCallback<string>(this.OnClaimAllRewardsSuccess), new SwordfishClientApi.ErrorCallback(this.OnClaimRewardError));
 		}
 
 		private void OnClaimRewardError(object state, Exception exception)
 		{
 			BattlepassRewardComponent.Log.Error(string.Format("Clain Reward Error {0}", exception));
 			this.ShowClaimItemErrorFeedback();
+			if (state == null)
+			{
+				return;
+			}
+			Action action = (Action)state;
+			action();
 		}
 
 		private void OnClaimRewardSuccess(object state, string s)
 		{
-			NetResult netResult = (NetResult)((JsonSerializeable<T>)s);
+			NetResult netResult = (NetResult)((JsonSerializeable<!0>)s);
 			if (!netResult.Success)
 			{
-				ClaimRewardFail claimRewardFail = (ClaimRewardFail)((JsonSerializeable<T>)netResult.Msg);
-				BattlepassRewardComponent.Log.Error(string.Format("Clain Reward Failed. {0}", netResult.Msg));
-				if (netResult.Error == -310)
-				{
-					BattlepassConfig battlepass = GameHubScriptableObject.Hub.SharedConfigs.Battlepass;
-					ProgressionReward progressionReward;
-					if (claimRewardFail.IsPremium)
-					{
-						progressionReward = battlepass.Levels[claimRewardFail.ClaimIndex].PremiumRewards;
-					}
-					else
-					{
-						progressionReward = battlepass.Levels[claimRewardFail.ClaimIndex].FreeRewards;
-					}
-					int num;
-					Guid? itemGuidByRewardKind = this.GetItemGuidByRewardKind(progressionReward.Kind, progressionReward.Argument, out num);
-					ItemTypeScriptableObject itemTypeScriptableObject;
-					if (!GameHubScriptableObject.Hub.InventoryColletion.AllItemTypes.TryGetValue(itemGuidByRewardKind.Value, out itemTypeScriptableObject))
-					{
-						this.ShowClaimItemErrorFeedback();
-						return;
-					}
-					this.ShowClaimItemErrorFeedback();
-				}
-				else
-				{
-					this.ShowClaimItemErrorFeedback();
-				}
+				this.ShowClaimItemErrorFeedback();
+				BattlepassRewardComponent.Log.Debug("Claim Reward Failed");
+				return;
 			}
-			else
+			ClaimRewardsSuccess claimRewardsSuccess = (ClaimRewardsSuccess)((JsonSerializeable<!0>)netResult.Msg);
+			for (int i = 0; i < claimRewardsSuccess.ItemAddResults.Count; i++)
 			{
-				ClaimRewardsSuccess claimRewardsSuccess = (ClaimRewardsSuccess)((JsonSerializeable<T>)netResult.Msg);
-				for (int i = 0; i < claimRewardsSuccess.ItemAddResults.Count; i++)
-				{
-					GameHubScriptableObject.Hub.User.Inventory.AddSingleItem(claimRewardsSuccess.ItemAddResults[i]);
-				}
-				this._rewardsClaimed = true;
+				GameHubScriptableObject.Hub.User.Inventory.AddSingleItem(claimRewardsSuccess.ItemAddResults[i]);
 			}
+			this._rewardsClaimed = true;
+			BattlepassRewardComponent.Log.Debug("Claim Reward Sucess");
 		}
 
 		private void ShowClaimItemErrorFeedback()
@@ -265,9 +217,9 @@ namespace HeavyMetalMachines.Battlepass
 			ConfirmWindowProperties properties = new ConfirmWindowProperties
 			{
 				Guid = confirmWindowGuid,
-				QuestionText = Language.Get("UNKNOWN_CLAIM_ERROR", TranslationSheets.Battlepass),
+				QuestionText = Language.Get("UNKNOWN_CLAIM_ERROR", TranslationContext.Battlepass),
 				EnableItemErrorGameObject = true,
-				OkButtonText = Language.Get("Ok", TranslationSheets.GUI),
+				OkButtonText = Language.Get("Ok", TranslationContext.GUI),
 				OnOk = delegate()
 				{
 					GameHubScriptableObject.Hub.GuiScripts.ConfirmWindow.HideConfirmWindow(confirmWindowGuid);
@@ -276,12 +228,32 @@ namespace HeavyMetalMachines.Battlepass
 			GameHubScriptableObject.Hub.GuiScripts.ConfirmWindow.OpenConfirmWindow(properties);
 		}
 
-		public void MetalpassBuyLevelRequest(int quantityFromCurrentLevel, System.Action onBuyLevel, System.Action onBuyWindowClosed)
+		private void OnClaimAllRewardsSuccess(object state, string s)
+		{
+			NetResult netResult = (NetResult)((JsonSerializeable<!0>)s);
+			Action action = (Action)state;
+			ClaimRewardsSuccess claimRewardsSuccess = (ClaimRewardsSuccess)((JsonSerializeable<!0>)netResult.Msg);
+			for (int i = 0; i < claimRewardsSuccess.ItemAddResults.Count; i++)
+			{
+				GameHubScriptableObject.Hub.User.Inventory.AddSingleItem(claimRewardsSuccess.ItemAddResults[i]);
+			}
+			this._rewardsClaimed = true;
+			action();
+			if (!netResult.Success)
+			{
+				this.ShowClaimItemErrorFeedback();
+				BattlepassRewardComponent.Log.Debug("Claim Reward Failed");
+				return;
+			}
+			BattlepassRewardComponent.Log.Debug("Claim Reward Sucess");
+		}
+
+		public void MetalpassBuyLevelRequest(int quantityFromCurrentLevel, Action onBuyLevel, Action onBuyWindowClosed)
 		{
 			this._onMetalpassBuyLevel = onBuyLevel;
 			if (GameHubScriptableObject.Hub != null)
 			{
-				GameHubScriptableObject.Hub.GuiScripts.SharedPreGameWindow.ItemBuyWindow.ShowBuyWindow(this._accountXpItemType, new System.Action(this.OnMetalpassBuyLevel), onBuyWindowClosed, new System.Action(this.OnGoToShopCash), quantityFromCurrentLevel, true);
+				GameHubScriptableObject.Hub.GuiScripts.SharedPreGameWindow.ItemBuyWindow.ShowBuyWindow(this._accountXpItemType, new Action(this.OnMetalpassBuyLevel), onBuyWindowClosed, new Action(this.OnGoToShopCash), quantityFromCurrentLevel, true);
 			}
 		}
 
@@ -319,9 +291,9 @@ namespace HeavyMetalMachines.Battlepass
 
 		private IBattlepassRewardView _battlepassRewardView;
 
-		private System.Action _onRewardWindowCloseAction;
+		private Action _onMetalpassBuyLevel;
 
-		private System.Action _onMetalpassBuyLevel;
+		private IStoreBusinessFactory _storeBusinessFactory;
 
 		private ExchangeableItemChecker _exchangeableItemChecker;
 

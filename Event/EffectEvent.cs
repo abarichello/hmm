@@ -21,7 +21,7 @@ namespace HeavyMetalMachines.Event
 			return EventScopeKind.Effect;
 		}
 
-		public void WriteToBitStream(Pocketverse.BitStream bs)
+		public void WriteToBitStream(BitStream bs)
 		{
 			bs.WriteVector3(this.Origin);
 			bs.WriteVector3(this.Target);
@@ -58,7 +58,7 @@ namespace HeavyMetalMachines.Event
 			bs.WriteCompressedInt(this.EffectInfo.EffectId);
 		}
 
-		public void ReadFromBitStream(Pocketverse.BitStream bs)
+		public void ReadFromBitStream(BitStream bs)
 		{
 			this.Origin = bs.ReadVector3();
 			this.Target = bs.ReadVector3();

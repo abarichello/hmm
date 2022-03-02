@@ -1,7 +1,11 @@
 ﻿using System;
-using HeavyMetalMachines.Utils;
+using HeavyMetalMachines.Profile;
+using HeavyMetalMachines.ToggleableFeatures;
+using Hoplon.ToggleableFeatures;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
@@ -15,8 +19,20 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
+		private bool IsProfileRefactorEnabled
+		{
+			get
+			{
+				return this._isFeatureToggled.Check(Features.ProfileRefactor);
+			}
+		}
+
 		public void Awake()
 		{
+			if (this.IsProfileRefactorEnabled)
+			{
+				return;
+			}
 			this.MainMenuButtonGameObject.SetActive(true);
 			for (int i = 0; i < this.ProfileWindows.Length; i++)
 			{
@@ -27,6 +43,10 @@ namespace HeavyMetalMachines.Frontend
 
 		public void OnDestroy()
 		{
+			if (this.IsProfileRefactorEnabled)
+			{
+				return;
+			}
 			for (int i = 0; i < this.ProfileWindows.Length; i++)
 			{
 				this.ProfileWindows[i].MainMenuProfileWindow.MainMenuProfileController = null;
@@ -36,8 +56,21 @@ namespace HeavyMetalMachines.Frontend
 
 		public void AnimateShow()
 		{
+			if (this.IsProfileRefactorEnabled)
+			{
+				return;
+			}
 			this._screenAnimation.gameObject.SetActive(true);
 			this._screenAnimation.Play("ProfileIn");
+			this.LegacyShow();
+		}
+
+		public void LegacyShow()
+		{
+			if (this.IsProfileRefactorEnabled)
+			{
+				return;
+			}
 			this.ShowWindow(this.ProfileWindows[0].ProfileWindowType);
 			this.ProfileWindows[0].LeftButton.Set(true, true);
 		}
@@ -45,6 +78,7 @@ namespace HeavyMetalMachines.Frontend
 		internal MainMenuProfileController.ProfileWindow ShowWindow(MainMenuProfileController.ProfileWindowType profileWindowType)
 		{
 			this.UpdateData(profileWindowType);
+			ObservableExtensions.Subscribe<Unit>(this._playerProfilePresenter.Initialize());
 			MainMenuProfileController.ProfileWindow result = this.ProfileWindows[0];
 			for (int i = 0; i < this.ProfileWindows.Length; i++)
 			{
@@ -67,6 +101,10 @@ namespace HeavyMetalMachines.Frontend
 
 		private void UpdateData(MainMenuProfileController.ProfileWindowType profileWindowType)
 		{
+			if (this.IsProfileRefactorEnabled)
+			{
+				return;
+			}
 			for (int i = 0; i < this.ProfileWindows.Length; i++)
 			{
 				if (this.ProfileWindows[i].ProfileWindowType == profileWindowType)
@@ -77,11 +115,34 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
+		[Obsolete]
 		public void ReturnToMainMenu()
 		{
-			this._screenAnimation.Play("profileOut");
-			base.StartCoroutine(GUIUtils.WaitAndDisable(this._screenAnimation.clip.length, this._screenAnimation.gameObject));
-			MainMenuProfileController.MainMenuGui.AnimateReturnToLobby(false, false);
+			if (this.IsProfileRefactorEnabled)
+			{
+				return;
+			}
+			MainMenuProfileController.Log.WarnStackTrace("Obsolete ReturnToMainMenu");
+		}
+
+		public void LegacyPreHide()
+		{
+			if (this.IsProfileRefactorEnabled)
+			{
+				return;
+			}
+			for (int i = 0; i < this.ProfileWindows.Length; i++)
+			{
+				this.ProfileWindows[i].MainMenuProfileWindow.OnPreBackToMainMenu();
+			}
+		}
+
+		public void LegacyHide()
+		{
+			if (this.IsProfileRefactorEnabled)
+			{
+				return;
+			}
 			for (int i = 0; i < this.ProfileWindows.Length; i++)
 			{
 				this.ProfileWindows[i].MainMenuProfileWindow.OnBackToMainMenu();
@@ -90,8 +151,20 @@ namespace HeavyMetalMachines.Frontend
 
 		public void OnProfileLeftButtonClick(int profileWindowType)
 		{
+			if (this.IsProfileRefactorEnabled)
+			{
+				return;
+			}
 			this.ShowWindow((MainMenuProfileController.ProfileWindowType)profileWindowType);
 		}
+
+		private static readonly BitLogger Log = new BitLogger(typeof(MainMenuProfileController));
+
+		[Inject]
+		private IPlayerProfilePresenter _playerProfilePresenter;
+
+		[Inject]
+		private IIsFeatureToggled _isFeatureToggled;
 
 		public GameObject MainMenuButtonGameObject;
 

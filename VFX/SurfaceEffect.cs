@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.GameCamera;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
 using HeavyMetalMachines.Match;
 using Pocketverse;
 using UnityEngine;
@@ -68,10 +70,6 @@ namespace HeavyMetalMachines.VFX
 		private void OnRepairDealt(float amount, int id)
 		{
 			PlayerData playerOrBotsByObjectId = GameHubBehaviour.Hub.Players.GetPlayerOrBotsByObjectId(id);
-			if (playerOrBotsByObjectId == null)
-			{
-				return;
-			}
 			CarComponentHub component = playerOrBotsByObjectId.CharacterInstance.GetComponent<CarComponentHub>();
 			component.surfaceEffect.Blink(GUIColorsInfo.Instance.HealColor);
 		}
@@ -79,10 +77,6 @@ namespace HeavyMetalMachines.VFX
 		private void OnDamageDealt(float amount, int id)
 		{
 			PlayerData playerOrBotsByObjectId = GameHubBehaviour.Hub.Players.GetPlayerOrBotsByObjectId(id);
-			if (playerOrBotsByObjectId == null)
-			{
-				return;
-			}
 			CarComponentHub component = playerOrBotsByObjectId.CharacterInstance.GetComponent<CarComponentHub>();
 			component.surfaceEffect.Blink(GUIColorsInfo.Instance.DamageColor);
 		}
@@ -179,7 +173,7 @@ namespace HeavyMetalMachines.VFX
 			{
 				this.shouldBlink = false;
 				this.blinkTime += Time.deltaTime * ((!this.isDoubleAlpha) ? this.blinkFrequency : (this.blinkFrequency + this.blinkFrequency));
-				if (this.blinkTime > 3.14159274f)
+				if (this.blinkTime > 3.1415927f)
 				{
 					this.blinkTime = 0f;
 				}
@@ -218,7 +212,7 @@ namespace HeavyMetalMachines.VFX
 									}
 									for (int j = 0; j < rendererHolder.meshFilter.sharedMesh.subMeshCount; j++)
 									{
-										Graphics.DrawMesh(rendererHolder.meshFilter.sharedMesh, rendererHolder.meshFilter.transform.localToWorldMatrix, this.overlapMaterial, base.gameObject.layer, CarCamera.Singleton.GetComponent<Camera>(), j, this.propertyBlock);
+										Graphics.DrawMesh(rendererHolder.meshFilter.sharedMesh, rendererHolder.meshFilter.transform.localToWorldMatrix, this.overlapMaterial, base.gameObject.layer, this._gameCameraEngine.UnityCamera, j, this.propertyBlock);
 									}
 								}
 							}
@@ -230,6 +224,9 @@ namespace HeavyMetalMachines.VFX
 		}
 
 		public static readonly BitLogger Log = new BitLogger(typeof(SurfaceEffect));
+
+		[InjectOnClient]
+		private IGameCameraEngine _gameCameraEngine;
 
 		public Material overlapMaterial;
 

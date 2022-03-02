@@ -7,43 +7,31 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 	[CreateAssetMenu(menuName = "GadgetScript/Block/Parameter/AddNumericParameter")]
 	public class AddNumericParameterBlock : BaseBlock
 	{
-		protected override bool CheckSanity(IGadgetContext gadgetContext, IEventContext eventContext)
-		{
-			if (this._parameterToAdd == null)
-			{
-				base.LogSanitycheckError("'Parameter To Add' cannot be null.");
-				return false;
-			}
-			if (!(this._parameterToAdd is INumericParameter))
-			{
-				base.LogSanitycheckError("'Parameter To Add' must be a numeric parameter.");
-				return false;
-			}
-			if (this._valueParameter != null && !(this._valueParameter is INumericParameter))
-			{
-				base.LogSanitycheckError("When set, 'Value Parameter' must be a numeric parameter.");
-				return false;
-			}
-			return true;
-		}
-
-		protected override IBlock InnerExecute(IGadgetContext gadgetContext, IEventContext eventContext)
+		public override IBlock Execute(IGadgetContext gadgetContext, IEventContext eventContext)
 		{
 			IHMMGadgetContext ihmmgadgetContext = (IHMMGadgetContext)gadgetContext;
 			IHMMEventContext ihmmeventContext = (IHMMEventContext)eventContext;
+			if (this._parameterToAdd == null)
+			{
+				Debug.LogFormat(this, "Missing parameters {0}", new object[]
+				{
+					base.name
+				});
+			}
+			IParameterTomate<float> parameterTomate = this._parameterToAdd.ParameterTomate as IParameterTomate<float>;
+			float value = this._value;
 			if (ihmmgadgetContext.IsClient)
 			{
+				parameterTomate.SetValue(gadgetContext, parameterTomate.GetValue(gadgetContext) + value);
 				ihmmeventContext.LoadParameter(this._parameterToAdd);
 				return this._nextBlock;
 			}
-			INumericParameter numericParameter = (INumericParameter)this._parameterToAdd;
-			INumericParameter numericParameter2 = this._valueParameter as INumericParameter;
-			float num = this._value;
-			if (numericParameter2 != null)
+			if (this._valueParameter != null)
 			{
-				num = numericParameter2.GetFloatValue(gadgetContext);
+				IParameterTomate<float> parameterTomate2 = this._valueParameter.ParameterTomate as IParameterTomate<float>;
+				value = parameterTomate2.GetValue(gadgetContext);
 			}
-			numericParameter.SetFloatValue(gadgetContext, numericParameter.GetFloatValue(gadgetContext) + num);
+			parameterTomate.SetValue(gadgetContext, parameterTomate.GetValue(gadgetContext) + value);
 			ihmmeventContext.SaveParameter(this._parameterToAdd);
 			if (this._sendToClient)
 			{
@@ -53,15 +41,18 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 			return this._nextBlock;
 		}
 
-		public override bool UsesParameterWithId(int parameterId)
-		{
-			return base.CheckIsParameterWithId(this._valueParameter, parameterId) || base.CheckIsParameterWithId(this._parameterToAdd, parameterId);
-		}
-
 		[Header("Read")]
+		[Restrict(true, new Type[]
+		{
+			typeof(float)
+		})]
 		[SerializeField]
 		private BaseParameter _parameterToAdd;
 
+		[Restrict(false, new Type[]
+		{
+			typeof(float)
+		})]
 		[SerializeField]
 		private BaseParameter _valueParameter;
 

@@ -1,16 +1,28 @@
 ﻿using System;
 using ClientAPI;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
 using HeavyMetalMachines.Match;
 using HeavyMetalMachines.Swordfish;
 using HeavyMetalMachines.Tutorial.InGame;
+using HeavyMetalMachines.Utils;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Tutorial.Behaviours
 {
 	public class MarkPlayerHasDoneTutorial : InGameTutorialBehaviourBase
 	{
-		protected override void StartBehaviourOnServer()
+		protected override void OnStepCompletedOnClient()
 		{
+			base.OnStepCompletedOnClient();
+			GameHubBehaviour.Hub.User.Bag.HasDoneTutorial = true;
+			string msg = string.Format("UniversalId={0}", GameHubBehaviour.Hub.User.UserSF.UniversalID);
+			GameHubBehaviour.Hub.Swordfish.Log.BILogClientMsg(71, msg, true);
+			this._biUtils.MarkConversion();
+		}
+
+		protected override void OnStepCompletedOnServer()
+		{
+			base.OnStepCompletedOnServer();
 			if (GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish))
 			{
 				return;
@@ -60,5 +72,8 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(MarkPlayerHasDoneTutorial));
+
+		[InjectOnClient]
+		private IBiUtils _biUtils;
 	}
 }

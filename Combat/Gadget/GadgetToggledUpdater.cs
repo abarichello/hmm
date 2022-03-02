@@ -66,7 +66,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			this.CurrentEffectId = -1;
 		}
 
-		public void DestroyEffect(DestroyEffect evt)
+		public void DestroyEffect(DestroyEffectMessage evt)
 		{
 			if (evt.RemoveData.TargetEventId != this.CurrentEffectId)
 			{

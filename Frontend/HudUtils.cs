@@ -4,12 +4,13 @@ using System.Collections.Generic;
 using Assets.ClientApiObjects;
 using Assets.ClientApiObjects.Components;
 using ClientAPI.Objects;
-using HeavyMetalMachines.Character;
-using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Combat.Gadget;
+using HeavyMetalMachines.DataTransferObjects.Progression;
+using HeavyMetalMachines.Localization;
 using HeavyMetalMachines.Match;
 using HeavyMetalMachines.Swordfish.Player;
 using HeavyMetalMachines.Utils;
+using Hoplon.Serialization;
 using Pocketverse;
 using UnityEngine;
 
@@ -20,6 +21,11 @@ namespace HeavyMetalMachines.Frontend
 		public static string GetColoredString(Color color, string baseString)
 		{
 			return string.Format("[{0}]{1}[-]", HudUtils.RGBToHex(color), baseString);
+		}
+
+		public static string GetTagColoredEncoded(string teamTag, Color textColor)
+		{
+			return string.Format("[{0}][[-][{0}]{1}[-][{0}]][-]", HudUtils.RGBToHex(textColor), NGUIText.EscapeSymbols(teamTag));
 		}
 
 		public static string GetPlayerIconName(HMMHub hub, Guid characterItemTypeId, HudUtils.PlayerIconSize size)
@@ -33,7 +39,7 @@ namespace HeavyMetalMachines.Frontend
 			{
 				return "Generic_icon_char_64";
 			}
-			return characterComponentFromGuid.CharacterIcon128Name;
+			return characterComponentFromGuid.Round128LookRightIconName;
 		}
 
 		public static string GetHudWinnerPlayertName(HMMHub hub, Guid customizationSkin)
@@ -79,20 +85,20 @@ namespace HeavyMetalMachines.Frontend
 				arg = "Passive";
 				break;
 			default:
-				HeavyMetalMachines.Utils.Debug.Assert(false, "Invalid gadget to load icon: " + gadgetSlot, HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+				Debug.Assert(false, "Invalid gadget to load icon: " + gadgetSlot, Debug.TargetTeam.All);
 				return string.Empty;
 			}
 			return string.Format("{0}_{1}{2}", name, "Gadget", arg);
 		}
 
-		public static string GetGadgetIconName(HeavyMetalMachines.Character.CharacterInfo characterInfo, GadgetSlot gadgetSlot)
+		public static string GetGadgetIconName(PlayerData playerData, GadgetSlot gadgetSlot)
 		{
-			return HudUtils.GetGadgetIconName(characterInfo.Asset, gadgetSlot);
+			return HudUtils.GetGadgetIconName(playerData.GetCharacterAssetPrefix(), gadgetSlot);
 		}
 
-		public static string GetGadgetIconNameB(HeavyMetalMachines.Character.CharacterInfo characterInfo, GadgetSlot gadgetSlot)
+		public static string GetGadgetIconNameB(PlayerData playerData, GadgetSlot gadgetSlot)
 		{
-			return HudUtils.GetGadgetIconName(characterInfo, gadgetSlot) + "B";
+			return HudUtils.GetGadgetIconName(playerData, gadgetSlot) + "B";
 		}
 
 		public static string GetGadgetUpgradeIconName(string name, GadgetSlot gadgetSlot, GadgetInfo gadgetInfo, UpgradeInfo upgradeInfo, bool bigIcon = false)
@@ -140,40 +146,6 @@ namespace HeavyMetalMachines.Frontend
 				text,
 				(!smallAsset) ? "B" : string.Empty
 			});
-		}
-
-		public static string GetCurrentInstanceIconName(PlayerData playerData, bool smallAsset)
-		{
-			return HudUtils.GetInstanceIconName(playerData.Character.Asset, HudUtils.GetInstanceUpgradeInfo(playerData), smallAsset);
-		}
-
-		public static string GetCurrentInstanceDescription(PlayerData playerData)
-		{
-			UpgradeInfo instanceUpgradeInfo = HudUtils.GetInstanceUpgradeInfo(playerData);
-			return instanceUpgradeInfo.LocalizedDescription;
-		}
-
-		public static UpgradeInfo GetInstanceUpgradeInfo(PlayerData playerData)
-		{
-			CombatObject bitComponent = playerData.CharacterInstance.GetBitComponent<CombatObject>();
-			GadgetBehaviour gadget = bitComponent.GetGadget(GadgetSlot.CustomGadget0);
-			UpgradeInfo[] upgrades = playerData.Character.CustomGadget0.Upgrades;
-			UpgradeInfo result = upgrades[0];
-			string defaultInstance = playerData.Character.CustomGadget0.DefaultInstance;
-			for (int i = 0; i < upgrades.Length; i++)
-			{
-				string name = upgrades[i].Name;
-				GadgetBehaviour.UpgradeInstance upgradeInstance = gadget.GetUpgradeInstance(name);
-				if (upgradeInstance.Level > 0)
-				{
-					return upgradeInstance.Info;
-				}
-				if (name == defaultInstance)
-				{
-					result = upgrades[i];
-				}
-			}
-			return result;
 		}
 
 		public static string RGBToHex(Color color)
@@ -226,9 +198,9 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
-		public static string GetCarSkinSpriteName(HMMHub hub, HeavyMetalMachines.Character.CharacterInfo character, Guid customizationSkin)
+		public static string GetCarSkinSpriteName(ICollectionScriptableObject inventoryCollection, Guid charItemTypeId, Guid customizationSkin)
 		{
-			ItemTypeScriptableObject skinItemTypeScriptableObjectByGuid = hub.InventoryColletion.GetSkinItemTypeScriptableObjectByGuid(character, customizationSkin);
+			ItemTypeScriptableObject skinItemTypeScriptableObjectByGuid = inventoryCollection.GetSkinItemTypeScriptableObjectByGuid(charItemTypeId, customizationSkin);
 			SkinPrefabItemTypeComponent component = skinItemTypeScriptableObjectByGuid.GetComponent<SkinPrefabItemTypeComponent>();
 			return component.SkinSpriteName;
 		}
@@ -238,7 +210,7 @@ namespace HeavyMetalMachines.Frontend
 			Character[] characters = hub.User.Characters;
 			for (int i = 0; i < characters.Length; i++)
 			{
-				CharacterBag characterBag2 = (CharacterBag)((JsonSerializeable<T>)characters[i].Bag);
+				CharacterBag characterBag2 = (CharacterBag)((JsonSerializeable<!0>)characters[i].Bag);
 				if (characterBag2 == null || !(characterBag2.CharacterId != itemTypeId))
 				{
 					characterBag = characterBag2;
@@ -273,13 +245,13 @@ namespace HeavyMetalMachines.Frontend
 		{
 			switch (kind)
 			{
-			case ProgressionInfo.RewardKind.SoftCurrency:
+			case 1:
 				spriteName = "Soft_currency_unlock";
 				break;
-			case ProgressionInfo.RewardKind.ItemType:
+			case 2:
 				spriteName = "CharacterSlot_unlock";
 				break;
-			case ProgressionInfo.RewardKind.SkinPurchasePermission:
+			case 3:
 				spriteName = "CharacterSlot_unlock";
 				break;
 			default:
@@ -304,20 +276,23 @@ namespace HeavyMetalMachines.Frontend
 		{
 			switch (kind)
 			{
-			case ProgressionInfo.RewardKind.SoftCurrency:
+			case 1:
 				name = "PROFILE_REWARD_SOFT_CURRENCY";
 				break;
-			case ProgressionInfo.RewardKind.ItemType:
+			case 2:
 				name = "PROFILE_REWARD_SKIN_UNLOCK";
 				break;
-			case ProgressionInfo.RewardKind.SkinPurchasePermission:
+			case 3:
 				name = "PROFILE_REWARD_SKIN_UNLOCK";
 				break;
 			default:
 				name = string.Empty;
 				return false;
 			}
-			name = string.Format(Language.Get(name, TranslationSheets.Profile), value);
+			name = Language.GetFormatted(name, TranslationContext.Profile, new object[]
+			{
+				value
+			});
 			return true;
 		}
 
@@ -354,15 +329,10 @@ namespace HeavyMetalMachines.Frontend
 
 		public class PlayerDataComparer : IComparer<PlayerData>
 		{
-			public PlayerDataComparer(HMMHub hub, HudUtils.PlayerDataComparer.PlayerDataComparerType type)
+			public PlayerDataComparer(int currentPlayerInstanceId, HudUtils.PlayerDataComparer.PlayerDataComparerType type)
 			{
-				this._hub = hub;
+				this._currentPlayerInstanceId = currentPlayerInstanceId;
 				this._playerDataComparerType = type;
-			}
-
-			~PlayerDataComparer()
-			{
-				this._hub = null;
 			}
 
 			public int Compare(PlayerData pdX, PlayerData pdY)
@@ -371,18 +341,17 @@ namespace HeavyMetalMachines.Frontend
 				{
 				case HudUtils.PlayerDataComparer.PlayerDataComparerType.InstanceId:
 				{
-					int instanceId = this._hub.Players.CurrentPlayerData.PlayerCarId.GetInstanceId();
-					int instanceId2 = pdX.PlayerCarId.GetInstanceId();
-					int instanceId3 = pdY.PlayerCarId.GetInstanceId();
-					if (instanceId2 == instanceId)
+					int instanceId = pdX.PlayerCarId.GetInstanceId();
+					int instanceId2 = pdY.PlayerCarId.GetInstanceId();
+					if (instanceId == this._currentPlayerInstanceId)
 					{
 						return 1;
 					}
-					if (instanceId3 == instanceId)
+					if (instanceId2 == this._currentPlayerInstanceId)
 					{
 						return -1;
 					}
-					return instanceId2 - instanceId3;
+					return instanceId - instanceId2;
 				}
 				case HudUtils.PlayerDataComparer.PlayerDataComparerType.CurrentPlayerFirst:
 				{
@@ -394,7 +363,7 @@ namespace HeavyMetalMachines.Frontend
 				return pdX.GridIndex.CompareTo(pdY.GridIndex);
 			}
 
-			private HMMHub _hub;
+			private int _currentPlayerInstanceId;
 
 			private readonly HudUtils.PlayerDataComparer.PlayerDataComparerType _playerDataComparerType;
 

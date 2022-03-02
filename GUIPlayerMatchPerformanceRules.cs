@@ -18,8 +18,8 @@ namespace HeavyMetalMachines
 
 		public float DamageDoneAverageLevel;
 
-		[Header("Repair Done Rule")]
 		[Space(10f)]
+		[Header("Repair Done Rule")]
 		[Tooltip("To be multiplied with total seconds of the match")]
 		public float RepairDoneRule;
 
@@ -32,8 +32,8 @@ namespace HeavyMetalMachines
 
 		public float RepairDoneAverageLevel;
 
-		[Header("BomTime Rule")]
 		[Space(10f)]
+		[Header("BomTime Rule")]
 		[Tooltip("Total seconds of the match will be divided by BombTimeRule")]
 		public float BombTimeRule;
 
@@ -46,8 +46,8 @@ namespace HeavyMetalMachines
 
 		public float BombTimeAverageLevel;
 
-		[Header("DebuffTime Rule")]
 		[Space(10f)]
+		[Header("DebuffTime Rule")]
 		[Tooltip("Total seconds of the match will be divided by DebuffTimeRule")]
 		public float DebuffTimeRule;
 

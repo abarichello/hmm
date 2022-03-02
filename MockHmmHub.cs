@@ -1,8 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using Assets.ClientApiObjects;
+using Assets.ClientApiObjects.Components;
+using Assets.ClientApiObjects.Components.Testable;
 using ClientAPI.Objects;
-using HeavyMetalMachines.Character;
+using HeavyMetalMachines.Characters;
+using HeavyMetalMachines.DataTransferObjects.Player;
+using HeavyMetalMachines.DataTransferObjects.Progression;
 using HeavyMetalMachines.Infra.ScriptableObjects;
 using HeavyMetalMachines.Swordfish;
 using HeavyMetalMachines.Swordfish.Player;
@@ -18,11 +22,21 @@ namespace HeavyMetalMachines
 			return this.WaitingInQueue;
 		}
 
-		private void Reset()
+		protected new void Awake()
 		{
 			this.SetupMockSwordfish();
 			this.SetupMockNetClientTest();
 			base.Awake();
+		}
+
+		private void Reset()
+		{
+		}
+
+		public void SetupMockConfig()
+		{
+			this._config = new ConfigLoader();
+			this._config.Initialize();
 		}
 
 		public void SetupMockSwordfish()
@@ -46,17 +60,6 @@ namespace HeavyMetalMachines
 		{
 			base.gameObject.AddComponent<Identifiable>();
 			this.Server = base.gameObject.AddComponent<ServerInfo>();
-		}
-
-		public void SetupMockArenaConfig(int arenasCount = 1, int currArenaIndex = 0)
-		{
-			this.ArenaConfig = ScriptableObject.CreateInstance<GameArenaConfig>();
-			this.ArenaConfig.Arenas = new GameArenaInfo[arenasCount];
-			this.Match.ArenaIndex = currArenaIndex;
-			for (int i = 0; i < this.ArenaConfig.Arenas.Length; i++)
-			{
-				this.ArenaConfig.Arenas[i] = new GameArenaInfo();
-			}
 		}
 
 		public void SetupMockUserData(bool mockPlayer = false)
@@ -93,7 +96,7 @@ namespace HeavyMetalMachines
 			this.User.PlayerSF = player;
 		}
 
-		public void SetupMockInventoryCollection(HeavyMetalMachines.Character.CharacterInfo[] charactersInfo = null)
+		public void SetupMockInventoryCollection(ItemTypeScriptableObject[] charactersInfo = null)
 		{
 			this.InventoryColletion = ScriptableObject.CreateInstance<CollectionScriptableObject>();
 			charactersInfo = (charactersInfo ?? MockHmmHub.CreateCharacterInfos(30));
@@ -101,32 +104,37 @@ namespace HeavyMetalMachines
 			this.InventoryColletion.SetupCharacterInfoHandler(characterInfoHandler);
 		}
 
-		private static HeavyMetalMachines.Character.CharacterInfo[] CreateCharacterInfos(int count)
+		private static ItemTypeScriptableObject[] CreateCharacterInfos(int count)
 		{
-			List<HeavyMetalMachines.Character.CharacterInfo> list = new List<HeavyMetalMachines.Character.CharacterInfo>();
+			List<ItemTypeScriptableObject> list = new List<ItemTypeScriptableObject>();
 			for (int i = 0; i < count; i++)
 			{
-				HeavyMetalMachines.Character.CharacterInfo characterInfo = ScriptableObject.CreateInstance<HeavyMetalMachines.Character.CharacterInfo>();
-				characterInfo.CharacterId = i;
-				characterInfo.Role = MockHmmHub.GetDriverRoleKindByCharId(i);
-				characterInfo.IsAnAvailableBot = true;
-				list.Add(characterInfo);
+				CharacterItemTypeComponentTestable characterItemTypeComponentTestable = ScriptableObject.CreateInstance<CharacterItemTypeComponentTestable>();
+				characterItemTypeComponentTestable.SetCharacterId(i);
+				characterItemTypeComponentTestable.SetRole(MockHmmHub.GetDriverRoleKindByCharId(i));
+				BotItemTypeComponentTestable botItemTypeComponentTestable = ScriptableObject.CreateInstance<BotItemTypeComponentTestable>();
+				botItemTypeComponentTestable.SetIsAnAvailableBot(true);
+				ItemTypeScriptableObject itemTypeScriptableObject = ScriptableObject.CreateInstance<ItemTypeScriptableObject>();
+				itemTypeScriptableObject.ReplaceItemTypeComponents(new ItemTypeComponent[0]);
+				itemTypeScriptableObject.AddItemTypeComponent(characterItemTypeComponentTestable);
+				itemTypeScriptableObject.AddItemTypeComponent(botItemTypeComponentTestable);
+				list.Add(itemTypeScriptableObject);
 			}
 			return list.ToArray();
 		}
 
-		private static HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind GetDriverRoleKindByCharId(int charId)
+		private static DriverRoleKind GetDriverRoleKindByCharId(int charId)
 		{
 			switch (charId % 3)
 			{
 			case 0:
-				return HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Carrier;
+				return 1;
 			case 1:
-				return HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Tackler;
+				return 2;
 			case 2:
-				return HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Support;
+				return 0;
 			default:
-				return HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Carrier;
+				return 1;
 			}
 		}
 

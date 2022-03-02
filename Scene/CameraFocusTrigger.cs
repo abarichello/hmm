@@ -1,4 +1,6 @@
 ﻿using System;
+using HeavyMetalMachines.GameCamera;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
 using Pocketverse;
 using UnityEngine;
 
@@ -13,7 +15,7 @@ namespace HeavyMetalMachines.Scene
 			this.size = base.GetComponent<SphereCollider>().radius;
 			if (GameHubBehaviour.Hub.Net.IsServer())
 			{
-				UnityEngine.Object.Destroy(this);
+				Object.Destroy(this);
 			}
 		}
 
@@ -24,11 +26,11 @@ namespace HeavyMetalMachines.Scene
 			if (component != null && component.ObjId == GameHubBehaviour.Hub.Players.CurrentPlayerData.PlayerCarId)
 			{
 				this.currentCollider = collider;
-				Vector3 rhs = collider.transform.position - base.transform.position;
-				rhs.y = 0f;
-				if (!this.middleRamp || (this.middleRamp && Vector3.Dot(base.transform.forward, rhs) > 0f))
+				Vector3 vector = collider.transform.position - base.transform.position;
+				vector.y = 0f;
+				if (!this.middleRamp || (this.middleRamp && Vector3.Dot(base.transform.forward, vector) > 0f))
 				{
-					CarCamera.Singleton.SkyViewFocusTarget = this;
+					this._gameCamera.SetFocusTarget(this);
 				}
 			}
 		}
@@ -41,7 +43,7 @@ namespace HeavyMetalMachines.Scene
 			}
 			if (collider == this.currentCollider)
 			{
-				CarCamera.Singleton.SkyViewFocusTarget = null;
+				this._gameCamera.SetFocusTarget(null);
 			}
 		}
 
@@ -56,6 +58,9 @@ namespace HeavyMetalMachines.Scene
 				Gizmos.DrawLine(base.transform.position, base.transform.position + base.transform.forward * radius);
 			}
 		}
+
+		[InjectOnClient]
+		private IGameCamera _gameCamera;
 
 		private static CameraFocusTrigger activeTrigger;
 

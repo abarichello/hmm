@@ -73,7 +73,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			return -1;
 		}
 
-		protected override void OnMyEffectDestroyed(DestroyEffect evt)
+		protected override void OnMyEffectDestroyed(DestroyEffectMessage evt)
 		{
 			if (evt.RemoveData.TargetEventId == this._currentSecondary)
 			{

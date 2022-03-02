@@ -6,8 +6,7 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	[RequireComponent(typeof(Rigidbody))]
-	public class PerkMoveToTarget : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkMoveToTarget : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		public override void PerkInitialized()
 		{
@@ -57,7 +56,7 @@ namespace HeavyMetalMachines.Combat
 			obj.ListenToObjectUnspawn -= this.OnObjectDeath;
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (this._targetCombat)
 			{
@@ -103,22 +102,26 @@ namespace HeavyMetalMachines.Combat
 		private Vector3 CalcNewPosition()
 		{
 			int playbackTime = GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
-			float d = (float)((long)playbackTime - this._lastMillis) * 0.001f;
-			Vector3 a = new Vector3(base._trans.forward.x, 0f, base._trans.forward.z);
-			a.Normalize();
-			return base._trans.position + a * this._moveSpeed * d;
+			float num = (float)((long)playbackTime - this._lastMillis) * 0.001f;
+			Vector3 forward = base._trans.forward;
+			Vector3 vector;
+			vector..ctor(forward.x, 0f, forward.z);
+			vector.Normalize();
+			return base._trans.position + vector * this._moveSpeed * num;
 		}
 
 		public virtual void UpdatePosition()
 		{
 			int playbackTime = GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
-			float d = (float)((long)playbackTime - this._lastMillis) * 0.001f;
+			float num = (float)((long)playbackTime - this._lastMillis) * 0.001f;
 			this._lastMillis = (long)playbackTime;
 			Quaternion rotation = base._trans.rotation;
 			base._trans.LookAt(this.TargetPosition);
-			Vector3 a = new Vector3(base._trans.forward.x, 0f, base._trans.forward.z);
-			a.Normalize();
-			base._trans.position += a * this._moveSpeed * d;
+			Vector3 forward = base._trans.forward;
+			Vector3 vector;
+			vector..ctor(forward.x, 0f, forward.z);
+			vector.Normalize();
+			base._trans.position += vector * this._moveSpeed * num;
 			if (this.LockRotation)
 			{
 				base._trans.rotation = rotation;

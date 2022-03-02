@@ -35,6 +35,10 @@ namespace HeavyMetalMachines.Combat.Gadget
 		{
 			base.Activate();
 			this.Combat.GetGadget(this.MyInfo.TargetGadget).ServerListenToGadgetUse += this.OnEffectFired;
+			PassiveExtraEffect.Log.DebugFormat("Activated, listener installed on={0}", new object[]
+			{
+				this.Combat.GetGadget(this.MyInfo.TargetGadget).Info.Name
+			});
 		}
 
 		protected override void SetLevel(string upgradeName, int level)

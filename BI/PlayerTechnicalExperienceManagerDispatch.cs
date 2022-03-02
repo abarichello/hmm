@@ -11,7 +11,7 @@ namespace HeavyMetalMachines.BI
 
 		public void ReceivePlayerExperienceData(ExperienceDataSet data)
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1054, 12, base.IsReliable, new object[]
+			base.Dispatch(base.DispatchDestination(), base.OID, 1079, 12, base.IsReliable, new object[]
 			{
 				data
 			});

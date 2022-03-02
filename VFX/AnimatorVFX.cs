@@ -1,4 +1,6 @@
 ﻿using System;
+using HeavyMetalMachines.Combat.Gadget;
+using HeavyMetalMachines.Render;
 using Pocketverse;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -57,7 +59,7 @@ namespace HeavyMetalMachines.VFX
 				}
 				break;
 			}
-			if (this._animator != null)
+			if (this._animator != null && !this.checkGadgetPercentage)
 			{
 				if (!string.IsNullOrEmpty(this._triggerName))
 				{
@@ -68,11 +70,26 @@ namespace HeavyMetalMachines.VFX
 					this._animator.Play(0);
 				}
 			}
+			if (this.checkGadgetPercentage)
+			{
+				this.PlayByPercentage();
+			}
 			if (this._minDuration > 0f)
 			{
 				this._endDurationTime = Time.time + this._minDuration;
 				this.CanCollectToCache = false;
 			}
+		}
+
+		private void PlayByPercentage()
+		{
+			GadgetsPropertiesData componentInChildren = this._targetFXInfo.Owner.GetComponentInChildren<GadgetsPropertiesData>();
+			if (!componentInChildren)
+			{
+				return;
+			}
+			float cooldownPercentage = componentInChildren.GetCooldownPercentage(this.gadgetSlot);
+			this._animator.Play(this.animationStateName, -1, cooldownPercentage);
 		}
 
 		protected override void WillDeactivate()
@@ -89,25 +106,34 @@ namespace HeavyMetalMachines.VFX
 
 		private static readonly BitLogger Log = new BitLogger(typeof(AnimatorVFX));
 
-		[FormerlySerializedAs("animator")]
 		[SerializeField]
+		[FormerlySerializedAs("animator")]
 		private Animator _animator;
 
-		[FormerlySerializedAs("animatorFromTarget")]
 		[SerializeField]
+		[FormerlySerializedAs("animatorFromTarget")]
 		private bool _animatorFromTarget;
 
-		[FormerlySerializedAs("AnimatorLocation")]
 		[SerializeField]
+		[FormerlySerializedAs("AnimatorLocation")]
 		private AnimatorVFX.EAnimatorLocation _animatorLocation;
 
-		[FormerlySerializedAs("triggerName")]
 		[SerializeField]
+		[FormerlySerializedAs("triggerName")]
 		private string _triggerName = string.Empty;
 
-		[FormerlySerializedAs("minDuration")]
 		[SerializeField]
+		[FormerlySerializedAs("minDuration")]
 		private float _minDuration;
+
+		[SerializeField]
+		private bool checkGadgetPercentage;
+
+		[SerializeField]
+		private GadgetSlot gadgetSlot;
+
+		[SerializeField]
+		private string animationStateName;
 
 		[NonSerialized]
 		private float _endDurationTime;

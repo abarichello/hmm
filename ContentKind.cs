@@ -7,9 +7,9 @@ namespace HeavyMetalMachines
 		Singleton,
 		PlayerCar,
 		SceneObject,
-		Creeps,
-		Wards,
+		Wards = 4,
 		Scrap,
-		GadgetBody
+		GadgetBody,
+		CharacterSelection
 	}
 }

@@ -2,7 +2,12 @@
 using System.Collections.Generic;
 using Assets.ClientApiObjects;
 using Assets.ClientApiObjects.Components;
-using HeavyMetalMachines.Swordfish.Player;
+using HeavyMetalMachines.Customization.Skins;
+using HeavyMetalMachines.Customizations.Skins;
+using HeavyMetalMachines.DataTransferObjects.Inventory;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Localization;
+using Hoplon.Serialization;
 using Pocketverse;
 using UnityEngine;
 
@@ -12,14 +17,14 @@ namespace HeavyMetalMachines.Frontend
 	{
 		private void ConfigureSkinsFilters()
 		{
-			this._filterList = new List<SkinPrefabItemTypeComponent.TierKind>();
-			this._filterList.Add(SkinPrefabItemTypeComponent.TierKind.None);
+			this._filterList = new List<TierKind>();
+			this._filterList.Add(0);
 			for (int i = 0; i < this._storeItems.Length; i++)
 			{
 				StoreItem storeItem = this._storeItems[i];
 				SkinPrefabItemTypeComponent component = storeItem.StoreItemType.GetComponent<SkinPrefabItemTypeComponent>();
-				SkinPrefabItemTypeComponent.TierKind tier = component.Tier;
-				if (tier != SkinPrefabItemTypeComponent.TierKind.Default)
+				TierKind tier = component.Tier;
+				if (tier != 1)
 				{
 					if (!this._filterList.Contains(tier))
 					{
@@ -27,6 +32,7 @@ namespace HeavyMetalMachines.Frontend
 					}
 				}
 			}
+			this._filterList.Sort();
 			this.LocalizeAndconfigureFilterTitleLabel();
 		}
 
@@ -36,9 +42,23 @@ namespace HeavyMetalMachines.Frontend
 			base.ConfigurePages();
 		}
 
+		protected override int Comparison(StoreItem thisStoreItem, StoreItem otherStoreItem)
+		{
+			CharacterItemTypeComponent component = thisStoreItem.CharacterItemType.GetComponent<CharacterItemTypeComponent>();
+			CharacterItemTypeComponent component2 = otherStoreItem.CharacterItemType.GetComponent<CharacterItemTypeComponent>();
+			string characterLocalizedName = component.GetCharacterLocalizedName();
+			string characterLocalizedName2 = component2.GetCharacterLocalizedName();
+			int num = characterLocalizedName.CompareTo(characterLocalizedName2);
+			if (num == 0)
+			{
+				num = thisStoreItem.StoreItemType.name.CompareTo(otherStoreItem.StoreItemType.name);
+			}
+			return num;
+		}
+
 		protected override bool IsFiltered(int index)
 		{
-			if (this._filterList[this._currentFilterIndex] == SkinPrefabItemTypeComponent.TierKind.None)
+			if (this._filterList[this._currentFilterIndex] == null)
 			{
 				return true;
 			}
@@ -49,26 +69,33 @@ namespace HeavyMetalMachines.Frontend
 
 		public override void OnStoreItemClick(StoreItem item)
 		{
-			this.Hide();
-			this.Shop.ShowSkinDetails(item);
+			if (this.IsVisible())
+			{
+				this.Hide();
+				this.Shop.ShowSkinDetails(item.StoreItemType);
+			}
 		}
 
 		protected override void SetupItem(StoreItem storeItem, ItemTypeScriptableObject skinItemType)
 		{
 			storeItem.name = skinItemType.Name;
-			storeItem.StoreItemType = skinItemType;
+			storeItem.Setup(skinItemType, this._storeBusinessFactory);
+			storeItem.IsPurchasableChanged += delegate(StoreItem sender, bool isPurchasable)
+			{
+				this._shouldReconfigurePages = true;
+			};
 			ShopItemTypeComponent component = skinItemType.GetComponent<ShopItemTypeComponent>();
 			SkinPrefabItemTypeComponent component2 = skinItemType.GetComponent<SkinPrefabItemTypeComponent>();
 			if (component == null)
 			{
 				return;
 			}
-			SkinItemTypeBag skinItemTypeBag = (SkinItemTypeBag)((JsonSerializeable<T>)skinItemType.Bag);
+			SkinItemTypeBag skinItemTypeBag = (SkinItemTypeBag)((JsonSerializeable<!0>)skinItemType.Bag);
 			ItemTypeScriptableObject itemTypeScriptableObject = GameHubBehaviour.Hub.InventoryColletion.AllItemTypes[skinItemTypeBag.CharacterItemTypeId];
-			storeItem.CharacterItemTypeScriptableObject = itemTypeScriptableObject;
 			CharacterItemTypeComponent component3 = itemTypeScriptableObject.GetComponent<CharacterItemTypeComponent>();
+			storeItem.CharacterItemType = itemTypeScriptableObject;
 			storeItem.carTexture.SpriteName = component2.SkinSpriteName;
-			storeItem.characterName.text = Language.Get(component2.CardSkinDraft, TranslationSheets.Items);
+			storeItem.characterName.text = Language.Get(component2.CardSkinDraft, TranslationContext.Items);
 			if (storeItem.categoryLabel != null)
 			{
 				ItemCategoryScriptableObject categoryById = GameHubBehaviour.Hub.InventoryColletion.GetCategoryById(skinItemType.ItemCategoryId);
@@ -76,13 +103,41 @@ namespace HeavyMetalMachines.Frontend
 			}
 			if (storeItem.descriptionLabel != null)
 			{
-				storeItem.descriptionLabel.text = Language.Get(component.DescriptionDraft, TranslationSheets.Items);
+				storeItem.descriptionLabel.text = Language.Get(component.DescriptionDraft, TranslationContext.Items);
 			}
 			if (storeItem.icon != null)
 			{
-				storeItem.icon.SpriteName = component3.CharacterIcon128Name;
+				storeItem.icon.SpriteName = component3.Round128LookRightIconName;
 			}
-			this.UpdateBoughtStatus(storeItem, skinItemType);
+			storeItem.name = string.Format("{0}_{1}", component3.GetCharacterLocalizedName(), skinItemType.Name);
+			if (storeItem.NameVariationGroupGameObject != null)
+			{
+				storeItem.NameVariationGroupGameObject.SetActive(false);
+				if (!string.IsNullOrEmpty(component2.SkinNameVariationDraft))
+				{
+					storeItem.NameVariationLabel.text = Language.Get(component2.SkinNameVariationDraft, TranslationContext.Inventory);
+					storeItem.NameVariationGroupGameObject.SetActive(true);
+				}
+			}
+			if (storeItem.RarityLabel != null)
+			{
+				string rarityText = this.GetRarityText(component2.Tier);
+				if (string.IsNullOrEmpty(rarityText))
+				{
+					storeItem.RarityLabel.gameObject.SetActive(false);
+				}
+				else
+				{
+					storeItem.RarityLabel.gameObject.SetActive(true);
+					storeItem.RarityLabel.text = rarityText;
+					storeItem.RarityLabel.color = this.GetRarityColor(component2.Tier);
+				}
+			}
+			if (storeItem.BorderSprite != null)
+			{
+				storeItem.BorderSprite.sprite2D = this.GetRarityBorderSprite(component2.Tier);
+				storeItem.BorderSprite.MakePixelPerfect();
+			}
 		}
 
 		public void GoNextFilter()
@@ -121,22 +176,52 @@ namespace HeavyMetalMachines.Frontend
 		{
 			switch (this._filterList[this._currentFilterIndex])
 			{
-			case SkinPrefabItemTypeComponent.TierKind.None:
-				this._filterTitle.text = Language.Get("shop_skin_page_filter_ALL", TranslationSheets.Store);
+			case 0:
+				this._filterTitle.text = Language.Get("shop_skin_page_filter_ALL", TranslationContext.Store);
 				break;
-			case SkinPrefabItemTypeComponent.TierKind.Idol:
-				this._filterTitle.text = Language.Get("shop_skin_page_filter_ALL_BRONZE", TranslationSheets.Store);
+			case 2:
+				this._filterTitle.text = Language.Get("shop_skin_page_filter_ALL_BRONZE", TranslationContext.Store);
 				break;
-			case SkinPrefabItemTypeComponent.TierKind.Rockstar:
-				this._filterTitle.text = Language.Get("shop_skin_page_filter_ALL_PRATA", TranslationSheets.Store);
+			case 3:
+				this._filterTitle.text = Language.Get("shop_skin_page_filter_ALL_PRATA", TranslationContext.Store);
 				break;
-			case SkinPrefabItemTypeComponent.TierKind.MetalLegend:
-				this._filterTitle.text = Language.Get("shop_skin_page_filter_ALL_OURO", TranslationSheets.Store);
+			case 4:
+				this._filterTitle.text = Language.Get("shop_skin_page_filter_ALL_OURO", TranslationContext.Store);
 				break;
-			case SkinPrefabItemTypeComponent.TierKind.HeavyMetal:
-				this._filterTitle.text = Language.Get("shop_skin_page_filter_ALL_HEAVYMETAL", TranslationSheets.Store);
+			case 5:
+				this._filterTitle.text = Language.Get("shop_skin_page_filter_ALL_HEAVYMETAL", TranslationContext.Store);
 				break;
 			}
+		}
+
+		private string GetRarityText(TierKind tier)
+		{
+			SkinRarityInfo skinRarityInfo;
+			if (this._skinRarityProvider.TryGetSkinRarityInfo(tier, out skinRarityInfo))
+			{
+				return Language.Get(skinRarityInfo.ShortDraftName, TranslationContext.Store);
+			}
+			return string.Empty;
+		}
+
+		private Color GetRarityColor(TierKind tier)
+		{
+			SkinRarityInfo skinRarityInfo;
+			if (this._skinRarityProvider.TryGetSkinRarityInfo(tier, out skinRarityInfo))
+			{
+				return skinRarityInfo.TierColor;
+			}
+			return Color.white;
+		}
+
+		private Sprite GetRarityBorderSprite(TierKind tier)
+		{
+			SkinRarityInfo skinRarityInfo;
+			if (this._skinRarityProvider.TryGetSkinRarityInfo(tier, out skinRarityInfo))
+			{
+				return skinRarityInfo.TierBorderSprite;
+			}
+			return null;
 		}
 
 		private int _currentFilterIndex;
@@ -144,6 +229,9 @@ namespace HeavyMetalMachines.Frontend
 		[SerializeField]
 		private UILabel _filterTitle;
 
-		private List<SkinPrefabItemTypeComponent.TierKind> _filterList;
+		[InjectOnClient]
+		private ISkinRarityProvider _skinRarityProvider;
+
+		private List<TierKind> _filterList;
 	}
 }

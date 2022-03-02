@@ -70,6 +70,10 @@ namespace HeavyMetalMachines.Frontend
 
 		public void ShowCountdownToPause(float countdownDuration, bool showAsBlue, bool playTopBarAnimation = false)
 		{
+			HudPauseCountdown.Log.DebugFormat("Show Pause Countdown at time {0}", new object[]
+			{
+				Time.time
+			});
 			if (playTopBarAnimation)
 			{
 				this.hudTopBar.OpenTopBar();
@@ -142,7 +146,7 @@ namespace HeavyMetalMachines.Frontend
 		private UILabel countdownToPauseTitleLabel;
 
 		[SerializeField]
-		private FMODAsset timeTickAudioAsset;
+		private AudioEventAsset timeTickAudioAsset;
 
 		[SerializeField]
 		private string pauseLabelDraft;

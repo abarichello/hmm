@@ -1,5 +1,6 @@
 ﻿using System;
 using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Infra.Context;
 using Hoplon.Timeline;
 using Pocketverse;
 using UnityEngine;
@@ -37,12 +38,17 @@ namespace HeavyMetalMachines.UpdateStream
 		{
 			if (this.Timeline.TryGetCurrentPose(ref this._idealPose))
 			{
-				BombScoreBoard.State currentState = this.ScoreBoard.CurrentState;
-				bool flag = this.Timeline.Size > 1u && (currentState == BombScoreBoard.State.BombDelivery || currentState == BombScoreBoard.State.PreReplay);
-				float t = (!flag) ? 1f : ((float)(1.0 - Math.Pow(this.smoothingFactor, (double)Time.smoothDeltaTime)));
-				this.Timeline.Interpolate(ref this._currentPose, ref this._idealPose, t, out this._currentPose);
+				BombScoreboardState currentState = this.ScoreBoard.CurrentState;
+				bool flag = this.Timeline.Size > 1U && (currentState == BombScoreboardState.BombDelivery || currentState == BombScoreboardState.PreReplay);
+				float num = (!flag) ? 1f : ((float)(1.0 - Math.Pow(this.smoothingFactor, (double)Time.smoothDeltaTime)));
+				this.Timeline.Interpolate(ref this._currentPose, ref this._idealPose, num, ref this._currentPose);
 				this.SetCurrentPose(ref this._currentPose);
 			}
+		}
+
+		public override void Clear()
+		{
+			this.Timeline.Clear();
 		}
 
 		protected Timeline<T> Timeline;

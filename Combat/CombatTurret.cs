@@ -60,14 +60,14 @@ namespace HeavyMetalMachines.Combat
 			Vector3 target = this._combatObject.CustomGadget0.Target;
 			target.y = base.transform.position.y;
 			Quaternion rotation = base.transform.rotation;
-			Quaternion b = Quaternion.LookRotation(target - base.transform.position, base.transform.up);
-			if (Mathf.Abs(Quaternion.Angle(rotation, b)) < this.minimunAngle)
+			Quaternion quaternion = Quaternion.LookRotation(target - base.transform.position, base.transform.up);
+			if (Mathf.Abs(Quaternion.Angle(rotation, quaternion)) < this.minimunAngle)
 			{
 				return;
 			}
 			base.transform.LookAt(target);
 			float num = Mathf.Abs(base.transform.localRotation.eulerAngles.y - this.defaultAngle);
-			base.transform.rotation = Quaternion.Lerp(rotation, b, this.lerpTime);
+			base.transform.rotation = Quaternion.Lerp(rotation, quaternion, this.lerpTime);
 			if (num <= 180f)
 			{
 				if (num > this.turnAngleMax)

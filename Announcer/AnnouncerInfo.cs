@@ -19,7 +19,7 @@ namespace HeavyMetalMachines.Announcer
 			}
 			catch (Exception)
 			{
-				Debug.LogWarning("AnnouncerInfo - GetAnnouncerLog ERROR: " + announcereventKind + " not found in dictionary.");
+				AnnouncerInfo._logger.Warn("AnnouncerInfo - GetAnnouncerLog ERROR: " + announcereventKind + " not found in dictionary.");
 				result = null;
 			}
 			return result;
@@ -31,7 +31,7 @@ namespace HeavyMetalMachines.Announcer
 			{
 				return true;
 			}
-			Debug.LogWarning("AnnouncerInfo - TryGetAnnouncerLog WARN: " + announcereventKind + " not found in dictionary.");
+			AnnouncerInfo._logger.Warn("AnnouncerInfo - TryGetAnnouncerLog WARN: " + announcereventKind + " not found in dictionary.");
 			return false;
 		}
 
@@ -94,6 +94,8 @@ namespace HeavyMetalMachines.Announcer
 		}
 
 		public List<AnnouncerLog> AnnouncerLogs;
+
+		private static BitLogger _logger = new BitLogger("AnnouncerInfo");
 
 		private Dictionary<AnnouncerLog.AnnouncerEventKinds, AnnouncerLog> DicAnnouncerLogs = new Dictionary<AnnouncerLog.AnnouncerEventKinds, AnnouncerLog>();
 	}

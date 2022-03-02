@@ -9,7 +9,7 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 	[CreateAssetMenu(menuName = "Parameter/Gadget/Body")]
 	public class GadgetBodyParameter : Parameter<GadgetBody>
 	{
-		public override int CompareTo(IParameterContext context, BaseParameter other)
+		public override int CompareTo(object context, BaseParameter other)
 		{
 			GadgetBodyParameter gadgetBodyParameter = (GadgetBodyParameter)other;
 			if (gadgetBodyParameter.GetValue(context) == base.GetValue(context))
@@ -19,34 +19,88 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 			return -1;
 		}
 
-		protected override void WriteToBitStream(IParameterContext context, Pocketverse.BitStream bs)
+		protected override void WriteToBitStream(object context, BitStream bs)
 		{
 			GadgetBody value = base.GetValue(context);
 			bool flag = value != null;
 			bs.WriteBool(flag);
 			if (flag)
 			{
-				bs.WriteCompressedInt(value.Context.OwnerId);
-				bs.WriteCompressedInt(value.Context.Id);
+				IHMMGadgetContext ihmmgadgetContext = (IHMMGadgetContext)value.Context;
+				bs.WriteCompressedInt(ihmmgadgetContext.Owner.Identifiable.ObjId);
+				bs.WriteCompressedInt(ihmmgadgetContext.Id);
 				bs.WriteCompressedInt(value.Id);
 			}
 		}
 
-		protected override void ReadFromBitStream(IParameterContext context, Pocketverse.BitStream bs)
+		protected override void ReadFromBitStream(object context, BitStream bs)
 		{
-			if (!bs.ReadBool())
+			int num = -1;
+			int num2 = -1;
+			try
 			{
-				base.SetValue(context, null);
-				return;
+				if (!bs.ReadBool())
+				{
+					base.SetValue(context, null);
+				}
+				else
+				{
+					num = bs.ReadCompressedInt();
+					num2 = bs.ReadCompressedInt();
+					int key = bs.ReadCompressedInt();
+					IGadgetOwner component = GameHubScriptableObject.Hub.ObjectCollection.GetObject(num).GetComponent<IGadgetOwner>();
+					IGadgetContext gadgetContext = component.GetGadgetContext(num2);
+					if (gadgetContext.Bodies.ContainsKey(key))
+					{
+						base.SetValue(context, (GadgetBody)gadgetContext.Bodies[key]);
+					}
+				}
 			}
-			int id = bs.ReadCompressedInt();
-			int id2 = bs.ReadCompressedInt();
-			int key = bs.ReadCompressedInt();
-			IGadgetOwner component = GameHubScriptableObject.Hub.ObjectCollection.GetObject(id).GetComponent<IGadgetOwner>();
-			IGadgetContext gadgetContext = component.GetGadgetContext(id2);
-			if (gadgetContext.Bodies.ContainsKey(key))
+			catch (Exception)
 			{
-				base.SetValue(context, (GadgetBody)gadgetContext.Bodies[key]);
+				Debug.LogError("GadgetBodyParameter::ReadFromBitStream");
+				Debug.LogErrorFormat("Context Is Null: {0}", new object[]
+				{
+					context == null
+				});
+				Debug.LogErrorFormat("bs Is Null: {0}", new object[]
+				{
+					bs == null
+				});
+				HMMHub hub = GameHubScriptableObject.Hub;
+				Debug.LogErrorFormat("hub Is Null: {0}", new object[]
+				{
+					hub == null
+				});
+				RPCObjectCollection objectCollection = hub.ObjectCollection;
+				Debug.LogErrorFormat("objectCollection Is Null: {0}", new object[]
+				{
+					objectCollection == null
+				});
+				Debug.LogErrorFormat("ownerId: {0}", new object[]
+				{
+					num
+				});
+				Identifiable @object = objectCollection.GetObject(num);
+				Debug.LogErrorFormat("identifiable Is Null: {0}", new object[]
+				{
+					@object == null
+				});
+				IGadgetOwner component2 = @object.GetComponent<IGadgetOwner>();
+				Debug.LogErrorFormat("owner Is Null: {0}", new object[]
+				{
+					component2 == null
+				});
+				Debug.LogErrorFormat("contextId: {0}", new object[]
+				{
+					num2
+				});
+				IHMMGadgetContext gadgetContext2 = component2.GetGadgetContext(num2);
+				Debug.LogErrorFormat("gadget Is Null: {0}", new object[]
+				{
+					gadgetContext2 == null
+				});
+				throw;
 			}
 		}
 	}

@@ -1,10 +1,13 @@
 ﻿using System;
 using System.Diagnostics;
-using Assets.Standard_Assets.Scripts.HMM.PlotKids;
-using Assets.Standard_Assets.Scripts.Infra.KeyBoardLayout;
 using FMod;
 using HeavyMetalMachines.Infra.Counselor;
-using HeavyMetalMachines.Options;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Input.ControllerInput;
+using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Spectator;
+using Hoplon.Input;
+using Hoplon.Input.Business;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Counselor
@@ -82,9 +85,9 @@ namespace HeavyMetalMachines.Counselor
 			case GameState.GameStateKind.Splash:
 				break;
 			default:
-				if (stateKind != GameState.GameStateKind.HORTA)
+				if (stateKind != GameState.GameStateKind.HORTA && stateKind != GameState.GameStateKind.Welcome)
 				{
-					ClientCounselorController.Log.ErrorFormat("GameOnOnCounselorActiveChanged: unexpected StateKind. StateKind={0}", new object[]
+					ClientCounselorController.Log.WarnFormat("GameOnOnCounselorActiveChanged: unexpected StateKind. StateKind={0}", new object[]
 					{
 						GameHubBehaviour.Hub.State.Current.StateKind
 					});
@@ -93,6 +96,10 @@ namespace HeavyMetalMachines.Counselor
 				break;
 			case GameState.GameStateKind.Pick:
 			case GameState.GameStateKind.Game:
+				ClientCounselorController.Log.DebugFormat("GameOnOnCounselorActiveChanged: ClientSendCounselorActivation on StateKind={0}", new object[]
+				{
+					GameHubBehaviour.Hub.State.Current.StateKind
+				});
 				GameHubBehaviour.Hub.Characters.Async().ClientSendCounselorActivation(GameHubBehaviour.Hub.Options.Game.CounselorActive);
 				return;
 			}
@@ -106,7 +113,7 @@ namespace HeavyMetalMachines.Counselor
 
 		private void Update()
 		{
-			if (this.IsAudioValid || GameHubBehaviour.Hub.State.Current.StateKind != GameState.GameStateKind.Game || SpectatorController.IsSpectating)
+			if (this.IsAudioValid || GameHubBehaviour.Hub.State.Current.StateKind != GameState.GameStateKind.Game || this._spectatorService.IsSpectating || GameHubBehaviour.Hub.Match.State == MatchData.MatchState.Nothing)
 			{
 				return;
 			}
@@ -146,35 +153,55 @@ namespace HeavyMetalMachines.Counselor
 
 		private void PlayAdviceAudio(CounselorConfig.AdvicesConfig adviceConfig, int index)
 		{
-			GameHubBehaviour.Hub.AnnouncerAudio.StopAll();
-			FMODVoiceOverAsset fmodvoiceOverAsset = adviceConfig.AudioAsset;
-			if (adviceConfig.ControlAction > ControlAction.None && adviceConfig.AlternativeAudioAsset != null)
+			ControllerInputActions inputAction = adviceConfig.InputAction;
+			int actionId = inputAction;
+			AudioEventAsset audioEventAsset;
+			if (this._inputGetActiveDevicePoller.GetActiveDevice() == 3)
 			{
-				KeyboarLayout keyboarLayout = GameHubBehaviour.Hub.Options.Controls.GetCurrentKeyboardLayout();
-				Control controlByAction = keyboarLayout.GetControlByAction(adviceConfig.ControlAction);
-				string cinputText;
-				if (controlByAction == null)
+				audioEventAsset = adviceConfig.JoystickAudioAsset;
+				if (inputAction != -1 && adviceConfig.AlternativeAudioAsset != null)
 				{
-					keyboarLayout = GameHubBehaviour.Hub.Options.Controls.GetDefaultKeyboardLayout();
-					controlByAction = keyboarLayout.GetControlByAction(adviceConfig.ControlAction);
-					cinputText = ControlOptions.GetCInputText(controlByAction.Action, ControlOptions.ControlActionInputType.Primary);
-				}
-				else
-				{
-					cinputText = ControlOptions.GetCInputText(controlByAction.Action, ControlOptions.ControlActionInputType.Primary);
-				}
-				if (adviceConfig.AlternativeKeyTrigger == cinputText)
-				{
-					fmodvoiceOverAsset = adviceConfig.AlternativeAudioAsset;
+					if (inputAction == 4)
+					{
+						actionId = 2;
+					}
+					if (this._inputGetPlayerMapping.GetJoystickKeyFromAction(actionId) == adviceConfig.JoystickAlternativeKeyCode)
+					{
+						audioEventAsset = adviceConfig.JoystickAlternativeAudioAsset;
+					}
 				}
 			}
-			this._currentPlayingAudio = FMODAudioManager.PlayAtVolume(fmodvoiceOverAsset, base.transform, 1f, false);
-			this._isPlayingAudio = true;
-			this.AddCooldown(index, fmodvoiceOverAsset.Cooldown);
-			this._currentAdviceConfigIndex = index;
-			if (this.OnAudioPlayingChanged != null)
+			else
 			{
-				this.OnAudioPlayingChanged();
+				audioEventAsset = adviceConfig.AudioAsset;
+				if (inputAction != -1 && adviceConfig.AlternativeAudioAsset != null)
+				{
+					KeyboardMouseCode primaryKeyFromAction = this._inputGetPlayerMapping.GetPrimaryKeyFromAction(actionId);
+					if (primaryKeyFromAction == adviceConfig.AlternativeKeyCode)
+					{
+						audioEventAsset = adviceConfig.AlternativeAudioAsset;
+					}
+					else
+					{
+						KeyboardMouseCode secondaryKeyFromAction = this._inputGetPlayerMapping.GetSecondaryKeyFromAction(actionId);
+						if (secondaryKeyFromAction == adviceConfig.AlternativeKeyCode)
+						{
+							audioEventAsset = adviceConfig.AlternativeAudioAsset;
+						}
+					}
+				}
+			}
+			if (audioEventAsset != null)
+			{
+				GameHubBehaviour.Hub.AnnouncerAudio.StopAll();
+				this._currentPlayingAudio = FMODAudioManager.PlayAtVolume(audioEventAsset, base.transform, 1f, false);
+				this._isPlayingAudio = true;
+				this.AddCooldown(index, audioEventAsset.Cooldown.Value);
+				this._currentAdviceConfigIndex = index;
+				if (this.OnAudioPlayingChanged != null)
+				{
+					this.OnAudioPlayingChanged();
+				}
 			}
 		}
 
@@ -197,6 +224,7 @@ namespace HeavyMetalMachines.Counselor
 			{
 				return;
 			}
+			ClientCounselorController.Log.DebugFormat("ClientCounselorController Initialization", new object[0]);
 			for (int i = 0; i < this._adviceStatus.Length; i++)
 			{
 				int maxUsesPerGame = GameHubBehaviour.Hub.CounselorConfig.Advices[i].MaxUsesPerGame;
@@ -215,7 +243,7 @@ namespace HeavyMetalMachines.Counselor
 
 		public void UpdateAdvice(int configIndex, bool isActive)
 		{
-			if (!GameHubBehaviour.Hub.Options.Game.CounselorActive || SpectatorController.IsSpectating)
+			if (!GameHubBehaviour.Hub.Options.Game.CounselorActive || this._spectatorService.IsSpectating)
 			{
 				return;
 			}
@@ -233,6 +261,15 @@ namespace HeavyMetalMachines.Counselor
 		private int _lastPlayedAdviceIndex = -1;
 
 		private int _currentAdviceConfigIndex;
+
+		[InjectOnClient]
+		private IInputGetPlayerMapping _inputGetPlayerMapping;
+
+		[InjectOnClient]
+		private IInputGetActiveDevicePoller _inputGetActiveDevicePoller;
+
+		[InjectOnClient]
+		private ISpectatorService _spectatorService;
 
 		private struct AdviceStatus
 		{

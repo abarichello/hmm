@@ -12,7 +12,7 @@ namespace HeavyMetalMachines.Combat
 			this.RegisterListeners();
 		}
 
-		public override void OnDestroyEffect(DestroyEffect evt)
+		public override void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			base.OnDestroyEffect(evt);
 			this.RemoveListeners();

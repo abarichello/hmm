@@ -4,12 +4,12 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkWardConfig : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkWardConfig : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		public override void PerkInitialized()
 		{
 			this.Ward.Id.Register(ObjectId.New(ContentKind.Wards.Byte(), this.Effect.EventId));
-			this.Ward.CreepTeam = this.Effect.Gadget.Combat.Team;
+			this.Ward.OwnerTeam = this.Effect.Gadget.Combat.Team;
 			this.Ward.Controller.AddPassiveModifiers((!this.UseExtraModifiers) ? this.Effect.Data.Modifiers : this.Effect.Data.ExtraModifiers, this.Effect.Gadget.Combat, this.Effect.EventId);
 			this.Ward.WardEffect = this.Effect;
 			this.Ward.Data.ResetHP();
@@ -17,7 +17,7 @@ namespace HeavyMetalMachines.Combat
 			this.Ward.gameObject.SetActive(true);
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (GameHubBehaviour.Hub.Net.IsClient())
 			{

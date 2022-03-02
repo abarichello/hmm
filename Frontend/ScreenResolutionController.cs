@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
-using System.Text;
 using HeavyMetalMachines.Frontend.Apis;
-using HeavyMetalMachines.Platform;
+using NativePlugins;
 using Pocketverse;
 using UnityEngine;
 
@@ -27,7 +25,9 @@ namespace HeavyMetalMachines.Frontend
 		{
 			get
 			{
-				return PlayerPrefs.GetInt("TARGETFPS", -1);
+				int @int = PlayerPrefs.GetInt("TARGETFPS", -1);
+				ScreenResolutionController.Log.Info(string.Format("TargetFramesPerSecond: {0}", @int));
+				return @int;
 			}
 		}
 
@@ -35,35 +35,33 @@ namespace HeavyMetalMachines.Frontend
 		{
 			get
 			{
-				return (ScreenResolutionController.QualityLevels)PlayerPrefs.GetInt("QUALITYLEVEL", 0);
+				int @int = PlayerPrefs.GetInt("QUALITYLEVEL", 0);
+				ScreenResolutionController.Log.Info(string.Format("QualityLevel: {0}", @int));
+				return (ScreenResolutionController.QualityLevels)@int;
 			}
 		}
 
 		private void Awake()
 		{
 			UICamera.onScreenResize += this.ScreenSizeChanged;
-			ScreenResolutionController._flashInfo.cbSize = Convert.ToUInt32(Marshal.SizeOf(ScreenResolutionController._flashInfo));
-			ScreenResolutionController._flashInfo.uCount = uint.MaxValue;
-			ScreenResolutionController._flashInfo.dwTimeout = 0u;
 			this.ScreenSizeChanged();
-			ScreenResolutionController.QualityLevels qualityLevels = (NativePlugins.GetDedicatedVideoMemorySize() <= 800) ? ScreenResolutionController.QualityLevels.LowTextures : ((SystemInfo.systemMemorySize <= 4096) ? ScreenResolutionController.QualityLevels.LowTextures : ScreenResolutionController.QualityLevels.HighTextures);
-			ScreenResolutionController.SetQualityLevel(qualityLevels, true);
-			ScreenResolutionController.Log.Info(string.Format("Selected quality level: {0}", (int)qualityLevels));
-			QualitySettings.vSyncCount = ScreenResolutionController.VerticalSync;
+			ScreenResolutionController.SelectedQuality = ((UnityInterface.GetDedicatedVideoMemorySize() <= 800) ? ScreenResolutionController.QualityLevels.LowTextures : ((SystemInfo.systemMemorySize <= 4096) ? ScreenResolutionController.QualityLevels.LowTextures : ScreenResolutionController.QualityLevels.HighTextures));
+			ScreenResolutionController.Log.Info(string.Format("Selected quality level: {0}", (int)ScreenResolutionController.SelectedQuality));
+			ScreenResolutionController.SetQualityLevel(ScreenResolutionController.QualityLevels.PreviewItem, false);
 			Application.targetFrameRate = ScreenResolutionController.TargetFramesPerSecond;
 		}
 
-		public List<ScreenResolutionController.Resolution> GetAvailableResolutions()
+		public List<Resolution> GetAvailableResolutions()
 		{
 			return this._availableResolutions;
 		}
 
-		public ScreenResolutionController.Resolution GetCurrentResolution()
+		public Resolution GetCurrentResolution()
 		{
 			return this._currentResolution;
 		}
 
-		public List<ScreenResolutionController.Display> GetAvailableDisplays()
+		public List<Display> GetAvailableDisplays()
 		{
 			return this._availableDisplays;
 		}
@@ -73,17 +71,17 @@ namespace HeavyMetalMachines.Frontend
 			return PlayerPrefs.GetInt("UnitySelectMonitor");
 		}
 
-		public ScreenResolutionController.Display GetCurrentDisplayInfo()
+		public Display GetCurrentDisplayInfo()
 		{
 			int currentDisplay = this.GetCurrentDisplay();
 			if (currentDisplay >= this._availableDisplays.Count)
 			{
-				ScreenResolutionController.Log.ErrorFormat("Display index doesn't is not available! Index: {0}; Available displays: {1}", new object[]
+				ScreenResolutionController.Log.ErrorFormat("Display index not available! Index: {0}; Available displays: {1}", new object[]
 				{
 					currentDisplay,
 					this._availableDisplays.Count
 				});
-				return default(ScreenResolutionController.Display);
+				return default(Display);
 			}
 			return this._availableDisplays[currentDisplay];
 		}
@@ -105,12 +103,14 @@ namespace HeavyMetalMachines.Frontend
 
 		private void Start()
 		{
-			ScreenResolutionController._windowHandle = WindowsPlatform.GetCurrentWindowHandle("Heavy Metal Machines");
+			ScreenResolutionController._windowHandle = Platform.Current.GetCurrentWindowHandle("Heavy Metal Machines");
 			if (ScreenResolutionController._windowHandle != IntPtr.Zero)
 			{
-				int num = WindowsPlatform.GetWindowTextLength(ScreenResolutionController._windowHandle);
-				StringBuilder strText = new StringBuilder(++num);
-				WindowsPlatform.GetWindowText(ScreenResolutionController._windowHandle, strText, num);
+				ScreenResolutionController.Log.DebugFormat("Client window detected. Text:[{0}] Handle:[{1}]", new object[]
+				{
+					Platform.Current.GetWindowText(ScreenResolutionController._windowHandle),
+					ScreenResolutionController._windowHandle
+				});
 			}
 			else
 			{
@@ -140,12 +140,17 @@ namespace HeavyMetalMachines.Frontend
 					}
 				}
 			}
+			ScreenResolutionController.Log.DebugFormat("ScreenSizeChanged: {0} Fullscreen: {1}", new object[]
+			{
+				this._currentResolution,
+				Screen.fullScreen
+			});
 			this.DisplaysUpdated();
 			int num = 0;
 			int i;
 			for (i = 0; i < this._availableDisplays.Count; i++)
 			{
-				num = Math.Max(this._standardResolutions.FindLastIndex((ScreenResolutionController.Resolution x) => x.CompareTo(this._availableDisplays[i].Res) <= 0), num);
+				num = Math.Max(this._standardResolutions.FindLastIndex((Resolution x) => x.CompareTo(this._availableDisplays[i].Res) <= 0), num);
 			}
 			this._availableResolutions.Clear();
 			this._availableResolutions.AddRange(this._standardResolutions.GetRange(0, num + 1));
@@ -173,16 +178,16 @@ namespace HeavyMetalMachines.Frontend
 		private void DisplaysUpdated()
 		{
 			this._availableDisplays.Clear();
-			if (!WindowsPlatform.EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, new WindowsPlatform.MonitorEnumProc(this.MonitorEnumProc), IntPtr.Zero))
+			if (!Platform.Current.GetDisplays(ref this._availableDisplays))
 			{
 				ScreenResolutionController.Log.Error("Failed to enumerate Monitors");
-				WindowsPlatform.RECT rect;
-				if (WindowsPlatform.GetWindowRect(WindowsPlatform.GetDesktopWindow(), out rect))
+				RectInt rect;
+				if (Platform.Current.GetDesktopRect(out rect))
 				{
-					ScreenResolutionController.Resolution res;
-					res.Width = rect.Right - rect.Left;
-					res.Height = rect.Bottom - rect.Top;
-					this._availableDisplays.Add(new ScreenResolutionController.Display
+					Resolution res;
+					res.Width = rect.width;
+					res.Height = rect.height;
+					this._availableDisplays.Add(new Display
 					{
 						Index = 0,
 						Rect = rect,
@@ -194,18 +199,6 @@ namespace HeavyMetalMachines.Frontend
 					ScreenResolutionController.Log.Error("Failed to get desktop rect");
 				}
 			}
-		}
-
-		private bool MonitorEnumProc(IntPtr hMonitor, IntPtr hdc, ref WindowsPlatform.RECT lprcMonitor, IntPtr dwData)
-		{
-			ScreenResolutionController.Display item = new ScreenResolutionController.Display
-			{
-				Index = this._availableDisplays.Count,
-				Rect = lprcMonitor,
-				Res = new ScreenResolutionController.Resolution(lprcMonitor.Right - lprcMonitor.Left, lprcMonitor.Bottom - lprcMonitor.Top)
-			};
-			this._availableDisplays.Add(item);
-			return true;
 		}
 
 		private void Update()
@@ -225,30 +218,34 @@ namespace HeavyMetalMachines.Frontend
 			}
 			else if (!this._startMovingAround)
 			{
-				if (Input.mousePosition.y > (float)(Screen.height - 100) && Input.GetMouseButtonDown(0) && UICamera.hoveredObject != null && UICamera.hoveredObject.tag == "ScreenRepositiningArea")
+				if (Input.mousePosition.y > (float)(Screen.height - 100) && Input.GetMouseButtonDown(0))
 				{
-					if (Application.isEditor)
+					GameObject hoveredObject = UICamera.hoveredObject;
+					if (hoveredObject != null && hoveredObject.CompareTag("ScreenRepositiningArea"))
 					{
-						return;
+						if (Application.isEditor)
+						{
+							return;
+						}
+						this._startMovingAround = true;
+						Platform.Current.GetCursorPos(out this._currentMousePos);
+						this._lastMousetPos = this._currentMousePos;
 					}
-					this._startMovingAround = true;
-					WindowsPlatform.GetCursorPos(out this._currentMousePos);
-					this._lastMousetPos = this._currentMousePos;
 				}
 			}
 			else
 			{
-				WindowsPlatform.GetCursorPos(out this._currentMousePos);
-				if (this._startMovingAround && (this._lastMousetPos.X != this._currentMousePos.X || this._lastMousetPos.Y != this._currentMousePos.Y))
+				Platform.Current.GetCursorPos(out this._currentMousePos);
+				if (this._startMovingAround && (this._lastMousetPos.x != this._currentMousePos.x || this._lastMousetPos.y != this._currentMousePos.y))
 				{
-					WindowsPlatform.RECT rect;
-					if (!WindowsPlatform.GetWindowRect(ScreenResolutionController._windowHandle, out rect))
+					RectInt rectInt;
+					if (!Platform.Current.GetWindowRect(ScreenResolutionController._windowHandle, out rectInt))
 					{
 						return;
 					}
-					int num = this._lastMousetPos.X - this._currentMousePos.X;
-					int num2 = this._lastMousetPos.Y - this._currentMousePos.Y;
-					this.SetPosition(rect.Left - num, rect.Top - num2, 0, 0);
+					int num = this._lastMousetPos.x - this._currentMousePos.x;
+					int num2 = this._lastMousetPos.y - this._currentMousePos.y;
+					this.SetPosition(rectInt.xMin - num, rectInt.yMin - num2, 0, 0);
 				}
 				this._lastMousetPos = this._currentMousePos;
 			}
@@ -256,89 +253,105 @@ namespace HeavyMetalMachines.Frontend
 
 		public void SetPosition(int x, int y, int resX = 0, int resY = 0)
 		{
-			WindowsPlatform.SetWindowPos(ScreenResolutionController._windowHandle, (IntPtr)0, x, y, resX, resY, (resX * resY != 0) ? 0 : 1);
+			Platform.Current.SetWindowPosition(ScreenResolutionController._windowHandle, x, y, resX, resY);
 		}
 
 		public void Minimize()
 		{
-			WindowsPlatform.ShowWindow(ScreenResolutionController._windowHandle, WindowsPlatform.ShowWindowCommands.Minimize);
+			Platform.Current.ShowWindow(ScreenResolutionController._windowHandle, true);
 		}
 
 		public void HighlightWindow(bool startTopmostWindow)
 		{
-			this.StartFlashWindow();
-			this.ForceShowWindow();
+			ScreenResolutionController.StartFlashWindow();
+			ScreenResolutionController.ForceShowWindow();
 			if (startTopmostWindow)
 			{
-				this.StartTopmostWindow();
+				ScreenResolutionController.StartTopmostWindow();
 			}
 		}
 
-		private void StartFlashWindow()
+		private static void StartFlashWindow()
 		{
-			ScreenResolutionController._flashInfo.hwnd = ScreenResolutionController._windowHandle;
-			ScreenResolutionController._flashInfo.dwFlags = 3u;
-			WindowsPlatform.FlashWindowEx(ref ScreenResolutionController._flashInfo);
+			Platform.Current.SetFlashWindow(ScreenResolutionController._windowHandle, true);
 		}
 
-		public void StopFlashWindow()
+		public static void StopFlashWindow()
 		{
-			ScreenResolutionController._flashInfo.hwnd = ScreenResolutionController._windowHandle;
-			ScreenResolutionController._flashInfo.dwFlags = 0u;
-			WindowsPlatform.FlashWindowEx(ref ScreenResolutionController._flashInfo);
+			Platform.Current.SetFlashWindow(ScreenResolutionController._windowHandle, false);
 		}
 
-		private void ForceShowWindow()
+		private static void ForceShowWindow()
 		{
-			IntPtr foregroundWindow = WindowsPlatform.GetForegroundWindow();
+			IntPtr foregroundWindow = Platform.Current.GetForegroundWindow();
 			if (foregroundWindow == ScreenResolutionController._windowHandle)
 			{
 				return;
 			}
-			WindowsPlatform.ShowWindow(ScreenResolutionController._windowHandle, WindowsPlatform.ShowWindowCommands.Normal);
+			ScreenResolutionController.Log.Debug("Forcing game window to show");
+			Platform.Current.ShowWindow(ScreenResolutionController._windowHandle, false);
 		}
 
-		private void StartTopmostWindow()
+		private static void StartTopmostWindow()
 		{
-			WindowsPlatform.SetWindowPos(ScreenResolutionController._windowHandle, WindowsPlatform.HWND.TOPMOST, 0, 0, 0, 0, WindowsPlatform.SWP.NOSIZE | WindowsPlatform.SWP.NOMOVE | WindowsPlatform.SWP.SHOWWINDOW);
+			Platform.Current.SetTopmostWindow(ScreenResolutionController._windowHandle, true);
 		}
 
-		public void EndTopmostWindow()
+		public static void EndTopmostWindow()
 		{
-			WindowsPlatform.SetWindowPos(ScreenResolutionController._windowHandle, WindowsPlatform.HWND.NOTOPMOST, 0, 0, 0, 0, WindowsPlatform.SWP.NOSIZE | WindowsPlatform.SWP.NOMOVE | WindowsPlatform.SWP.SHOWWINDOW);
+			if (!Application.isFocused)
+			{
+				return;
+			}
+			Platform.Current.SetTopmostWindow(ScreenResolutionController._windowHandle, false);
 		}
 
-		public static void SetWindowResolution(ScreenResolutionController.Resolution resolution)
+		public static void SetWindowResolution(Resolution resolution)
 		{
+			if (Platform.Current.IsConsole())
+			{
+				return;
+			}
+			ScreenResolutionController.Log.DebugFormat("SetWindowResolution: {0} Fullscreen: {1}", new object[]
+			{
+				resolution,
+				Screen.fullScreen
+			});
 			Screen.SetResolution(resolution.Width, resolution.Height, Screen.fullScreen);
 		}
 
 		public void SetDisplay(int index)
 		{
+			ScreenResolutionController.Log.DebugFormat("SetDisplay: {0}", new object[]
+			{
+				index
+			});
 			PlayerPrefs.SetInt("UnitySelectMonitor", index);
-			ScreenResolutionController.Display display = this._availableDisplays[index];
+			Display display = this._availableDisplays[index];
 			if (this.IsFullscreen())
 			{
-				WindowsPlatform.MoveWindow(ScreenResolutionController._windowHandle, display.Rect.Left, display.Rect.Top, display.Res.Width, display.Res.Height, true);
+				Platform.Current.MoveWindow(ScreenResolutionController._windowHandle, display.Rect.xMin, display.Rect.yMin, display.Res.Width, display.Res.Height, true);
 			}
 			else
 			{
-				WindowsPlatform.RECT rect;
-				if (!WindowsPlatform.GetWindowRect(ScreenResolutionController._windowHandle, out rect))
+				RectInt rectInt;
+				if (!Platform.Current.GetWindowRect(ScreenResolutionController._windowHandle, out rectInt))
 				{
 					ScreenResolutionController.Log.Error("Failed to get window rect, won't move window");
 					return;
 				}
-				int num = rect.Right - rect.Left;
-				int num2 = rect.Bottom - rect.Top;
-				int x = (display.Res.Width - num >> 1) + display.Rect.Left;
-				int y = (display.Res.Height - num2 >> 1) + display.Rect.Top;
-				WindowsPlatform.MoveWindow(ScreenResolutionController._windowHandle, x, y, num, num2, false);
+				int x = (display.Res.Width - rectInt.width >> 1) + display.Rect.xMin;
+				int y = (display.Res.Height - rectInt.height >> 1) + display.Rect.yMin;
+				Platform.Current.MoveWindow(ScreenResolutionController._windowHandle, x, y, rectInt.width, rectInt.height, false);
 			}
 		}
 
 		public static void SetFullscreen(bool value)
 		{
+			ScreenResolutionController.Log.DebugFormat("SetFullscreen: {0}", new object[]
+			{
+				value
+			});
 			Screen.fullScreen = value;
 		}
 
@@ -356,47 +369,59 @@ namespace HeavyMetalMachines.Frontend
 
 		public static void SetQualityLevel(ScreenResolutionController.QualityLevels level, bool persist = true)
 		{
+			if (Platform.Current.IsConsole())
+			{
+				ScreenResolutionController.Log.WarnFormat("TODO/FIX - SetQualityLevel disabled on consoles. Current running level: {0}", new object[]
+				{
+					QualitySettings.GetQualityLevel()
+				});
+				return;
+			}
 			if (persist)
 			{
 				PlayerPrefs.SetInt("QUALITYLEVEL", (int)level);
 			}
 			QualitySettings.SetQualityLevel((int)level, false);
 			QualitySettings.vSyncCount = ScreenResolutionController.VerticalSync;
+			ScreenResolutionController.Log.InfoFormat("Quality setting set. Quality={0} persist={1}", new object[]
+			{
+				level,
+				persist
+			});
+		}
+
+		public static void SetInGameQualityLevel()
+		{
+			ScreenResolutionController.SetQualityLevel(ScreenResolutionController.SelectedQuality, true);
 		}
 
 		public Vector2 GetClientWindowOffset()
 		{
-			WindowsPlatform.RECT rect;
-			if (!WindowsPlatform.GetClientRect(ScreenResolutionController._windowHandle, out rect))
+			Vector2Int vector2Int;
+			if (Platform.Current.GetClientRectOffset(ScreenResolutionController._windowHandle, out vector2Int))
 			{
-				ScreenResolutionController.Log.Warn("Could not get window rect.");
-				return Vector2.zero;
+				return new Vector2((float)vector2Int.x, (float)vector2Int.y);
 			}
-			WindowsPlatform.POINT point;
-			WindowsPlatform.ClientToScreen(ScreenResolutionController._windowHandle, out point);
-			rect.Left = point.X;
-			rect.Top = point.Y;
-			rect.Right += point.X;
-			rect.Bottom += point.Y;
-			return new Vector2((float)point.X, (float)point.Y);
+			ScreenResolutionController.Log.Warn("Could not get client window offset rect.");
+			return Vector2.zero;
 		}
 
 		public Vector2 GetClientWindowDimensions()
 		{
-			float x;
-			float y;
+			float num;
+			float num2;
 			if (Screen.fullScreen)
 			{
-				ScreenResolutionController.Display currentDisplayInfo = this.GetCurrentDisplayInfo();
-				x = (float)currentDisplayInfo.Res.Width;
-				y = (float)currentDisplayInfo.Res.Height;
+				Display currentDisplayInfo = this.GetCurrentDisplayInfo();
+				num = (float)currentDisplayInfo.Res.Width;
+				num2 = (float)currentDisplayInfo.Res.Height;
 			}
 			else
 			{
-				x = (float)Screen.width;
-				y = (float)Screen.height;
+				num = (float)Screen.width;
+				num2 = (float)Screen.height;
 			}
-			return new Vector2(x, y);
+			return new Vector2(num, num2);
 		}
 
 		private const string ClientWindowText = "Heavy Metal Machines";
@@ -413,88 +438,44 @@ namespace HeavyMetalMachines.Frontend
 
 		private static IntPtr _windowHandle;
 
-		private static WindowsPlatform.FLASHWINFO _flashInfo;
-
 		public GameState Login;
 
 		public GameState Game;
 
-		private readonly List<ScreenResolutionController.Resolution> _standardResolutions = new List<ScreenResolutionController.Resolution>
+		private readonly List<Resolution> _standardResolutions = new List<Resolution>
 		{
-			new ScreenResolutionController.Resolution(800, 600),
-			new ScreenResolutionController.Resolution(1024, 768),
-			new ScreenResolutionController.Resolution(1280, 720),
-			new ScreenResolutionController.Resolution(1280, 1024),
-			new ScreenResolutionController.Resolution(1360, 768),
-			new ScreenResolutionController.Resolution(1366, 768),
-			new ScreenResolutionController.Resolution(1440, 900),
-			new ScreenResolutionController.Resolution(1600, 900),
-			new ScreenResolutionController.Resolution(1680, 1050),
-			new ScreenResolutionController.Resolution(1920, 1080)
+			new Resolution(1280, 720),
+			new Resolution(1280, 1024),
+			new Resolution(1360, 768),
+			new Resolution(1366, 768),
+			new Resolution(1440, 900),
+			new Resolution(1600, 900),
+			new Resolution(1680, 1050),
+			new Resolution(1920, 1080)
 		};
 
-		private readonly List<ScreenResolutionController.Resolution> _availableResolutions = new List<ScreenResolutionController.Resolution>();
+		private readonly List<Resolution> _availableResolutions = new List<Resolution>();
 
-		private readonly List<ScreenResolutionController.Display> _availableDisplays = new List<ScreenResolutionController.Display>();
+		private List<Display> _availableDisplays = new List<Display>();
 
-		private ScreenResolutionController.Resolution _currentResolution;
+		private Resolution _currentResolution;
 
-		private WindowsPlatform.POINT _currentMousePos;
+		private Vector2Int _currentMousePos;
 
-		private WindowsPlatform.POINT _lastMousetPos;
+		private Vector2Int _lastMousetPos;
 
 		private bool _startMovingAround;
 
 		private bool _lastFullscreen;
 
-		public struct Resolution : IComparable<ScreenResolutionController.Resolution>
-		{
-			public Resolution(int width, int height)
-			{
-				this.Width = width;
-				this.Height = height;
-			}
-
-			public int CompareTo(ScreenResolutionController.Resolution other)
-			{
-				int num = this.Width - other.Width;
-				return (num != 0) ? num : (this.Height - other.Height);
-			}
-
-			public float AspectRatio()
-			{
-				return (float)this.Width / (float)this.Height;
-			}
-
-			public override string ToString()
-			{
-				return string.Format("{0}x{1}", this.Width, this.Height);
-			}
-
-			public int Width;
-
-			public int Height;
-		}
-
-		public struct Display
-		{
-			public override string ToString()
-			{
-				return this.Index.ToString();
-			}
-
-			public int Index;
-
-			public WindowsPlatform.RECT Rect;
-
-			public ScreenResolutionController.Resolution Res;
-		}
+		private static ScreenResolutionController.QualityLevels SelectedQuality = ScreenResolutionController.QualityLevels.LowTextures;
 
 		public enum QualityLevels
 		{
 			LowTextures,
 			HighTextures,
-			ModelViewer
+			PreviewItem,
+			PS4
 		}
 
 		public delegate void OnResolutionChange();

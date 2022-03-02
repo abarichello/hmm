@@ -9,6 +9,10 @@ namespace HeavyMetalMachines.VFX
 	{
 		private void OnEnable()
 		{
+			NarratorObjectsStateSetter.Log.DebugFormat("Enable NarratorEnabled: {0}", new object[]
+			{
+				SpectatorController.IsSpectating
+			});
 			SpectatorController.EvtSpectatorRoleChanged += this.OnSpectatorRoleChanged;
 			this.RefreshSpectatorSettings();
 		}

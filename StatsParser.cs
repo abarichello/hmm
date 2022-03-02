@@ -1,9 +1,10 @@
 ﻿using System;
+using HeavyMetalMachines.Bank;
 using Pocketverse;
 
 namespace HeavyMetalMachines
 {
-	public class StatsParser : KeyStateParser
+	public class StatsParser : KeyStateParser, IPlayerStatsFeature, IStatsDispatcher
 	{
 		public override StateType Type
 		{
@@ -11,6 +12,15 @@ namespace HeavyMetalMachines
 			{
 				return StateType.PlayerStats;
 			}
+		}
+
+		public int BlueTeamDeaths { get; set; }
+
+		public int RedTeamDeaths { get; set; }
+
+		public IPlayerStatsSerialData GetStats(int objectId)
+		{
+			return GameHubObject.Hub.Stream.StatsStream.GetObject(objectId);
 		}
 
 		public override void Update(BitStream stream)
@@ -39,9 +49,5 @@ namespace HeavyMetalMachines
 			stream.WriteCompressedInt(this.RedTeamDeaths);
 			base.SendFullUpdate(address, stream.ToArray());
 		}
-
-		public int BlueTeamDeaths;
-
-		public int RedTeamDeaths;
 	}
 }

@@ -3,6 +3,7 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.VFX
 {
+	[HelpURL("https://confluence.hoplon.com/pages/viewpage.action?pageId=19729738")]
 	public class FadeInOutRendererVFX : BaseVFX
 	{
 		private void OnEnable()

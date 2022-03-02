@@ -12,7 +12,7 @@ namespace HeavyMetalMachines.Combat
 		public IFuture ServerCreatePing(int pingKind)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1052, 1, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1077, 1, new object[]
 			{
 				pingKind
 			});

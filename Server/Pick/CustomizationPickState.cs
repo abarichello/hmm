@@ -1,5 +1,5 @@
 ﻿using System;
-using HeavyMetalMachines.Character;
+using HeavyMetalMachines.Characters;
 using HeavyMetalMachines.Server.Pick.Apis;
 using UnityEngine;
 

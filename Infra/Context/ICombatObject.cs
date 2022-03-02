@@ -1,11 +1,14 @@
 ﻿using System;
+using HeavyMetalMachines.Car;
 using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Combat.Gadget;
+using HeavyMetalMachines.Combat.GadgetScript;
 using HeavyMetalMachines.Match;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Infra.Context
 {
-	public interface ICombatObject
+	public interface ICombatObject : IGadgetOwner
 	{
 		TeamKind Team { get; }
 
@@ -13,9 +16,13 @@ namespace HeavyMetalMachines.Infra.Context
 
 		IPhysicalObject PhysicalObject { get; }
 
-		IIdentifiable Identifiable { get; }
-
 		ICombatController ModifierController { get; }
+
+		bool IsPlayer { get; }
+
+		bool IsBot { get; }
+
+		bool NoHit { get; }
 
 		Transform Transform { get; }
 
@@ -25,8 +32,22 @@ namespace HeavyMetalMachines.Infra.Context
 
 		CombatAttributes Attributes { get; }
 
+		CombatLayer Layer { get; }
+
 		ICombatMovement CombatMovement { get; }
 
-		void BreakBombLink();
+		ITurretMovement TurretMovement { get; }
+
+		IPlayerData PlayerData { get; }
+
+		CarInput CarInput { get; }
+
+		IPlayerStats Stats { get; }
+
+		void AddCollider(Collider collider);
+
+		void RemoveCollider(Collider collider);
+
+		IGadgetInput GetGadgetInput(GadgetSlot slot);
 	}
 }

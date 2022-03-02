@@ -1,4 +1,5 @@
 ﻿using System;
+using UniRx;
 
 namespace HeavyMetalMachines.Battlepass
 {
@@ -7,5 +8,7 @@ namespace HeavyMetalMachines.Battlepass
 		void SetVisibility(bool isVisible);
 
 		bool IsVisible();
+
+		IObservable<Unit> ObserveHide();
 	}
 }

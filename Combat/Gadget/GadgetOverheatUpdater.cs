@@ -26,8 +26,8 @@ namespace HeavyMetalMachines.Combat.Gadget
 			SpawnController bitComponent = this._gadget.Combat.Id.GetBitComponent<SpawnController>();
 			long num = (long)bitComponent.GetPlayerMaxTimeDeadMillis();
 			float num2 = (!this.IsOverheated) ? this._gadget.OverheatCoolingRate : this._gadget.OverheatUnblockRate;
-			float value = this._gadget.CurrentHeat - num2 * (float)num / 1000f;
-			this._gadget.CurrentHeat = Mathf.Clamp01(value);
+			float num3 = this._gadget.CurrentHeat - num2 * (float)num / 1000f;
+			this._gadget.CurrentHeat = Mathf.Clamp01(num3);
 			this._gadget.UpdateGadgetStateObjectHeat();
 			this._gadget.Toggled = false;
 			if (this._gadget.CurrentHeat <= 0f)

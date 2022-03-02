@@ -11,6 +11,6 @@ namespace HeavyMetalMachines.VFX
 			FMODAudioManager.PlayOneShotAt(this.audioSFX, base.transform.position, 0);
 		}
 
-		public FMODAsset audioSFX;
+		public AudioEventAsset audioSFX;
 	}
 }

@@ -20,9 +20,9 @@ namespace HeavyMetalMachines
 				{
 					this.MatchInfoController.gameObject.SetActive(true);
 				}
-				if (this.MatchInfoController.MyWidgetAlpha.alpha < 1f)
+				if (this.MatchInfoController.MyWidgetAlpha.Alpha < 1f)
 				{
-					this.MatchInfoController.MyWidgetAlpha.alpha = 1f;
+					this.MatchInfoController.MyWidgetAlpha.Alpha = 1f;
 				}
 				this.MatchInfoController.CreateOrRestBombDeliverIconList(this.MatchInfoController.TimelinePlayers);
 				if (this.MatchInfoController.TimelinePlayers.Count == 0)

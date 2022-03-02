@@ -1,4 +1,6 @@
 ﻿using System;
+using HeavyMetalMachines.Localization;
+using Hoplon.Localization.TranslationTable;
 
 namespace HeavyMetalMachines.Combat.Gadget
 {
@@ -9,18 +11,18 @@ namespace HeavyMetalMachines.Combat.Gadget
 		{
 			get
 			{
-				this.CheckTranslationSheet();
-				return Language.Get(this.Label, this._translationSheet);
+				this.CheckTranslationContext();
+				return Language.Get(this.Label, this._context);
 			}
 		}
 
-		private void CheckTranslationSheet()
+		private void CheckTranslationContext()
 		{
-			if (this._translationSheet != TranslationSheets.All)
+			if (this._context != TranslationContext.All)
 			{
 				return;
 			}
-			this._translationSheet = ((!this.Label.StartsWith("SPONSOR")) ? TranslationSheets.CharactersMatchInfo : TranslationSheets.Sponsors);
+			this._context = ((!this.Label.StartsWith("SPONSOR")) ? TranslationContext.CharactersMatchInfo : TranslationContext.Sponsors);
 		}
 
 		public string Label;
@@ -33,6 +35,6 @@ namespace HeavyMetalMachines.Combat.Gadget
 
 		public int Index;
 
-		private TranslationSheets _translationSheet;
+		private ContextTag _context = TranslationContext.All;
 	}
 }

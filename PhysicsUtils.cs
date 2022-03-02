@@ -44,9 +44,9 @@ namespace HeavyMetalMachines
 			if (boxCollider != null)
 			{
 				Vector3 lossyScale = collider.transform.lossyScale;
-				float a = boxCollider.size.x * lossyScale.x * 0.5f;
-				float b = boxCollider.size.z * lossyScale.z * 0.5f;
-				return Mathf.Min(a, b);
+				float num = boxCollider.size.x * lossyScale.x * 0.5f;
+				float num2 = boxCollider.size.z * lossyScale.z * 0.5f;
+				return Mathf.Min(num, num2);
 			}
 			return PhysicsUtils.GetRadius(collider);
 		}
@@ -54,7 +54,7 @@ namespace HeavyMetalMachines
 		public static bool GetFirstHit(Vector3 from, Vector3 to, float radius, out RaycastHit info, int raycastLayer)
 		{
 			Vector3 vector = to - from;
-			return Physics.SphereCast(from, radius, vector.normalized, out info, vector.magnitude, raycastLayer);
+			return Physics.SphereCast(from, radius, vector.normalized, ref info, vector.magnitude, raycastLayer);
 		}
 
 		public static bool IsFacing(Vector3 forward, Vector3 normal)
@@ -65,7 +65,8 @@ namespace HeavyMetalMachines
 
 		public static bool IsInFront(Vector3 myCenter, Vector3 mStEdgeNormal, Vector3 p1)
 		{
-			Plane plane = new Plane(mStEdgeNormal, myCenter);
+			Plane plane;
+			plane..ctor(mStEdgeNormal, myCenter);
 			return plane.GetSide(p1);
 		}
 
@@ -91,13 +92,15 @@ namespace HeavyMetalMachines
 		{
 			Vector3 vector = HMMMathUtils.CalcDirectionXZ(srcPos, targetCollider.transform.position);
 			float num = Vector3.Dot(srcForward, vector);
-			Vector3 b = Quaternion.Euler(0f, angle * 0.5f, 0f) * srcForward;
-			Vector3 b2 = Quaternion.Euler(0f, -angle * 0.5f, 0f) * srcForward;
-			float num2 = Mathf.Cos(angle * 0.0174532924f * 0.5f);
+			Vector3 vector2 = Quaternion.Euler(0f, angle * 0.5f, 0f) * srcForward;
+			Vector3 vector3 = Quaternion.Euler(0f, -angle * 0.5f, 0f) * srcForward;
+			float num2 = Mathf.Cos(angle * 0.017453292f * 0.5f);
 			if (num <= num2)
 			{
-				Plane plane = new Plane(srcPos, srcPos + b, srcPos + Vector3.up * 10f);
-				Plane plane2 = new Plane(srcPos, srcPos + b2, srcPos + Vector3.up * 10f);
+				Plane plane;
+				plane..ctor(srcPos, srcPos + vector2, srcPos + Vector3.up * 10f);
+				Plane plane2;
+				plane2..ctor(srcPos, srcPos + vector3, srcPos + Vector3.up * 10f);
 				int num3 = targetCollider.PlaneCast(plane);
 				int num4 = targetCollider.PlaneCast(plane2);
 				return (num3 == 1 || num3 == 0) && (num4 == -1 || num4 == 0);
@@ -106,31 +109,32 @@ namespace HeavyMetalMachines
 			{
 				return true;
 			}
-			Ray ray = new Ray(srcPos, vector);
+			Ray ray;
+			ray..ctor(srcPos, vector);
 			RaycastHit raycastHit;
-			return targetCollider.Raycast(ray, out raycastHit, range);
+			return targetCollider.Raycast(ray, ref raycastHit, range);
 		}
 
 		public static RaycastHit2D CircleCast(Vector3 origin, float radius, Vector3 direction, float distance = float.PositiveInfinity, int layerMask = -5)
 		{
-			Vector2 origin2;
-			origin2.x = origin.x;
-			origin2.y = origin.z;
-			Vector2 direction2;
-			direction2.x = direction.x;
-			direction2.y = direction.z;
-			return Physics2D.CircleCast(origin2, radius, direction2, distance, layerMask);
+			Vector2 vector;
+			vector.x = origin.x;
+			vector.y = origin.z;
+			Vector2 vector2;
+			vector2.x = direction.x;
+			vector2.y = direction.z;
+			return Physics2D.CircleCast(vector, radius, vector2, distance, layerMask);
 		}
 
 		public static RaycastHit2D Raycast(Vector3 origin, Vector3 direction, float distance = float.PositiveInfinity, int layerMask = -5)
 		{
-			Vector2 origin2;
-			origin2.x = origin.x;
-			origin2.y = origin.z;
-			Vector2 direction2;
-			direction2.x = direction.x;
-			direction2.y = direction.z;
-			return Physics2D.Raycast(origin2, direction2, distance, layerMask);
+			Vector2 vector;
+			vector.x = origin.x;
+			vector.y = origin.z;
+			Vector2 vector2;
+			vector2.x = direction.x;
+			vector2.y = direction.z;
+			return Physics2D.Raycast(vector, vector2, distance, layerMask);
 		}
 
 		public static bool SphereIntersect(Vector3 i, Vector3 j, Vector3 center, float radius)
@@ -151,8 +155,8 @@ namespace HeavyMetalMachines
 			{
 				return false;
 			}
-			Vector3 b = num2 * vector2;
-			return (vector - b).sqrMagnitude < num;
+			Vector3 vector3 = num2 * vector2;
+			return (vector - vector3).sqrMagnitude < num;
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(PhysicsUtils));

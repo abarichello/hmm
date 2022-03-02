@@ -5,30 +5,30 @@ namespace HeavyMetalMachines.Audio
 {
 	public class CrowdConfiguration : GameHubScriptableObject
 	{
-		public FMODAsset CrowdDefeat;
+		public AudioEventAsset CrowdDefeat;
 
-		public FMODAsset CrowdVictory;
+		public AudioEventAsset CrowdVictory;
 
-		public FMODAsset CrowdEnemyBombDrop;
+		public AudioEventAsset CrowdEnemyBombDrop;
 
-		public FMODAsset CrowdAllyBombDrop;
+		public AudioEventAsset CrowdAllyBombDrop;
 
-		public FMODAsset CrowdEnemyDelivery;
+		public AudioEventAsset CrowdEnemyDelivery;
 
-		public FMODAsset CrowdAllyDelivery;
+		public AudioEventAsset CrowdAllyDelivery;
 
-		public FMODAsset CrowdEnemyNearDelivery;
+		public AudioEventAsset CrowdEnemyNearDelivery;
 
-		public FMODAsset CrowdAllyNearDelivery;
+		public AudioEventAsset CrowdAllyNearDelivery;
 
-		public FMODAsset CrowdEnemyDeliveryAnim;
+		public AudioEventAsset CrowdEnemyDeliveryAnim;
 
-		public FMODAsset CrowdAllyDeliveryAnim;
+		public AudioEventAsset CrowdAllyDeliveryAnim;
 
-		public FMODAsset CrowdAllyBombPicked;
+		public AudioEventAsset CrowdAllyBombPicked;
 
-		public FMODAsset CrowdEnemyBombPicked;
+		public AudioEventAsset CrowdEnemyBombPicked;
 
-		public FMODAsset CrowdLoop;
+		public AudioEventAsset CrowdLoop;
 	}
 }

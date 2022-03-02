@@ -1,23 +1,24 @@
 ﻿using System;
 using System.Collections.Generic;
-using Commons.Swordfish.Battlepass;
+using HeavyMetalMachines.Customization.Business;
+using HeavyMetalMachines.DataTransferObjects.Battlepass;
 
 namespace HeavyMetalMachines.Customization
 {
 	[Serializable]
 	public class CustomizationInventoryCategoryData
 	{
-		public CustomizationInventoryCategoryData(Guid categoryId, string categoryName)
+		public CustomizationInventoryCategoryData(Guid categoryId, string categoryName, List<PlayerCustomizationSlot> customizationSlots, IGetCustomizationSlot customizationSlotSelector)
 		{
-			int capacity = 10;
-			this.Items = new List<CustomizationInventoryCellItemData>(capacity);
-			this.ItemsDictionary = new Dictionary<Guid, CustomizationInventoryCellItemData>(capacity);
+			this.Items = new List<CustomizationInventoryCellItemData>(10);
+			this.ItemsDictionary = new Dictionary<Guid, CustomizationInventoryCellItemData>(10);
+			this.SortedCharacterIds = new List<Guid>(10);
+			this.CharacterIdToItemsDictionary = new Dictionary<Guid, List<CustomizationInventoryCellItemData>>(10);
 			this.CategoryId = categoryId;
 			this.CategoryName = categoryName;
 			this.NewItemsCount = 0;
-			this.SkinTabDataItems = new List<CustomizationInventoryCellItemSkinTabData>(capacity);
-			this.SkinTabToCellCountDictionary = new Dictionary<int, int>(capacity);
-			this.SkinTabToItemsDictionary = new Dictionary<int, List<CustomizationInventoryCellItemData>>(capacity);
+			this.CustomizationSlots = customizationSlots;
+			this._customizationSlotSelector = customizationSlotSelector;
 		}
 
 		public void AddItem(CustomizationInventoryCellItemData item)
@@ -31,36 +32,12 @@ namespace HeavyMetalMachines.Customization
 			{
 				this.NewItemsCount++;
 			}
-			if (item.IsEquipped)
-			{
-				this.EquipItem(item.ItemTypeId);
-			}
 		}
 
-		public void AddSkinTabDataItem(CustomizationInventoryCellItemSkinTabData skinTabData, List<CustomizationInventoryCellItemData> items)
+		public void AddCharacterSkinDataItems(Guid characterId, List<CustomizationInventoryCellItemData> items)
 		{
-			this.SkinTabDataItems.Add(skinTabData);
-			int key = this.SkinTabDataItems.Count - 1;
-			int num = items.Count / 3;
-			if (items.Count % 3 != 0)
-			{
-				num++;
-			}
-			this.SkinTabToCellCountDictionary.Add(key, num);
-			this.SkinTabToItemsDictionary.Add(key, items);
-		}
-
-		public void EquipItem(Guid itemId)
-		{
-			if (this._currentlySelectedItemId != Guid.Empty && this.ItemsDictionary.ContainsKey(this._currentlySelectedItemId))
-			{
-				this.ItemsDictionary[this._currentlySelectedItemId].IsEquipped = false;
-			}
-			this._currentlySelectedItemId = itemId;
-			if (this.ItemsDictionary.ContainsKey(this._currentlySelectedItemId))
-			{
-				this.ItemsDictionary[this._currentlySelectedItemId].IsEquipped = true;
-			}
+			this.SortedCharacterIds.Add(characterId);
+			this.CharacterIdToItemsDictionary.Add(characterId, items);
 		}
 
 		public void SortItems(CustomizationInventoryCategoryData.SortKind sortKind, bool asc = true)
@@ -82,64 +59,19 @@ namespace HeavyMetalMachines.Customization
 			return num;
 		}
 
-		public bool SkinIndexIsTab(int scrollIndex)
+		public PlayerCustomizationSlot GetEquippingSlot()
 		{
-			int num;
-			int num2;
-			return this.SkinIndexIsTab(scrollIndex, out num, out num2);
+			return this._customizationSlotSelector.GetEquippingSlot();
 		}
 
-		public bool SkinIndexIsTab(int scrollIndex, out int tabIndexFound, out int tabIndexCellOffset)
+		public PlayerCustomizationSlot GetUnequippingSlot(Guid itemTypeId)
 		{
-			tabIndexFound = 0;
-			tabIndexCellOffset = 0;
-			if (scrollIndex == 0)
-			{
-				return true;
-			}
-			int num = 0;
-			int i = 0;
-			while (i < this.SkinTabDataItems.Count)
-			{
-				num++;
-				tabIndexFound = i;
-				if (this.SkinTabDataItems[i].IsExpanded)
-				{
-					num += this.SkinTabToCellCountDictionary[i];
-				}
-				if (scrollIndex < num)
-				{
-					tabIndexCellOffset = this.SkinTabToCellCountDictionary[i] - (num - scrollIndex);
-					return false;
-				}
-				i++;
-				if (scrollIndex == num)
-				{
-					tabIndexFound = i;
-					return true;
-				}
-			}
-			return false;
-		}
-
-		public int GetSkinScrollerCellCount()
-		{
-			int num = 0;
-			for (int i = 0; i < this.SkinTabDataItems.Count; i++)
-			{
-				CustomizationInventoryCellItemSkinTabData customizationInventoryCellItemSkinTabData = this.SkinTabDataItems[i];
-				num++;
-				if (customizationInventoryCellItemSkinTabData.IsExpanded)
-				{
-					num += this.SkinTabToCellCountDictionary[i];
-				}
-			}
-			return num;
+			return this._customizationSlotSelector.GetUnequippingSlot(itemTypeId);
 		}
 
 		public Guid CategoryId;
 
-		public PlayerCustomizationSlot CustomizationSlot;
+		public List<PlayerCustomizationSlot> CustomizationSlots;
 
 		public bool IsLore;
 
@@ -149,17 +81,15 @@ namespace HeavyMetalMachines.Customization
 
 		public List<CustomizationInventoryCellItemData> Items;
 
-		public List<CustomizationInventoryCellItemSkinTabData> SkinTabDataItems;
-
-		public Dictionary<int, List<CustomizationInventoryCellItemData>> SkinTabToItemsDictionary;
-
-		public Dictionary<int, int> SkinTabToCellCountDictionary;
-
 		public Dictionary<Guid, CustomizationInventoryCellItemData> ItemsDictionary;
 
-		private Guid _currentlySelectedItemId = Guid.Empty;
+		public List<Guid> SortedCharacterIds;
+
+		public Dictionary<Guid, List<CustomizationInventoryCellItemData>> CharacterIdToItemsDictionary;
 
 		private bool _isCurrentSortAscending;
+
+		private IGetCustomizationSlot _customizationSlotSelector;
 
 		public enum SortKind
 		{

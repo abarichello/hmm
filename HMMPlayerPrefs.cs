@@ -4,20 +4,21 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using ClientAPI;
 using ClientAPI.Objects;
+using HeavyMetalMachines.DataTransferObjects.Result;
 using HeavyMetalMachines.Swordfish;
-using HeavyMetalMachines.Swordfish.Player;
+using Hoplon.Serialization;
 using Pocketverse;
 using UnityEngine;
 
 namespace HeavyMetalMachines
 {
-	public class HMMPlayerPrefs : GameHubObject
+	public class HMMPlayerPrefs : GameHubObject, IHMMPlayerPrefs
 	{
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		private event System.Action OnPrefsLoaded;
+		private event Action OnPrefsLoaded;
 
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		private event System.Action OnPrefsWrongVersion;
+		private event Action OnPrefsWrongVersion;
 
 		public void SetString(string key, string value)
 		{
@@ -108,6 +109,11 @@ namespace HeavyMetalMachines
 			return this._values.ContainsKey(key);
 		}
 
+		public bool IsLoaded()
+		{
+			return this._loaded;
+		}
+
 		public void Save()
 		{
 			if (!this._loaded)
@@ -130,29 +136,20 @@ namespace HeavyMetalMachines
 			this._breakSave = true;
 			if (GameHubObject.Hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish))
 			{
-				this.SkipSwordfishSave();
 				return;
 			}
 			PlayerPrefsContent playerPrefsContent = new PlayerPrefsContent
 			{
-				Values = this._values
+				Values = this._values,
+				version = 9
 			};
-			playerPrefsContent.version = 2;
 			InventoryBag inventoryBag = new InventoryBag
 			{
-				Kind = InventoryBag.InventoryKind.PlayerPrefs,
-				Content = playerPrefsContent.ToString()
+				Kind = 6,
+				Content = playerPrefsContent.Serialize()
 			};
-			PlayerCustomWS.SavePlayerPrefs(inventoryBag.ToString(), new SwordfishClientApi.ParameterizedCallback<string>(this.OnSave), new SwordfishClientApi.ErrorCallback(this.OnError));
-		}
-
-		private void SkipSwordfishSave()
-		{
-			foreach (KeyValuePair<string, string> keyValuePair in this._values)
-			{
-				GameHubObject.Hub.Config.SetDebugSetting(keyValuePair.Key, keyValuePair.Value);
-			}
-			GameHubObject.Hub.Config.SaveDebugIni();
+			HMMPlayerPrefs.Log.Debug(inventoryBag.Serialize());
+			PlayerCustomWS.SavePlayerPrefs(inventoryBag.Serialize(), new SwordfishClientApi.ParameterizedCallback<string>(this.OnSave), new SwordfishClientApi.ErrorCallback(this.OnError));
 		}
 
 		private void OnError(object state, Exception exception)
@@ -162,8 +159,12 @@ namespace HeavyMetalMachines
 
 		private void OnSave(object state, string obj)
 		{
-			NetResult netResult = (NetResult)((JsonSerializeable<T>)obj);
-			if (!netResult.Success)
+			NetResult netResult = (NetResult)((JsonSerializeable<!0>)obj);
+			if (netResult.Success)
+			{
+				HMMPlayerPrefs.Log.Debug("Player preferences saved!");
+			}
+			else
 			{
 				HMMPlayerPrefs.Log.ErrorFormat("Failed to save preferences, error={0} msg={1}", new object[]
 				{
@@ -190,7 +191,7 @@ namespace HeavyMetalMachines
 			yield break;
 		}
 
-		public void ExecOnPrefsLoaded(System.Action action)
+		public void ExecOnceOnPrefsLoaded(Action action)
 		{
 			if (action == null)
 			{
@@ -204,7 +205,7 @@ namespace HeavyMetalMachines
 			this.OnPrefsLoaded += action;
 		}
 
-		public void ExecOnPrefsWrongVersion(System.Action action)
+		public void ExecOnPrefsWrongVersion(Action action)
 		{
 			if (action == null)
 			{
@@ -221,21 +222,21 @@ namespace HeavyMetalMachines
 		public void Load()
 		{
 			this._loaded = true;
-			Inventory inventoryByKind = GameHubObject.Hub.User.Inventory.GetInventoryByKind(InventoryBag.InventoryKind.PlayerPrefs);
+			Inventory inventoryByKind = GameHubObject.Hub.User.Inventory.GetInventoryByKind(6);
 			if (inventoryByKind == null)
 			{
 				HMMPlayerPrefs.Log.WarnFormat("Inventory for PlayerPrefs not found", new object[0]);
 				return;
 			}
-			InventoryBag inventoryBag = (InventoryBag)((JsonSerializeable<T>)inventoryByKind.Bag);
+			InventoryBag inventoryBag = (InventoryBag)((JsonSerializeable<!0>)inventoryByKind.Bag);
 			PlayerPrefsContent playerPrefsContent = null;
 			try
 			{
-				playerPrefsContent = (PlayerPrefsContent)((JsonSerializeable<T>)inventoryBag.Content);
+				playerPrefsContent = (PlayerPrefsContent)((JsonSerializeable<!0>)inventoryBag.Content);
 			}
 			catch (Exception ex)
 			{
-				UnityEngine.Debug.LogErrorFormat("[HMMPlayerPrefs] {0} Loading PlayerPrefs Content, will use default content. Loaded Player Bag Content:\n{1}\n, Exception:\n{2}", new object[]
+				Debug.LogErrorFormat("[HMMPlayerPrefs] {0} Loading PlayerPrefs Content, will use default content. Loaded Player Bag Content:\n{1}\n, Exception:\n{2}", new object[]
 				{
 					ex.GetType().Name,
 					inventoryBag.Content,
@@ -248,11 +249,15 @@ namespace HeavyMetalMachines
 			}
 			else
 			{
-				this.SetPreferences(playerPrefsContent.Values);
-				if (playerPrefsContent.version < 2 && this.OnPrefsWrongVersion != null)
+				Dictionary<string, string> preferences = playerPrefsContent.Values;
+				if (playerPrefsContent.version < 9 && this.OnPrefsWrongVersion != null)
 				{
 					this.OnPrefsWrongVersion();
+					preferences = null;
+					this._values.Clear();
+					this.SaveNow();
 				}
+				this.SetPreferences(preferences);
 			}
 			this.OnPrefsWrongVersion = null;
 		}
@@ -276,8 +281,7 @@ namespace HeavyMetalMachines
 		public void SkipSwordfishLoad()
 		{
 			this._loaded = true;
-			Dictionary<string, string> debugSettings = GameHubObject.Hub.Config.GetDebugSettings();
-			this.SetPreferences(debugSettings);
+			this.SetPreferences(null);
 		}
 
 		public static readonly BitLogger Log = new BitLogger(typeof(HMMPlayerPrefs));
@@ -294,6 +298,6 @@ namespace HeavyMetalMachines
 
 		private const float WaitSaveSeconds = 60f;
 
-		private const int CurrentValidPrefsVersion = 2;
+		private const int CurrentValidPrefsVersion = 9;
 	}
 }

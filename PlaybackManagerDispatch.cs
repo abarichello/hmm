@@ -11,7 +11,7 @@ namespace HeavyMetalMachines
 
 		public void AddKeyframe(byte keyframetype, int frameId, int previousFrameId, int time, byte[] data)
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1008, 9, base.IsReliable, new object[]
+			base.Dispatch(base.DispatchDestination(), base.OID, 1009, 8, base.IsReliable, new object[]
 			{
 				keyframetype,
 				frameId,
@@ -23,7 +23,7 @@ namespace HeavyMetalMachines
 
 		public void UpdateState(byte statetype, byte[] data)
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1008, 10, base.IsReliable, new object[]
+			base.Dispatch(base.DispatchDestination(), base.OID, 1009, 9, base.IsReliable, new object[]
 			{
 				statetype,
 				data

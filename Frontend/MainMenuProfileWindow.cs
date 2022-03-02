@@ -14,6 +14,8 @@ namespace HeavyMetalMachines.Frontend
 
 		public abstract void SetWindowVisibility(bool visible);
 
+		public abstract void OnPreBackToMainMenu();
+
 		public abstract void OnBackToMainMenu();
 
 		[SerializeField]

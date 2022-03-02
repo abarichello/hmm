@@ -21,7 +21,7 @@ namespace HeavyMetalMachines.Event
 			return true;
 		}
 
-		public void WriteToBitStream(Pocketverse.BitStream bs)
+		public void WriteToBitStream(BitStream bs)
 		{
 			bs.WriteCompressedInt(this.Killer);
 			bs.WriteCompressedInt(this.Causer);
@@ -32,7 +32,7 @@ namespace HeavyMetalMachines.Event
 			bs.WriteCompressedInt((int)this.Reason);
 		}
 
-		public void ReadFromBitStream(Pocketverse.BitStream bs)
+		public void ReadFromBitStream(BitStream bs)
 		{
 			this.Killer = bs.ReadCompressedInt();
 			this.Causer = bs.ReadCompressedInt();

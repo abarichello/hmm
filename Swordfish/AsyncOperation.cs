@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using HeavyMetalMachines.DataTransferObjects.Result;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Swordfish

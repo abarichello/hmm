@@ -1,11 +1,14 @@
 ﻿using System;
+using System.Diagnostics;
 using HeavyMetalMachines.Infra.Context;
 using Hoplon.GadgetScript;
+using Pocketverse;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Combat.GadgetScript.Block
 {
 	[CreateAssetMenu(menuName = "GadgetScript/Block/CombatObject/CheckAlive")]
+	[Obsolete("Obsolete! Use FilterBlock.")]
 	public class CheckAliveBlock : BaseBlock
 	{
 		protected override void OnEnable()
@@ -17,17 +20,7 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 			}
 		}
 
-		protected override bool CheckSanity(IGadgetContext gadgetContext, IEventContext eventContext)
-		{
-			if (this._combat != null)
-			{
-				return true;
-			}
-			base.LogSanitycheckError("'Combat' parameter cannot be null.");
-			return false;
-		}
-
-		protected override IBlock InnerExecute(IGadgetContext gadgetContext, IEventContext eventContext)
+		public override IBlock Execute(IGadgetContext gadgetContext, IEventContext eventContext)
 		{
 			IHMMEventContext ihmmeventContext = (IHMMEventContext)eventContext;
 			if (((IHMMGadgetContext)gadgetContext).IsServer)
@@ -43,10 +36,24 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 			return (!CheckAliveBlock._resultParameter.GetValue(gadgetContext)) ? this._failureBlock : this._nextBlock;
 		}
 
-		public override bool UsesParameterWithId(int parameterId)
+		[Conditional("AllowHacks")]
+		private void LogPossibleNulls(ICombatObject combatObject)
 		{
-			return base.CheckIsParameterWithId(this._combat, parameterId);
+			if (CheckAliveBlock._resultParameter == null)
+			{
+				CheckAliveBlock.Log.Debug("_resultParameter is null when it shouldn't.");
+			}
+			if (combatObject == null)
+			{
+				CheckAliveBlock.Log.Debug("combatObject is null when it shouldn't.");
+			}
+			if (combatObject.Data == null)
+			{
+				CheckAliveBlock.Log.Debug("combatObject.Data is null when it shouldn't.");
+			}
 		}
+
+		private static readonly BitLogger Log = new BitLogger(typeof(CheckAliveBlock));
 
 		[SerializeField]
 		private BaseBlock _failureBlock;

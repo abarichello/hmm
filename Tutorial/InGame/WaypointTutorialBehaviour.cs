@@ -48,7 +48,7 @@ namespace HeavyMetalMachines.Tutorial.InGame
 				return;
 			}
 			this._playerCO = base.playerController.GetComponent<CombatObject>();
-			this._arrowHintInstance = UnityEngine.Object.Instantiate<GameObject>(this.arrowHint);
+			this._arrowHintInstance = Object.Instantiate<GameObject>(this.arrowHint);
 			this._arrowHintInstance.transform.parent = this._playerCO.Dummy.transform;
 			this._arrowHintInstance.transform.localScale = Vector3.one;
 			this._arrowHintInstance.transform.localPosition = Vector3.zero;
@@ -87,7 +87,7 @@ namespace HeavyMetalMachines.Tutorial.InGame
 			this._nextWaypoint = null;
 			if (this._arrowHintInstance != null)
 			{
-				UnityEngine.Object.Destroy(this._arrowHintInstance);
+				Object.Destroy(this._arrowHintInstance);
 			}
 			this.CompleteBehaviourAndSync();
 		}
@@ -97,7 +97,7 @@ namespace HeavyMetalMachines.Tutorial.InGame
 			base.OnStepCompletedOnClient();
 			if (this._arrowHintInstance != null)
 			{
-				UnityEngine.Object.Destroy(this._arrowHintInstance);
+				Object.Destroy(this._arrowHintInstance);
 			}
 		}
 

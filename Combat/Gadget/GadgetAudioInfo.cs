@@ -36,21 +36,21 @@ namespace HeavyMetalMachines.Combat.Gadget
 		[AudioDrawer]
 		public string FireAudio;
 
-		public FMODAsset tmpFireAudio;
+		public AudioEventAsset tmpFireAudio;
 
 		[AudioDrawer]
 		public string HitAudio;
 
-		public FMODAsset tmpHitAudio;
+		public AudioEventAsset tmpHitAudio;
 
 		[AudioDrawer]
 		public string FadeAudio;
 
-		public FMODAsset tmpFadeAudio;
+		public AudioEventAsset tmpFadeAudio;
 
 		[AudioDrawer]
 		public string LoopAudio;
 
-		public FMODAsset tmpLoopAudio;
+		public AudioEventAsset tmpLoopAudio;
 	}
 }

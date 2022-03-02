@@ -24,6 +24,6 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 		}
 
 		[SerializeField]
-		private FMODAsset _asset;
+		private AudioEventAsset _asset;
 	}
 }

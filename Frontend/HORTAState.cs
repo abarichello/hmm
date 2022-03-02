@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Frontend
@@ -8,16 +9,24 @@ namespace HeavyMetalMachines.Frontend
 		protected override void OnMyLevelLoaded()
 		{
 			GameHubBehaviour.Hub.Config.SetValue(ConfigAccess.SkipSwordfish, true.ToString());
-			this._login = new Login(GameHubBehaviour.Hub, new Action<bool>(this.LoginEnd), new Action<ConfirmWindowProperties>(this.BogusConfirm));
-			this._login.ConnectSteam();
+			GameHubBehaviour.Hub.PlayerPrefs.SkipSwordfishLoad();
 		}
 
 		private void BogusConfirm(ConfirmWindowProperties obj)
 		{
+			HORTAState.Log.DebugFormat("Bogus Confirm Window={0} Question={1}", new object[]
+			{
+				obj.TileText,
+				obj.QuestionText
+			});
 		}
 
 		private void LoginEnd(bool obj)
 		{
+			HORTAState.Log.DebugFormat("Steam login ended={0}", new object[]
+			{
+				obj
+			});
 		}
 
 		protected override void OnStateEnabled()
@@ -34,6 +43,10 @@ namespace HeavyMetalMachines.Frontend
 
 		private void ListenToMatchFileLoaded(IMatchInformation match)
 		{
+			HORTAState.Log.DebugFormat("Match file loaded={0}", new object[]
+			{
+				match.Data
+			});
 		}
 
 		private void ListenToMatchReady()
@@ -45,8 +58,7 @@ namespace HeavyMetalMachines.Frontend
 
 		public LoadingState Loading;
 
-		public HORTAComponent Component;
-
-		private Login _login;
+		[InjectOnClient]
+		private HORTAComponent Component;
 	}
 }

@@ -1,19 +1,39 @@
 ﻿using System;
 using System.Collections.Generic;
-using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Matches.DataTransferObjects;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Swordfish
 {
 	public static class SwordfishConnectionArgsParser
 	{
-		public static void ParseMatchArgs(string[] args, out string[] redTeam, out string[] bluTeam, out string[] spectators, ref long jobId, ref Guid serverMatchId, ref bool serverConfiguredBySwordfish, ref string serverIp, ref int serverPort, ref MatchData.MatchKind matchKind, ref int arenaIndex)
+		public static string[] AutoCompleteTeamArrayWithBots(string[] parsedTeam, int maxPlayersInTeam)
 		{
-			redTeam = null;
-			bluTeam = null;
-			spectators = null;
+			string[] array = new string[maxPlayersInTeam];
+			int i;
+			for (i = 0; i < parsedTeam.Length; i++)
+			{
+				array[i] = parsedTeam[i];
+			}
+			while (i < array.Length)
+			{
+				array[i] = "-1";
+				i++;
+			}
+			return array;
+		}
+
+		public static void ParseMatchArgs(string[] args, out string[] redTeam, out string[] bluTeam, out string[] spectators, ref long jobId, ref Guid serverMatchId, ref bool serverConfiguredBySwordfish, ref string serverIp, ref int serverPort, ref MatchKind matchKind, ref int arenaIndex, ref long tournamentStepId, ref string regionName, ref string queueName)
+		{
+			redTeam = new string[0];
+			bluTeam = new string[0];
+			spectators = new string[0];
 			foreach (string text in args)
 			{
+				SwordfishConnectionArgsParser.Log.DebugFormat("Parsing argument={0}", new object[]
+				{
+					text
+				});
 				if (SwordfishConnectionArgsParser.IsValidConfigArg(text))
 				{
 					string[] array = text.Split(new char[]
@@ -26,84 +46,123 @@ namespace HeavyMetalMachines.Swordfish
 					{
 					case "--jobid":
 						jobId = long.Parse(text3);
-						goto IL_1D0;
+						goto IL_249;
 					case "--matchid":
 						serverMatchId = new Guid(text3);
-						goto IL_1D0;
+						goto IL_249;
 					case "--ip":
 						serverIp = text3;
-						goto IL_1D0;
+						goto IL_249;
 					case "--port":
 						serverPort = int.Parse(text3);
-						goto IL_1D0;
-					case "--queuename":
-					{
-						string queueName = text3;
-						SwordfishConnectionArgsParser.ParseQueueName(queueName, ref matchKind);
-						goto IL_1D0;
-					}
-					case "--TutorialPlayer":
-					{
-						string text4 = text3;
-						redTeam = new string[]
-						{
-							text4
-						};
-						goto IL_1D0;
-					}
+						goto IL_249;
+					case "--queueName":
+						queueName = text3;
+						goto IL_249;
+					case "--arena":
+						serverConfiguredBySwordfish = true;
+						SwordfishConnectionArgsParser.ParseArenaIndex(text3, ref arenaIndex);
+						goto IL_249;
 					case "--config":
-						SwordfishConnectionArgsParser.ParseConfig(text, ref arenaIndex, ref serverConfiguredBySwordfish, ref redTeam, ref bluTeam);
-						goto IL_1D0;
+						SwordfishConnectionArgsParser.ParseConfig(text, ref redTeam, ref bluTeam, ref arenaIndex, ref matchKind);
+						goto IL_249;
+					case "--kind":
+						SwordfishConnectionArgsParser.ParseMatchKindName(text3, ref matchKind);
+						goto IL_249;
 					case "--team1":
 					case "--team2":
 						SwordfishConnectionArgsParser.ParseTeamData(text2, text3, ref redTeam, ref bluTeam);
-						goto IL_1D0;
+						goto IL_249;
 					case "--spectators":
 						SwordfishConnectionArgsParser.ParseSpectators(text3, ref spectators);
-						goto IL_1D0;
+						goto IL_249;
+					case "--tournamentStepId":
+						tournamentStepId = long.Parse(text3);
+						goto IL_249;
+					case "--regionName":
+						regionName = text3;
+						goto IL_249;
 					}
 					SwordfishConnectionArgsParser.Log.WarnFormat("Unknow configuration found: {0}", new object[]
 					{
 						text2
 					});
 				}
-				IL_1D0:;
+				IL_249:;
 			}
 		}
 
-		private static void ParseQueueName(string queueName, ref MatchData.MatchKind matchKind)
+		private static void ParseConfig(string arg, ref string[] redTeam, ref string[] bluTeam, ref int arenaIndex, ref MatchKind matchKind)
 		{
-			MatchData.MatchKind matchKind2 = MatchData.MatchKind.PvP;
-			if (SwordfishConnectionArgsParser.TryGetMatchKindFromQueueName(queueName, ref matchKind2))
+			string[] array = arg.Split(new char[]
 			{
-				matchKind = matchKind2;
-			}
-		}
-
-		private static void ParseConfig(string arg, ref int arenaIndex, ref bool serverConfiguredBySwordfish, ref string[] redTeam, ref string[] bluTeam)
-		{
-			string text = arg.Replace("--config=", string.Empty);
-			string[] array = text.Split(new char[]
-			{
-				'=',
-				':'
+				'='
 			});
-			for (int i = 0; i < array.Length; i += 2)
+			if (array.Length == 2)
 			{
-				if (array[i].Contains("ArenaIndex"))
+				string[] array2 = array[1].Split(new char[]
 				{
-					SwordfishConnectionArgsParser.ParseArenaIndex(array[i + 1], ref arenaIndex, out serverConfiguredBySwordfish);
-				}
-				if (array[i].Contains("CustomWithBotsPlayerID"))
+					',',
+					':'
+				});
+				for (int i = 0; i < array2.Length; i += 2)
 				{
-					SwordfishConnectionArgsParser.ParseCustomWithBotsPlayerId(array[i + 1], ref redTeam, ref bluTeam);
+					if (array2[i].Contains("MatchKind"))
+					{
+						SwordfishConnectionArgsParser.ParseMatchKindName(array2[i + 1], ref matchKind);
+					}
+					else if (array2[i].Contains("CustomWithBotsPlayerID"))
+					{
+						SwordfishConnectionArgsParser.ParseCustomWithBotsPlayerId(array2[i + 1], ref redTeam, ref bluTeam);
+					}
+					else if (array2[i].Contains("TutorialPlayer"))
+					{
+						string text = array2[i + 1];
+						redTeam = new string[]
+						{
+							text
+						};
+						bluTeam = new string[0];
+						SwordfishConnectionArgsParser.Log.DebugFormat("Tutorial Player. Team=Red Uid={0}", new object[]
+						{
+							text
+						});
+					}
+					else if (array2[i].Contains("Config"))
+					{
+						SwordfishConnectionArgsParser.ParseArenaIndex(array2[i + 1], ref arenaIndex);
+					}
 				}
 			}
 		}
 
-		private static void ParseArenaIndex(string arenaIndexText, ref int arenaIndex, out bool serverConfiguredBySwordfish)
+		private static void ParseMatchKindName(string matchKindName, ref MatchKind matchKind)
 		{
-			serverConfiguredBySwordfish = true;
+			string[] names = Enum.GetNames(typeof(MatchKind));
+			MatchKind[] array = (MatchKind[])Enum.GetValues(typeof(MatchKind));
+			for (int i = 0; i < names.Length; i++)
+			{
+				if (string.CompareOrdinal(names[i], matchKindName) == 0)
+				{
+					matchKind = array[i];
+					SwordfishConnectionArgsParser.Log.DebugFormat("MatchKind found: {0}. MatchKind set to: {1}", new object[]
+					{
+						matchKindName,
+						matchKind
+					});
+					return;
+				}
+			}
+			matchKind = 0;
+			SwordfishConnectionArgsParser.Log.ErrorFormat("MatchKindName not found: {0}. MatchKind set to: {1}", new object[]
+			{
+				matchKindName,
+				matchKind
+			});
+		}
+
+		private static void ParseArenaIndex(string arenaIndexText, ref int arenaIndex)
+		{
 			int num;
 			if (!int.TryParse(arenaIndexText, out num))
 			{
@@ -132,6 +191,10 @@ namespace HeavyMetalMachines.Swordfish
 				"-1",
 				"-1"
 			};
+			SwordfishConnectionArgsParser.Log.DebugFormat("[CustomWithBots] Player. Team=Red Uid={0}", new object[]
+			{
+				universalId
+			});
 		}
 
 		private static void ParseTeamData(string configTag, string configArg, ref string[] redTeam, ref string[] bluTeam)
@@ -156,6 +219,11 @@ namespace HeavyMetalMachines.Swordfish
 			}
 			for (int j = 0; j < list.Count; j++)
 			{
+				SwordfishConnectionArgsParser.Log.DebugFormat("Team={0} Uid={1}", new object[]
+				{
+					(!flag) ? "Blu" : "Red",
+					list[j]
+				});
 			}
 			if (flag)
 			{
@@ -185,6 +253,10 @@ namespace HeavyMetalMachines.Swordfish
 			spectators = list.ToArray();
 			for (int j = 0; j < list.Count; j++)
 			{
+				SwordfishConnectionArgsParser.Log.DebugFormat("Spectator Uid={0}", new object[]
+				{
+					list[j]
+				});
 			}
 		}
 
@@ -210,40 +282,6 @@ namespace HeavyMetalMachines.Swordfish
 				return false;
 			}
 			return true;
-		}
-
-		public static bool TryGetMatchKindFromQueueName(string name, ref MatchData.MatchKind matchKind)
-		{
-			string text = name.ToLower();
-			if (text != null)
-			{
-				if (text == "normal")
-				{
-					matchKind = MatchData.MatchKind.PvP;
-					return true;
-				}
-				if (text == "coopvsbots")
-				{
-					matchKind = MatchData.MatchKind.PvE;
-					return true;
-				}
-				if (text == "custom")
-				{
-					matchKind = MatchData.MatchKind.Custom;
-					return true;
-				}
-				if (text == "playnow.8682b631-5e72-48df-9d50-ef69120aa14e")
-				{
-					matchKind = MatchData.MatchKind.Tutorial;
-					return true;
-				}
-				if (text == "ranked")
-				{
-					matchKind = MatchData.MatchKind.Ranked;
-					return true;
-				}
-			}
-			return false;
 		}
 
 		public static readonly BitLogger Log = new BitLogger(typeof(SwordfishConnectionArgsParser));

@@ -12,7 +12,7 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 		public IFuture ShowDialogOnClient()
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1010, 4, new object[0]);
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1011, 4, new object[0]);
 			return future;
 		}
 

@@ -2,8 +2,16 @@
 using System.Collections;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids;
 using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.Infra.Counselor;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Input;
+using HeavyMetalMachines.Localization;
+using HeavyMetalMachines.Presenting;
+using HeavyMetalMachines.Presenting.Unity;
+using Hoplon.Input;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -28,12 +36,16 @@ namespace HeavyMetalMachines.Counselor
 				GameHubBehaviour.Hub.Events.Players.ListenToAllPlayersSpawned += this.ListenToAllPlayersSpawned;
 				GameHubBehaviour.Hub.Events.Bots.ListenToAllPlayersSpawned += this.ListenToAllPlayersSpawned;
 				GameHubBehaviour.Hub.BombManager.ListenToPhaseChange += this.OnPhaseChange;
+				this._inputActiveDeviceChangeNotifierDisposable = ObservableExtensions.Subscribe<InputDevice>(Observable.Do<InputDevice>(this._inputActiveDeviceChangeNotifier.ObserveActiveDeviceChange(), delegate(InputDevice activeDevice)
+				{
+					this.OnActiveDeviceChange();
+				}));
 			}
 		}
 
-		private void OnPhaseChange(BombScoreBoard.State bombScoreBoardState)
+		private void OnPhaseChange(BombScoreboardState bombScoreBoardState)
 		{
-			if (this.state != HudCounselorCursorController.State.Off && bombScoreBoardState != BombScoreBoard.State.BombDelivery)
+			if (this.state != HudCounselorCursorController.State.Off && bombScoreBoardState != BombScoreboardState.BombDelivery)
 			{
 				this.GoToOffState(true);
 			}
@@ -49,6 +61,11 @@ namespace HeavyMetalMachines.Counselor
 			{
 				this._combat.SpawnController.OnStateChanged -= this.SpawnControllerOnStateChanged;
 			}
+			if (this._inputActiveDeviceChangeNotifierDisposable != null)
+			{
+				this._inputActiveDeviceChangeNotifierDisposable.Dispose();
+				this._inputActiveDeviceChangeNotifierDisposable = null;
+			}
 		}
 
 		private void ListenToAllPlayersSpawned()
@@ -61,9 +78,9 @@ namespace HeavyMetalMachines.Counselor
 			this._combat.SpawnController.OnStateChanged += this.SpawnControllerOnStateChanged;
 		}
 
-		private void SpawnControllerOnStateChanged(SpawnController.StateType stateType)
+		private void SpawnControllerOnStateChanged(SpawnStateKind stateType)
 		{
-			if (this.state != HudCounselorCursorController.State.Off && stateType != SpawnController.StateType.PreSpawned)
+			if (this.state != HudCounselorCursorController.State.Off && stateType != SpawnStateKind.PreSpawned)
 			{
 				this.GoToOffState(false);
 			}
@@ -86,7 +103,7 @@ namespace HeavyMetalMachines.Counselor
 		private void OnAudioPlayingChanged()
 		{
 			CounselorConfig.AdvicesConfig currentAdviceConfig = GameHubBehaviour.Hub.ClientCounselorController.CurrentAdviceConfig;
-			if (string.IsNullOrEmpty(currentAdviceConfig.CursorText))
+			if (!this.IsValidToShowCursor(currentAdviceConfig))
 			{
 				if (this.state != HudCounselorCursorController.State.Off)
 				{
@@ -98,7 +115,7 @@ namespace HeavyMetalMachines.Counselor
 			{
 				return;
 			}
-			this._messageLabel.text = Language.Get(currentAdviceConfig.CursorText, TranslationSheets.Advisor);
+			this.UpdateCursorInfo(currentAdviceConfig);
 			if (this.state == HudCounselorCursorController.State.Off)
 			{
 				this.state = HudCounselorCursorController.State.In;
@@ -111,9 +128,37 @@ namespace HeavyMetalMachines.Counselor
 			}
 		}
 
+		private void UpdateCursorInfo(CounselorConfig.AdvicesConfig advicesConfig)
+		{
+			if (!this.IsValidToShowCursor(advicesConfig))
+			{
+				return;
+			}
+			if (this._inputGetActiveDevicePoller.GetActiveDevice() == 3)
+			{
+				this._messageLabel.gameObject.SetActive(false);
+				this._joystickGroupGameObject.SetActive(true);
+				ISprite sprite;
+				string text;
+				this._inputTranslation.TryToGetInputActionJoystickAssetOrFallbackToTranslation(advicesConfig.InputAction, ref sprite, ref text);
+				this._joystickIconImage.sprite = (sprite as UnitySprite).GetSprite();
+			}
+			else
+			{
+				this._messageLabel.gameObject.SetActive(true);
+				this._joystickGroupGameObject.SetActive(false);
+				this._messageLabel.text = Language.Get(advicesConfig.CursorText, TranslationContext.Advisor);
+			}
+		}
+
+		private bool IsValidToShowCursor(CounselorConfig.AdvicesConfig advicesConfig)
+		{
+			return !string.IsNullOrEmpty(advicesConfig.CursorText);
+		}
+
 		private void StopCurrentAnim()
 		{
-			if (this._anim.clip.wrapMode != WrapMode.Loop)
+			if (this._anim.clip.wrapMode != 2)
 			{
 				return;
 			}
@@ -135,10 +180,27 @@ namespace HeavyMetalMachines.Counselor
 			yield break;
 		}
 
+		private void OnActiveDeviceChange()
+		{
+			if (this.state == HudCounselorCursorController.State.Showing)
+			{
+				this.UpdateCursorInfo(GameHubBehaviour.Hub.ClientCounselorController.CurrentAdviceConfig);
+			}
+		}
+
 		private HudCounselorCursorController.State state = HudCounselorCursorController.State.Off;
 
 		[SerializeField]
 		private Text _messageLabel;
+
+		[SerializeField]
+		private GameObject _joystickGroupGameObject;
+
+		[SerializeField]
+		private Text _joystickMessageLabel;
+
+		[SerializeField]
+		private Image _joystickIconImage;
 
 		[SerializeField]
 		private Animation _anim;
@@ -158,6 +220,17 @@ namespace HeavyMetalMachines.Counselor
 		private Coroutine updateInStateCoroutine;
 
 		private CombatObject _combat;
+
+		[InjectOnClient]
+		private IInputGetActiveDevicePoller _inputGetActiveDevicePoller;
+
+		[InjectOnClient]
+		private IInputActiveDeviceChangeNotifier _inputActiveDeviceChangeNotifier;
+
+		[InjectOnClient]
+		private IInputTranslation _inputTranslation;
+
+		private IDisposable _inputActiveDeviceChangeNotifierDisposable;
 
 		public enum State
 		{

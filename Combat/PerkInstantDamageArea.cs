@@ -38,7 +38,7 @@ namespace HeavyMetalMachines.Combat
 		private void DamageSphere()
 		{
 			Vector3 origin = this.Effect.Data.Origin;
-			Collider[] array = Physics.OverlapSphere(origin, this.Radius, 1077058560);
+			Collider[] array = Physics.OverlapSphere(origin, this.Radius, 1077054464);
 			List<BarrierUtils.CombatHit> list = new List<BarrierUtils.CombatHit>();
 			foreach (Collider collider in array)
 			{
@@ -121,13 +121,15 @@ namespace HeavyMetalMachines.Combat
 			Vector3 direction = this.Effect.Data.Direction;
 			Vector3 vector = Vector3.Cross(direction, Vector3.up);
 			Vector3 vector2 = vector * -1f;
-			Vector3 inPoint = origin + vector * (x / 2f);
-			Vector3 inPoint2 = origin + vector2 * (x / 2f);
-			Plane plane = new Plane(vector2, inPoint2);
-			Plane plane2 = new Plane(vector, inPoint);
-			float radius = Mathf.Sqrt(Mathf.Pow(y / 2f, 2f) + Mathf.Pow(x / 2f, 2f));
-			Vector3 position = origin;
-			Collider[] array = Physics.OverlapSphere(position, radius, 1077058560);
+			Vector3 vector3 = origin + vector * (x / 2f);
+			Vector3 vector4 = origin + vector2 * (x / 2f);
+			Plane plane;
+			plane..ctor(vector2, vector4);
+			Plane plane2;
+			plane2..ctor(vector, vector3);
+			float num = Mathf.Sqrt(Mathf.Pow(y / 2f, 2f) + Mathf.Pow(x / 2f, 2f));
+			Vector3 vector5 = origin;
+			Collider[] array = Physics.OverlapSphere(vector5, num, 1077054464);
 			List<BarrierUtils.CombatHit> list = new List<BarrierUtils.CombatHit>();
 			foreach (Collider collider in array)
 			{

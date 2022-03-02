@@ -15,7 +15,7 @@ namespace HeavyMetalMachines.Utils
 
 		private void Update()
 		{
-			this.histogramWindow.AddSample(0, (float)((!Input.GetKey(KeyCode.A)) ? UnityEngine.Random.Range(0, 100) : 0));
+			this.histogramWindow.AddSample(0, (float)((!Input.GetKey(97)) ? Random.Range(0, 100) : 0));
 		}
 
 		private HistogramUtility.HistogramWindow histogramWindow;

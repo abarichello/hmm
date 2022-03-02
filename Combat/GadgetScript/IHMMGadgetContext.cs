@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.GameCamera;
 using HeavyMetalMachines.Infra.Context;
 using Hoplon.GadgetScript;
 using Pocketverse;
@@ -6,27 +7,35 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat.GadgetScript
 {
-	public interface IHMMGadgetContext : IGadgetContext, IParameterContext
+	public interface IHMMGadgetContext : IGadgetContext, IGadgetInput
 	{
-		int OwnerId { get; }
-
 		IGadgetOwner Owner { get; }
 
 		int Id { get; }
 
-		void SetLastBodyId(IEventContext ev);
+		void SetLastBodyId(int objectId);
 
 		ICombatObject Bomb { get; }
+
+		IGameCamera GameCamera { get; }
 
 		bool IsClient { get; }
 
 		bool IsServer { get; }
 
-		bool IsLocalPlayer { get; }
+		bool IsTest { get; }
 
 		int CurrentTime { get; }
 
 		Drawers HierarchyDrawers { get; }
+
+		IScoreBoard ScoreBoard { get; }
+
+		IStateMachine StateMachine { get; }
+
+		void SetBodyDestructionTime(int bodyId, int time);
+
+		bool TryGetBodyDestructionTime(int bodyId, out int time);
 
 		ICombatObject GetCombatObject(int id);
 
@@ -35,6 +44,8 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 		IIdentifiable GetIdentifiable(int id);
 
 		bool IsCarryingBomb(ICombatObject combatObject);
+
+		void CleanUp();
 
 		IParameter<T> GetUIParameter<T>(string param);
 

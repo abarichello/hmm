@@ -20,13 +20,25 @@ namespace HeavyMetalMachines.Frontend
 
 		public abstract void Setup(T data);
 
-		public void FeedUpdate(float timeoutDeltaInSec)
+		public bool Visible
 		{
+			get
+			{
+				return this.CanvasGroup != null && this.CanvasGroup.alpha > 0f;
+			}
+		}
+
+		public virtual void FeedUpdate(float timeoutDeltaInSec)
+		{
+			if (!this.Visible)
+			{
+				return;
+			}
 			if (this.Data == null)
 			{
 				if (!this.OutAnimation.isPlaying)
 				{
-					base.gameObject.SetActive(false);
+					this.CanvasGroup.alpha = 0f;
 				}
 				return;
 			}
@@ -39,33 +51,33 @@ namespace HeavyMetalMachines.Frontend
 
 		public void AnimateIn()
 		{
-			if (!base.gameObject.activeInHierarchy)
+			if (!this.Visible)
 			{
 				return;
 			}
 			GUIUtils.AnimationSetFirstFrame(this.OutAnimation);
-			GUIUtils.PlayAnimation(this.InAnimation, false, 1f, string.Empty);
+			GUIUtils.PlayAnimation(this.InAnimation, false, 1f, this.InAnimationClip.name);
 		}
 
 		public void AnimateOut()
 		{
 			this.Data = (T)((object)null);
-			if (!base.gameObject.activeInHierarchy)
+			if (!this.Visible)
 			{
 				return;
 			}
-			GUIUtils.PlayAnimation(this.OutAnimation, false, 1f, string.Empty);
+			GUIUtils.PlayAnimation(this.OutAnimation, false, 1f, this.OutAnimationClip.name);
 		}
 
 		public void AnimateDown()
 		{
-			if (!base.gameObject.activeInHierarchy)
+			if (!this.Visible)
 			{
 				return;
 			}
 			GUIUtils.AnimationSetLastFrame(this.InAnimation);
 			GUIUtils.AnimationSetFirstFrame(this.OutAnimation);
-			GUIUtils.PlayAnimation(this.DownAnimation, false, 1f, string.Empty);
+			GUIUtils.PlayAnimation(this.DownAnimation, false, 1f, this.DownAnimationClip.name);
 		}
 
 		public Animation InAnimation;
@@ -73,6 +85,14 @@ namespace HeavyMetalMachines.Frontend
 		public Animation OutAnimation;
 
 		public Animation DownAnimation;
+
+		public AnimationClip InAnimationClip;
+
+		public AnimationClip OutAnimationClip;
+
+		public AnimationClip DownAnimationClip;
+
+		public CanvasGroup CanvasGroup;
 
 		public class HudFeedData
 		{

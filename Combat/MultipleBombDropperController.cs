@@ -11,7 +11,7 @@ namespace HeavyMetalMachines.Combat
 		{
 			if (GameHubBehaviour.Hub.Net.IsServer())
 			{
-				UnityEngine.Object.Destroy(base.gameObject);
+				Object.Destroy(base.gameObject);
 				return;
 			}
 		}

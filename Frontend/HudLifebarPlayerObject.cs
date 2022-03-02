@@ -1,20 +1,34 @@
 ﻿using System;
-using System.Collections;
-using System.Collections.Generic;
+using System.Text;
+using Assets.Customization;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Combat.Gadget;
 using HeavyMetalMachines.Combat.GadgetScript;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.ParentalControl.Restrictions;
+using HeavyMetalMachines.Players.Business;
+using HeavyMetalMachines.Players.Presenting;
 using HeavyMetalMachines.Utils;
+using Hoplon.UserInterface;
 using Pocketverse;
 using UnityEngine;
 using UnityEngine.UI;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
 	public class HudLifebarPlayerObject : HudLifebarObject
 	{
+		public HudIconBar IconBar
+		{
+			get
+			{
+				return this._iconBar;
+			}
+		}
+
 		public CombatObject CombatObject
 		{
 			get
@@ -29,9 +43,11 @@ namespace HeavyMetalMachines.Frontend
 			if (this._combatObject)
 			{
 				this._combatObject.Player.ListenToBotControlChanged -= this.ListenToBotControlChanged;
-				this._combatObject.GadgetStates.GetGadgetState(GadgetSlot.CustomGadget0).ListenToGadgetReady -= this.OnListenToGadget0Ready;
-				this._combatObject.GadgetStates.GetGadgetState(GadgetSlot.CustomGadget1).ListenToGadgetReady -= this.OnListenToGadget1Ready;
-				this._combatObject.GadgetStates.GetGadgetState(GadgetSlot.BoostGadget).ListenToGadgetReady -= this.OnListenToGadgetBoostReady;
+			}
+			if (this.hudEmotePresenter != null)
+			{
+				this.hudEmotePresenter.Dispose();
+				this.hudEmotePresenter = null;
 			}
 			GameHubBehaviour.Hub.BombManager.ListenToPhaseChange -= this.BombManagerOnListenToPhaseChange;
 			GameHubBehaviour.Hub.Options.Game.ListenToShowGadgetsLifebarChanged -= this.OptionsOnListenToShowGadgetsLifebarChanged;
@@ -47,8 +63,8 @@ namespace HeavyMetalMachines.Frontend
 				this._lifebarPlayerType = HudLifebarPlayerObject.HudLifebarPlayerType.LocalPlayer;
 				this._colorHpEncoded = NGUIText.EncodeColor24(this.HudLifebarSettings.PlayerHpTextColor);
 				this._colorHpMaxEncoded = NGUIText.EncodeColor24(this.HudLifebarSettings.PlayerHpMaxTextColor);
-				this.NameText.gameObject.SetActive(false);
-				this.HpText.gameObject.SetActive(true);
+				this._nameText.gameObject.SetActive(false);
+				this._hpText.gameObject.SetActive(true);
 				GameHubBehaviour.Hub.BombManager.ListenToPhaseChange += this.BombManagerOnListenToPhaseChange;
 				this.uiLifeBar.kind = UILifeBar.Kind.Self;
 				this.SetupCurrentPlayerGadgets();
@@ -60,18 +76,18 @@ namespace HeavyMetalMachines.Frontend
 				this._lifebarPlayerType = ((!flag) ? HudLifebarPlayerObject.HudLifebarPlayerType.Enemy : HudLifebarPlayerObject.HudLifebarPlayerType.Ally);
 				this.UpdateNameText(!combatObject.Player.IsBot && combatObject.Player.IsBotControlled);
 				combatObject.Player.ListenToBotControlChanged += this.ListenToBotControlChanged;
-				this.HpText.gameObject.SetActive(false);
+				this._nameText.gameObject.SetActive(true);
+				this._hpText.gameObject.SetActive(false);
 				this.uiLifeBar.kind = ((!flag) ? UILifeBar.Kind.Enemy : UILifeBar.Kind.Ally);
-				UnityEngine.Object.Destroy(this.CounselorParentGameObject);
+				Object.Destroy(this.CounselorParentGameObject);
 			}
+			this.hudEmotePresenter = new HudEmotePresenter(this.hudEmoteView, GameHubBehaviour.Hub.Players, this._customizationAssets, this._isPlayerRestrictedByTextChat);
+			this.hudEmotePresenter.Initialize(combatObject.Player.PlayerCarId);
 			this.SetLifebarBackground(this.uiLifeBar.kind);
-			this.SetupTextInfoVisibility();
+			this.OptionsOnShowLifebarTextChanged();
 			GameHubBehaviour.Hub.Options.Game.ShowLifebarTextChanged += this.OptionsOnShowLifebarTextChanged;
-			this.RepairData.Animation.playAutomatically = false;
-			this.ArmourData.ArmourAnimation.playAutomatically = false;
-			this.ArmourData.VulnerableAnimation.playAutomatically = false;
-			this.InvulnerableData.MainCanvasGroup.alpha = 0f;
-			this._showIndestructibleFeedback = GameHubBehaviour.Hub.ArenaConfig.Arenas[GameHubBehaviour.Hub.Match.ArenaIndex].LifebarShowIndestructibleFeedback;
+			this.InvulnerableData.Object.SetActive(false);
+			this._showIndestructibleFeedback = GameHubBehaviour.Hub.ArenaConfig.GetCurrentArena().LifebarShowIndestructibleFeedback;
 		}
 
 		private void SetLifebarBackground(UILifeBar.Kind kind)
@@ -82,22 +98,26 @@ namespace HeavyMetalMachines.Frontend
 				{
 					if (kind == UILifeBar.Kind.Self)
 					{
-						this._backgroundLifebarImage.sprite = this._lifebarBackgroundImages.PlayerBackGroundSprite;
+						this._backgroundLifebarImage.Sprite = this._lifebarBackgroundImages.PlayerBackGroundSprite;
 					}
 				}
 				else
 				{
-					this._backgroundLifebarImage.sprite = this._lifebarBackgroundImages.AllyBackGroundSprite;
+					this._backgroundLifebarImage.Sprite = this._lifebarBackgroundImages.AllyBackGroundSprite;
 				}
 			}
 			else
 			{
-				this._backgroundLifebarImage.sprite = this._lifebarBackgroundImages.EnemyBackGroundSprite;
+				this._backgroundLifebarImage.Sprite = this._lifebarBackgroundImages.EnemyBackGroundSprite;
 			}
 		}
 
 		private void ListenToBotControlChanged(PlayerData obj)
 		{
+			if (HudLifebarPlayerObject.IsMatchOver())
+			{
+				return;
+			}
 			if (!SpectatorController.IsSpectating && this.CombatObject.Id.ObjId == GameHubBehaviour.Hub.Players.CurrentPlayerData.CharacterInstance.ObjId)
 			{
 				return;
@@ -105,40 +125,41 @@ namespace HeavyMetalMachines.Frontend
 			this.UpdateNameText(!obj.IsBot && obj.IsBotControlled);
 		}
 
+		private static bool IsMatchOver()
+		{
+			return GameHubBehaviour.Hub.Match.State == MatchData.MatchState.MatchOverTie || GameHubBehaviour.Hub.Match.State == MatchData.MatchState.MatchOverBluWins || GameHubBehaviour.Hub.Match.State == MatchData.MatchState.MatchOverRedWins;
+		}
+
 		private void UpdateNameText(bool useLocalizedBotName)
 		{
-			string nameText = (!useLocalizedBotName) ? GUIUtils.GetShortName(this.CombatObject.Player.Name, this.HudLifebarSettings.PlayerNameMaxChars) : this.CombatObject.Player.Character.LocalizedBotName;
-			this.NameText.text = nameText;
-			this.NameText.supportRichText = false;
-			Color playerColor = (!this.CombatObject.IsSameTeamAsCurrentPlayer()) ? this.HudLifebarSettings.EnemyNameColor : this.HudLifebarSettings.AllyNameColor;
-			this.NameText.color = playerColor;
-			this.NameText.gameObject.SetActive(true);
+			string text;
+			if (useLocalizedBotName)
+			{
+				text = this.CombatObject.Player.GetCharacterBotLocalizedName();
+			}
+			else
+			{
+				text = GUIUtils.GetShortName(this.CombatObject.Player.Name, this.HudLifebarSettings.PlayerNameMaxChars);
+				if (!this.CombatObject.Player.IsBot)
+				{
+					text = this._getDisplayableNickName.GetFormattedNickNameWithPlayerTag(this.CombatObject.Player.PlayerId, text, new long?(this.CombatObject.Player.PlayerTag));
+				}
+			}
+			this._nameText.Text = text;
+			Color color = (!this.CombatObject.IsSameTeamAsCurrentPlayer()) ? this.HudLifebarSettings.EnemyNameColor : this.HudLifebarSettings.AllyNameColor;
+			this._nameText.Color = color;
+			this._nameText.gameObject.SetActive(true);
 			if (!useLocalizedBotName && !this.CombatObject.Player.IsBot)
 			{
-				TeamUtils.GetUserTagAsync(GameHubBehaviour.Hub, this.CombatObject.Player.UserId, delegate(string teamTag)
-				{
-					if (!string.IsNullOrEmpty(teamTag))
-					{
-						this.NameText.supportRichText = true;
-						this.NameText.color = Color.white;
-						this.NameText.text = string.Format("<color=#{0}>{1}</color> <color=#{2}>{3}</color>", new object[]
-						{
-							HudUtils.RGBToHex(GameHubBehaviour.Hub.GuiScripts.GUIColors.TeamTagColor),
-							NGUIText.StripSymbols(teamTag),
-							HudUtils.RGBToHex(playerColor),
-							nameText
-						});
-					}
-				}, delegate(Exception exception)
-				{
-					HudLifebarObject.Log.Warn(string.Format("Error on GetUserTagAsync. Exception:{0}", exception));
-				});
+				this._nameText.SupportRichText = true;
+				this._nameText.Color = Color.white;
+				this._nameText.Text = string.Format("<color=#{0}>{1}</color>", HudUtils.RGBToHex(color), text);
 			}
 		}
 
-		private void BombManagerOnListenToPhaseChange(BombScoreBoard.State state)
+		private void BombManagerOnListenToPhaseChange(BombScoreboardState state)
 		{
-			if (state == BombScoreBoard.State.Shop)
+			if (state == BombScoreboardState.Shop)
 			{
 				this.RenderStateOutOfCombatUpdate();
 			}
@@ -149,19 +170,17 @@ namespace HeavyMetalMachines.Frontend
 			base.RenderUpdate();
 			if (this._lifebarPlayerType == HudLifebarPlayerObject.HudLifebarPlayerType.LocalPlayer && GameHubBehaviour.Hub.Options.Game.ShowLifebarText)
 			{
-				this.HpText.text = string.Format("<color=#{0}>{1}</color><color=#{2}>/{3}</color>", new object[]
-				{
-					this._colorHpEncoded,
-					Mathf.Ceil(this._lastFullHp).ToString("0"),
-					this._colorHpMaxEncoded,
-					Mathf.Ceil(this._maxFullHp).ToString("0")
-				});
+				this._hpTextBuilder.Length = 0;
+				this._hpTextBuilder.AppendFormat("<color=#{0}>", this._colorHpEncoded);
+				this._hpTextBuilder.Append(Mathf.RoundToInt(Mathf.Ceil(this._lastFullHp)));
+				this._hpTextBuilder.AppendFormat("</color><color=#{0}>/", this._colorHpMaxEncoded);
+				this._hpTextBuilder.Append(Mathf.RoundToInt(Mathf.Ceil(this._maxFullHp)));
+				this._hpTextBuilder.Append("</color>");
+				this._hpText.Text = this._hpTextBuilder.ToString();
 			}
 			StatusKind currentStatus = this._combatObject.Attributes.CurrentStatus;
 			this.RenderStateIntangibleUpdate(currentStatus);
 			this.RenderStateInvulnerableUpdate(currentStatus);
-			this.RenderStateArmourUpdate(currentStatus);
-			this.RenderStateRepairUpdate();
 			this.RenderStateOutOfCombatUpdate();
 			if (this.uiLifeBar.kind == UILifeBar.Kind.Self)
 			{
@@ -176,8 +195,8 @@ namespace HeavyMetalMachines.Frontend
 			{
 				return;
 			}
-			this._attachedEpProgressImage.fillAmount = this._attachedCombat.Data.EP / (float)this._attachedCombat.Data.EPMax;
-			this._attachedHpProgressImage.fillAmount = this._attachedCombat.Data.CurrentHPPercent;
+			this._attachedEpProgressImage.FillAmount = this._attachedCombat.Data.EP / (float)this._attachedCombat.Data.EPMax;
+			this._attachedHpProgressImage.FillAmount = this._attachedCombat.Data.CurrentHPPercent;
 		}
 
 		private void RenderStateOutOfCombatUpdate()
@@ -188,13 +207,13 @@ namespace HeavyMetalMachines.Frontend
 			}
 			if (GameHubBehaviour.Hub.Match.LevelIsTutorial())
 			{
-				this.OutOfCombatImage.fillAmount = 0f;
+				this.OutOfCombatImage.FillAmount = 0f;
 				return;
 			}
 			CombatData data = this._combatObject.Data;
 			if (data.HP >= (float)data.HPMax)
 			{
-				this.OutOfCombatImage.fillAmount = 0f;
+				this.OutOfCombatImage.FillAmount = 0f;
 				return;
 			}
 			GadgetData.GadgetStateObject gadgetState = this._combatObject.Combat.GadgetStates.GetGadgetState(GadgetSlot.OutOfCombatGadget);
@@ -203,15 +222,15 @@ namespace HeavyMetalMachines.Frontend
 				return;
 			}
 			int playbackTime = GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
-			long coolDown = gadgetState.CoolDown;
-			if ((long)playbackTime >= coolDown)
+			long cooldown = gadgetState.Cooldown;
+			if ((long)playbackTime >= cooldown)
 			{
-				this.OutOfCombatImage.fillAmount = 1f;
+				this.OutOfCombatImage.FillAmount = 1f;
 				return;
 			}
 			float num = (this._combatObject.OutOfCombatGadget.Cooldown - 0.5f) * 1000f;
-			float num2 = (float)(coolDown - (long)playbackTime);
-			this.OutOfCombatImage.fillAmount = 1f - Mathf.Clamp01(num2 / num);
+			float num2 = (float)(cooldown - (long)playbackTime);
+			this.OutOfCombatImage.FillAmount = 1f - Mathf.Clamp01(num2 / num);
 		}
 
 		private void RenderStateIntangibleUpdate(StatusKind statusKind)
@@ -224,42 +243,18 @@ namespace HeavyMetalMachines.Frontend
 		{
 			if (this._showIndestructibleFeedback && statusKind.HasFlag(StatusKind.Invulnerable))
 			{
-				if (this.InvulnerableData.MainCanvasGroup.alpha < 0.001f)
-				{
-					this.InvulnerableData.ActiveAnimation.Play();
-					this.InvulnerableData.MainCanvasGroup.alpha = 1f;
-				}
+				this.InvulnerableData.Object.SetActive(true);
 			}
 			else
 			{
-				this.InvulnerableData.MainCanvasGroup.alpha = 0f;
+				this.InvulnerableData.Object.SetActive(false);
 			}
-		}
-
-		private void RenderStateArmourUpdate(StatusKind statusKind)
-		{
-			int hplightArmor = this._combatObject.Data.HPLightArmor;
-			bool isArmoured = hplightArmor > 0;
-			bool isVulnerable = hplightArmor < 0;
-			bool isInvulnerable = statusKind.HasFlag(StatusKind.Invulnerable);
-			this.ArmourData.Update(isArmoured, isVulnerable, isInvulnerable);
-		}
-
-		private void RenderStateRepairUpdate()
-		{
-			float hpregenPct = this._combatObject.Attributes.HPRegenPct;
-			this.RepairData.Update(hpregenPct);
-		}
-
-		public void SetVisible(bool isVisible)
-		{
-			this.LifebarCanvas.alpha = ((!isVisible) ? 0f : 1f);
 		}
 
 		protected override void CombatObjectOnObjectSpawn(CombatObject combatObject, SpawnEvent msg)
 		{
 			base.CombatObjectOnObjectSpawn(combatObject, msg);
-			this.OutOfCombatImage.fillAmount = 1f;
+			this.OutOfCombatImage.FillAmount = 1f;
 		}
 
 		private void RenderGadgetUpdate()
@@ -273,7 +268,7 @@ namespace HeavyMetalMachines.Frontend
 			this.RenderGadgetUpdate(this.CooldownIndicatorData.GadgetBoostFillImage, GadgetSlot.BoostGadget, this._combatObject.BoostGadget);
 		}
 
-		private void RenderGadgetUpdate(Image fillImage, GadgetSlot gadgetSlot, GadgetBehaviour gadgetBehaviour)
+		private void RenderGadgetUpdate(HoplonImage fillImage, GadgetSlot gadgetSlot, GadgetBehaviour gadgetBehaviour)
 		{
 			if (this.TryRenderCustomGadgetUpdate(fillImage, gadgetSlot))
 			{
@@ -282,67 +277,45 @@ namespace HeavyMetalMachines.Frontend
 			GadgetData.GadgetStateObject gadgetState = this._combatObject.GadgetStates.GetGadgetState(gadgetSlot);
 			if (gadgetState.GadgetState == GadgetState.Cooldown)
 			{
-				long num = gadgetState.CoolDown - (long)GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
+				long num = gadgetState.Cooldown - (long)GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
 				float num2 = (float)num * 0.001f / gadgetBehaviour.Cooldown;
-				fillImage.fillAmount = 1f - num2;
+				fillImage.FillAmount = 1f - num2;
 			}
-			else if (fillImage.fillAmount > 0.001f)
+			else if (fillImage.FillAmount > 0.001f)
 			{
-				fillImage.fillAmount = 1f;
+				fillImage.FillAmount = 1f;
 			}
 		}
 
-		private bool TryRenderCustomGadgetUpdate(Image fillImage, GadgetSlot gadgetSlot)
+		private bool TryRenderCustomGadgetUpdate(HoplonImage fillImage, GadgetSlot gadgetSlot)
 		{
-			CombatGadget combatGadget;
-			if (!this._combatObject.CustomGadgets.TryGetValue(gadgetSlot, out combatGadget))
+			CombatGadget combatGadget = (CombatGadget)this._combatObject.GetGadgetContext((int)gadgetSlot);
+			if (null == combatGadget)
 			{
 				return false;
 			}
-			float num = 1f;
+			float fillAmount = 1f;
 			if (combatGadget.HasCooldownParameters())
 			{
-				int playbackTime = GameHubBehaviour.Hub.Clock.GetPlaybackTime();
+				int playbackTime = GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
 				int cooldownEndTime = combatGadget.GetCooldownEndTime();
 				float cooldownTotalTime = combatGadget.GetCooldownTotalTime();
 				if (cooldownEndTime > playbackTime)
 				{
-					float num2 = (float)(cooldownEndTime - playbackTime) * 0.001f;
+					float num = (float)(cooldownEndTime - playbackTime) * 0.001f;
 					if (cooldownTotalTime > 0f)
 					{
-						num = 1f - num2 / cooldownTotalTime;
+						fillAmount = 1f - num / cooldownTotalTime;
 					}
 				}
-				if (num >= 1f && fillImage.fillAmount < num)
-				{
-					this.PlayCooldownIndicatorGadgetReadyAnimation(gadgetSlot);
-				}
 			}
-			fillImage.fillAmount = num;
+			fillImage.FillAmount = fillAmount;
 			return true;
 		}
 
 		private void SetupCurrentPlayerGadgets()
 		{
-			if (GameHubBehaviour.Hub.Options.Game.ShowGadgetsLifebar)
-			{
-				this.CooldownIndicatorData.SetVisibility(true);
-				this._combatObject.GadgetStates.GetGadgetState(GadgetSlot.CustomGadget0).ListenToGadgetReady += this.OnListenToGadget0Ready;
-				this._combatObject.GadgetStates.GetGadgetState(GadgetSlot.CustomGadget1).ListenToGadgetReady += this.OnListenToGadget1Ready;
-				this._combatObject.GadgetStates.GetGadgetState(GadgetSlot.BoostGadget).ListenToGadgetReady += this.OnListenToGadgetBoostReady;
-			}
-			else
-			{
-				this.CooldownIndicatorData.SetVisibility(false);
-				this._combatObject.GadgetStates.GetGadgetState(GadgetSlot.CustomGadget0).ListenToGadgetReady -= this.OnListenToGadget0Ready;
-				this._combatObject.GadgetStates.GetGadgetState(GadgetSlot.CustomGadget1).ListenToGadgetReady -= this.OnListenToGadget1Ready;
-				this._combatObject.GadgetStates.GetGadgetState(GadgetSlot.BoostGadget).ListenToGadgetReady -= this.OnListenToGadgetBoostReady;
-			}
-		}
-
-		private void SetupTextInfoVisibility()
-		{
-			this.TextCanvasGroup.alpha = ((!GameHubBehaviour.Hub.Options.Game.ShowLifebarText) ? 0f : 1f);
+			this.CooldownIndicatorData.SetVisibility(GameHubBehaviour.Hub.Options.Game.ShowGadgetsLifebar);
 		}
 
 		private void OptionsOnListenToShowGadgetsLifebarChanged(bool isEnabled)
@@ -352,44 +325,7 @@ namespace HeavyMetalMachines.Frontend
 
 		private void OptionsOnShowLifebarTextChanged()
 		{
-			this.SetupTextInfoVisibility();
-		}
-
-		private void OnListenToGadget0Ready()
-		{
-			this.PlayCooldownIndicatorGadgetReadyAnimation(GadgetSlot.CustomGadget0);
-		}
-
-		private void OnListenToGadget1Ready()
-		{
-			this.PlayCooldownIndicatorGadgetReadyAnimation(GadgetSlot.CustomGadget1);
-		}
-
-		private void OnListenToGadgetBoostReady()
-		{
-			this.PlayCooldownIndicatorGadgetReadyAnimation(GadgetSlot.BoostGadget);
-		}
-
-		private void PlayCooldownIndicatorGadgetReadyAnimation(GadgetSlot slot)
-		{
-			if (slot != GadgetSlot.CustomGadget0)
-			{
-				if (slot != GadgetSlot.CustomGadget1)
-				{
-					if (slot == GadgetSlot.BoostGadget)
-					{
-						this.CooldownIndicatorData.GadgetBoostGlowAnimation.Play();
-					}
-				}
-				else
-				{
-					this.CooldownIndicatorData.Gadget1GlowAnimation.Play();
-				}
-			}
-			else
-			{
-				this.CooldownIndicatorData.Gadget0GlowAnimation.Play();
-			}
+			this._textControlObject.SetActive(GameHubBehaviour.Hub.Options.Game.ShowLifebarText);
 		}
 
 		public void SetAttachedGroupVisibility(int attachedObjectId, bool visible)
@@ -401,15 +337,15 @@ namespace HeavyMetalMachines.Frontend
 				this._attachedCombatId = attachedObjectId;
 				if (this._attachedCombat.IsLocalPlayer)
 				{
-					this._attachedHpProgressImage.color = this._attachedHpColorSelf;
+					this._attachedHpProgressImage.Color = this._attachedHpColorSelf;
 				}
 				else if (this._attachedCombat.IsSameTeamAsCurrentPlayer())
 				{
-					this._attachedHpProgressImage.color = this._attachedHpColorAlly;
+					this._attachedHpProgressImage.Color = this._attachedHpColorAlly;
 				}
 				else
 				{
-					this._attachedHpProgressImage.color = this._attachedHpColorEnemy;
+					this._attachedHpProgressImage.Color = this._attachedHpColorEnemy;
 				}
 				this.RenderAttachedGroupUpdate();
 			}
@@ -422,32 +358,47 @@ namespace HeavyMetalMachines.Frontend
 
 		private HudLifebarPlayerObject.HudLifebarPlayerType _lifebarPlayerType;
 
+		[Inject]
+		private IMatchTeams _teams;
+
+		[Inject]
+		private ICustomizationAssets _customizationAssets;
+
+		[Inject]
+		private IIsPlayerRestrictedByTextChat _isPlayerRestrictedByTextChat;
+
+		[Inject]
+		private IGetDisplayableNickName _getDisplayableNickName;
+
+		[Inject]
+		private ITeamNameRestriction _teamNameRestriction;
+
+		[Header("Icons")]
+		[SerializeField]
+		private HudIconBar _iconBar;
+
 		[Header("[Text info]")]
-		public CanvasGroup TextCanvasGroup;
+		[SerializeField]
+		private GameObject _textControlObject;
 
-		public Text NameText;
+		[SerializeField]
+		private HoplonText _nameText;
 
-		public Text HpText;
+		[SerializeField]
+		private HoplonText _hpText;
 
-		public CanvasRenderer HpTextCanvasRenderer;
+		[SerializeField]
+		[Header("Emote")]
+		private HudEmoteView hudEmoteView;
 
-		[Header("[Debug data]")]
-		public List<StatusKind> TestStatus;
+		public IHudEmotePresenter hudEmotePresenter;
 
-		public HudLifebarPlayerObject.DebugCombatData TestCombatData;
-
-		[Header("[State datas]")]
+		[Header("[State data]")]
 		[SerializeField]
 		public HudLifebarPlayerObject.HudLifebarInvulnerableData InvulnerableData;
 
-		[SerializeField]
-		public HudLifebarPlayerObject.HudLifebarArmourData ArmourData;
-
-		[SerializeField]
-		public HudLifebarPlayerObject.HudLifebarRepairData RepairData;
-
 		[Header("[Out of combat bar]")]
-		public Image OutOfCombatImage;
+		public HoplonImage OutOfCombatImage;
 
 		[Header("[Counselor]")]
 		public GameObject CounselorParentGameObject;
@@ -457,10 +408,10 @@ namespace HeavyMetalMachines.Frontend
 		private GameObject _attachedGroup;
 
 		[SerializeField]
-		private Image _attachedEpProgressImage;
+		private HoplonImage _attachedEpProgressImage;
 
 		[SerializeField]
-		private Image _attachedHpProgressImage;
+		private HoplonImage _attachedHpProgressImage;
 
 		[SerializeField]
 		private Color _attachedHpColorAlly;
@@ -479,11 +430,13 @@ namespace HeavyMetalMachines.Frontend
 		private HudLifebarPlayerObject.LifebarBackgroundImages _lifebarBackgroundImages;
 
 		[SerializeField]
-		private Image _backgroundLifebarImage;
+		private HoplonImage _backgroundLifebarImage;
 
 		private string _colorHpEncoded;
 
 		private string _colorHpMaxEncoded;
+
+		private readonly StringBuilder _hpTextBuilder = new StringBuilder();
 
 		private bool _showIndestructibleFeedback;
 
@@ -507,229 +460,9 @@ namespace HeavyMetalMachines.Frontend
 		}
 
 		[Serializable]
-		public struct DebugCombatData
-		{
-			[Range(-1f, 1f)]
-			public float Repair;
-
-			public int Armor;
-		}
-
-		[Serializable]
 		public class HudLifebarInvulnerableData
 		{
-			public Animation ActiveAnimation;
-
-			public CanvasGroup MainCanvasGroup;
-		}
-
-		[Serializable]
-		public class HudLifebarArmourData
-		{
-			public void Update(bool isArmoured, bool isVulnerable, bool isInvulnerable)
-			{
-				bool flag = (isArmoured || isVulnerable) && !isInvulnerable;
-				this._nextAnimationIsBuff = isArmoured;
-				if (this._currentAnimation != null && this._currentAnimation.isPlaying)
-				{
-					flag = (flag && this._currentAnimationIsBuff == this._nextAnimationIsBuff);
-					if (flag)
-					{
-						IEnumerator enumerator = this._currentAnimation.GetEnumerator();
-						try
-						{
-							while (enumerator.MoveNext())
-							{
-								object obj = enumerator.Current;
-								AnimationState animationState = (AnimationState)obj;
-								if (animationState.normalizedTime > 0.5f)
-								{
-									animationState.normalizedTime = 0.5f;
-									animationState.speed = 0f;
-								}
-							}
-						}
-						finally
-						{
-							IDisposable disposable;
-							if ((disposable = (enumerator as IDisposable)) != null)
-							{
-								disposable.Dispose();
-							}
-						}
-					}
-					else
-					{
-						IEnumerator enumerator2 = this._currentAnimation.GetEnumerator();
-						try
-						{
-							while (enumerator2.MoveNext())
-							{
-								object obj2 = enumerator2.Current;
-								AnimationState animationState2 = (AnimationState)obj2;
-								animationState2.speed = 1f;
-							}
-						}
-						finally
-						{
-							IDisposable disposable2;
-							if ((disposable2 = (enumerator2 as IDisposable)) != null)
-							{
-								disposable2.Dispose();
-							}
-						}
-					}
-					return;
-				}
-				if (flag)
-				{
-					this._currentAnimationIsBuff = isArmoured;
-				}
-				this.MainGroup.SetActive(flag);
-				if (flag)
-				{
-					this.ArmourImage.gameObject.SetActive(isArmoured && !isVulnerable);
-					this.VulnerableImage.gameObject.SetActive(isVulnerable);
-					this._currentAnimation = ((!isVulnerable) ? this.ArmourAnimation : this.VulnerableAnimation);
-					IEnumerator enumerator3 = this._currentAnimation.GetEnumerator();
-					try
-					{
-						while (enumerator3.MoveNext())
-						{
-							object obj3 = enumerator3.Current;
-							AnimationState animationState3 = (AnimationState)obj3;
-							animationState3.speed = 1f;
-						}
-					}
-					finally
-					{
-						IDisposable disposable3;
-						if ((disposable3 = (enumerator3 as IDisposable)) != null)
-						{
-							disposable3.Dispose();
-						}
-					}
-					this._currentAnimation.Play();
-				}
-			}
-
-			public GameObject MainGroup;
-
-			public Image ArmourImage;
-
-			public Image VulnerableImage;
-
-			public Animation ArmourAnimation;
-
-			public Animation VulnerableAnimation;
-
-			private Animation _currentAnimation;
-
-			private bool _currentAnimationIsBuff;
-
-			private bool _nextAnimationIsBuff;
-		}
-
-		[Serializable]
-		public class HudLifebarRepairData
-		{
-			private void SetAnimationSpeed(Animation animation, float speed)
-			{
-				IEnumerator enumerator = animation.GetEnumerator();
-				try
-				{
-					while (enumerator.MoveNext())
-					{
-						object obj = enumerator.Current;
-						AnimationState animationState = (AnimationState)obj;
-						animationState.speed = speed;
-					}
-				}
-				finally
-				{
-					IDisposable disposable;
-					if ((disposable = (enumerator as IDisposable)) != null)
-					{
-						disposable.Dispose();
-					}
-				}
-			}
-
-			public void Update(float repairValue)
-			{
-				bool flag = repairValue != 0f;
-				this._nextAnimationIsBuff = (repairValue > 0f);
-				if (this.Animation.isPlaying)
-				{
-					bool flag2 = this._nextAnimationIsBuff == this._currentAnimationIsBuff;
-					if (flag2)
-					{
-						float speed = -Mathf.Clamp(this.MaxAnimationSpeed * repairValue, -this.MaxAnimationSpeed, this.MaxAnimationSpeed);
-						this.SetAnimationSpeed(this.RepairAnimation, speed);
-					}
-					flag = (flag && flag2);
-					if (flag)
-					{
-						IEnumerator enumerator = this.Animation.GetEnumerator();
-						try
-						{
-							while (enumerator.MoveNext())
-							{
-								object obj = enumerator.Current;
-								AnimationState animationState = (AnimationState)obj;
-								if (animationState.normalizedTime > 0.5f)
-								{
-									animationState.normalizedTime = 0.5f;
-									animationState.speed = 0f;
-								}
-							}
-						}
-						finally
-						{
-							IDisposable disposable;
-							if ((disposable = (enumerator as IDisposable)) != null)
-							{
-								disposable.Dispose();
-							}
-						}
-					}
-					else
-					{
-						this.SetAnimationSpeed(this.Animation, 1f);
-					}
-					return;
-				}
-				this.MainGroup.SetActive(flag);
-				if (flag)
-				{
-					float speed2 = -Mathf.Clamp(this.MaxAnimationSpeed * repairValue, -this.MaxAnimationSpeed, this.MaxAnimationSpeed);
-					this.SetAnimationSpeed(this.RepairAnimation, speed2);
-					this._currentAnimationIsBuff = this._nextAnimationIsBuff;
-					this.RepairImage.sprite = ((!this._currentAnimationIsBuff) ? this.DebuffSprite : this.BuffSprite);
-					this.SetAnimationSpeed(this.Animation, 1f);
-					this.Animation.Play();
-					this.RepairAnimation.Play();
-				}
-			}
-
-			public GameObject MainGroup;
-
-			public Image RepairImage;
-
-			public Animation Animation;
-
-			public Animation RepairAnimation;
-
-			public float MaxAnimationSpeed = 3f;
-
-			[Header("[Assets]")]
-			public Sprite BuffSprite;
-
-			public Sprite DebuffSprite;
-
-			private bool _currentAnimationIsBuff;
-
-			private bool _nextAnimationIsBuff;
+			public GameObject Object;
 		}
 
 		[Serializable]
@@ -742,17 +475,11 @@ namespace HeavyMetalMachines.Frontend
 
 			public GameObject MainGroup;
 
-			public Image Gadget0FillImage;
+			public HoplonImage Gadget0FillImage;
 
-			public Image Gadget1FillImage;
+			public HoplonImage Gadget1FillImage;
 
-			public Image GadgetBoostFillImage;
-
-			public Animation Gadget0GlowAnimation;
-
-			public Animation Gadget1GlowAnimation;
-
-			public Animation GadgetBoostGlowAnimation;
+			public HoplonImage GadgetBoostFillImage;
 		}
 
 		[Serializable]

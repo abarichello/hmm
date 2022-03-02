@@ -7,16 +7,24 @@ namespace HeavyMetalMachines.VFX
 	[RequireComponent(typeof(AttachVFX))]
 	public class ScaleTransformToCarBoundsVFX : BaseVFX
 	{
+		public Transform GetTargetTransform()
+		{
+			return this.TargetTransform;
+		}
+
 		protected override void OnActivate()
 		{
-			Bounds lhs;
-			this.GetScaledBounds(out lhs);
-			if (lhs == default(Bounds))
+			Bounds bounds;
+			this.GetScaledBounds(out bounds);
+			if (bounds == default(Bounds))
 			{
 				return;
 			}
-			this.TargetTransform.localPosition = lhs.center;
-			this.TargetTransform.localScale = lhs.size;
+			this.TargetTransform.localScale = bounds.size;
+			if (this._useBoundsCenterPosition)
+			{
+				this.TargetTransform.localPosition = bounds.center;
+			}
 		}
 
 		private void GetScaledBounds(out Bounds attachedBounds)
@@ -68,13 +76,14 @@ namespace HeavyMetalMachines.VFX
 			{
 				num = bounds.size.z;
 			}
-			float y = (!this._dontNormalizeYAxis) ? num : bounds.size.y;
-			bounds.size = new Vector3(num, y, num);
+			float num2 = (!this._dontNormalizeYAxis) ? num : bounds.size.y;
+			bounds.size = new Vector3(num, num2, num);
 		}
 
 		private void OverrideScale(ref Bounds bounds)
 		{
-			Vector3 size = new Vector3(bounds.size.x, bounds.size.y, bounds.size.z);
+			Vector3 size;
+			size..ctor(bounds.size.x, bounds.size.y, bounds.size.z);
 			if (this._fixedScale.x > 0f)
 			{
 				size.x = this._fixedScale.x;
@@ -92,6 +101,10 @@ namespace HeavyMetalMachines.VFX
 
 		private void SetCarIndicatorCenter(ref Bounds bounds)
 		{
+			if (this.PrevizMode)
+			{
+				return;
+			}
 			CarComponentHub componentHub = this._targetFXInfo.Owner.GetComponentHub<CarComponentHub>();
 			float playerBorderOffsetPosition = componentHub.Player.Character.IndicatorConfig.PlayerBorderOffsetPosition;
 			bounds.center = this._targetFXInfo.Owner.transform.forward * playerBorderOffsetPosition;
@@ -116,8 +129,8 @@ namespace HeavyMetalMachines.VFX
 		[Tooltip("The transform that should be scaled according to the car bounds")]
 		protected Transform TargetTransform;
 
-		[HideInInspector]
 		[SerializeField]
+		[HideInInspector]
 		private AttachVFX _attachVfx;
 
 		[SerializeField]
@@ -135,5 +148,8 @@ namespace HeavyMetalMachines.VFX
 		[SerializeField]
 		[Tooltip("Use car indicator central position to display the effect (only available for car targets).")]
 		private bool _useCarIndicatorCenter;
+
+		[SerializeField]
+		private bool _useBoundsCenterPosition = true;
 	}
 }

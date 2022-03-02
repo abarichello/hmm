@@ -83,7 +83,7 @@ namespace HeavyMetalMachines.Render
 			if (this._effectInstance == null)
 			{
 				this._effectInstance = (MasterVFX)GameHubBehaviour.Hub.Resources.PrefabCacheInstantiate(this.EffectPrefab, base.transform.position, base.transform.rotation);
-				this._effectInstance.transform.parent = GameHubBehaviour.Hub.Drawer.Effects;
+				GameHubBehaviour.Hub.Drawer.AddEffect(this._effectInstance.transform);
 				this._effectInstance.baseMasterVFX = this.EffectPrefab;
 				this._effectInstance = this._effectInstance.Activate(this._combat.Id, this._combat.Id, base.transform);
 			}

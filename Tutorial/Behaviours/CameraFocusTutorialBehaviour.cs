@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections;
+using HeavyMetalMachines.GameCamera;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
 using HeavyMetalMachines.PostProcessing;
 using HeavyMetalMachines.Tutorial.InGame;
 using Pocketverse;
@@ -17,14 +19,14 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 				return;
 			}
 			base.SetPlayerInputsActive(false);
-			CarCamera.Singleton.enabled = false;
-			this._initialPosition = CarCamera.Singleton.transform.position;
-			this._initialRotation = CarCamera.Singleton.transform.rotation;
+			this._gameCameraEngine.Disable();
+			this._initialPosition = this._gameCameraEngine.CameraTransform.position;
+			this._initialRotation = this._gameCameraEngine.CameraTransform.rotation;
 			this._lookTarget = new GameObject("look_target");
 			this._lookTarget.transform.parent = base.transform;
 			this._lookTarget.transform.localScale = Vector3.one;
 			this._lookTarget.transform.position = base.playerController.transform.position;
-			PostProcessingState postProcessingState = CarCamera.Singleton.postProcessing.Request("FocusTutorial", () => !CarCamera.Singleton.enabled, false);
+			PostProcessingState postProcessingState = this._postProcessing.Request("FocusTutorial", () => !this._gameCameraEngine.IsEnabled(), false);
 			if (postProcessingState != null)
 			{
 				postProcessingState.Enabled = true;
@@ -49,7 +51,7 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 			}
 			CameraFocusNodeInfo tCameraInfo = tNextNode.GetComponentInChildren<CameraFocusNodeInfo>();
 			this._targeTweener = new CameraFocusTutorialBehaviour.Tweener(this._lookTarget.transform, tCameraInfo.nextNodeTransitionTime).Position(this._lookTarget.transform.position, tCameraInfo.target.transform.position);
-			this._cameraTweener = new CameraFocusTutorialBehaviour.Tweener(CarCamera.Singleton.CameraTransform, tCameraInfo.nextNodeTransitionTime).Position(CarCamera.Singleton.CameraTransform.position, tNextNode.transform.position);
+			this._cameraTweener = new CameraFocusTutorialBehaviour.Tweener(this._gameCameraEngine.CameraTransform, tCameraInfo.nextNodeTransitionTime).Position(this._gameCameraEngine.CameraTransform.position, tNextNode.transform.position);
 			yield return new WaitForSeconds(tCameraInfo.nextNodeTransitionTime);
 			yield return base.StartCoroutine(this.StartNodeActions(tNextNode));
 			yield return new WaitForSeconds(tCameraInfo.waitTime);
@@ -110,10 +112,10 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 
 		private IEnumerator OnMoveComplete()
 		{
-			this._cameraTweener = new CameraFocusTutorialBehaviour.Tweener(CarCamera.Singleton.transform, this.backToPlayerTime).Position(CarCamera.Singleton.transform.position, this._initialPosition).Rotation(CarCamera.Singleton.transform.rotation, this._initialRotation);
+			this._cameraTweener = new CameraFocusTutorialBehaviour.Tweener(this._gameCameraEngine.CameraTransform, this.backToPlayerTime).Position(this._gameCameraEngine.CameraTransform.position, this._initialPosition).Rotation(this._gameCameraEngine.CameraTransform.rotation, this._initialRotation);
 			yield return new WaitForSeconds(this.backToPlayerTime);
 			this.CompleteBehaviourAndSync();
-			UnityEngine.Object.Destroy(this._lookTarget);
+			Object.Destroy(this._lookTarget);
 			yield break;
 		}
 
@@ -122,7 +124,7 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 			base.OnStepCompletedOnClient();
 			this._targeTweener = null;
 			this._cameraTweener = null;
-			CarCamera.Singleton.enabled = true;
+			this._gameCameraEngine.Enable();
 			base.SetPlayerInputsActive(true);
 		}
 
@@ -134,12 +136,18 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 				this._cameraTweener.Update();
 				if (this._targeTweener != null && this._targeTweener.Update())
 				{
-					CarCamera.Singleton.CameraTransform.LookAt(this._lookTarget.transform);
+					this._gameCameraEngine.CameraTransform.LookAt(this._lookTarget.transform);
 				}
 			}
 		}
 
 		public float backToPlayerTime = 50f;
+
+		[InjectOnClient]
+		private IGamePostProcessing _postProcessing;
+
+		[InjectOnClient]
+		private IGameCameraEngine _gameCameraEngine;
 
 		[HideInInspector]
 		private GameObject _lookTarget;
@@ -184,19 +192,19 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 			public bool Update()
 			{
 				float num = Mathf.SmoothStep(0f, 1f, (Time.time - this._startTime) / this._duration);
-				Vector3 position = Vector3.Lerp(this._startPos, this._endPos, num);
-				Quaternion rotation = Quaternion.Slerp(this._startRot, this._endRot, num);
+				Vector3 vector = Vector3.Lerp(this._startPos, this._endPos, num);
+				Quaternion quaternion = Quaternion.Slerp(this._startRot, this._endRot, num);
 				if (this._position && this._rotation)
 				{
-					this._transform.SetPositionAndRotation(position, rotation);
+					this._transform.SetPositionAndRotation(vector, quaternion);
 				}
 				else if (this._position)
 				{
-					this._transform.position = position;
+					this._transform.position = vector;
 				}
 				else if (this._rotation)
 				{
-					this._transform.rotation = rotation;
+					this._transform.rotation = quaternion;
 				}
 				return num < 1f;
 			}

@@ -1,6 +1,7 @@
 ﻿using System;
 using ClientAPI;
 using ClientAPI.Objects;
+using HeavyMetalMachines.Store;
 using Pocketverse;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -10,10 +11,10 @@ namespace HeavyMetalMachines.PurchaseFeedback
 	[CreateAssetMenu(menuName = "ScriptableObject/Temp/PurchaseFeedbackComponent")]
 	public class PurchaseFeedbackComponent : GameHubScriptableObject, IPurchaseFeedbackComponent
 	{
-		public void TryToShowBoughtHardCurrency(System.Action onTryToShowEnd)
+		public void TryToShowBoughtHardCurrency(Action onTryToShowEnd, ILocalBalanceStorage localBalanceStorage)
 		{
 			this._onTryToShowEnd = onTryToShowEnd;
-			GameHubScriptableObject.Hub.ClientApi.billing.GetMyProductsNotSaw(null, new SwordfishClientApi.ParameterizedCallback<UserHardCurrencyProduct[]>(this.OnGetMyProductsNotSaw), new SwordfishClientApi.ErrorCallback(this.OnGetMyProductsNotSawError));
+			GameHubScriptableObject.Hub.ClientApi.billing.GetMyProductsNotSaw(localBalanceStorage, new SwordfishClientApi.ParameterizedCallback<UserHardCurrencyProduct[]>(this.OnGetMyProductsNotSaw), new SwordfishClientApi.ErrorCallback(this.OnGetMyProductsNotSawError));
 		}
 
 		private void OnGetMyProductsNotSaw(object state, UserHardCurrencyProduct[] userHardCurrencyProducts)
@@ -23,10 +24,15 @@ namespace HeavyMetalMachines.PurchaseFeedback
 				this.TryCallEndCallback();
 				return;
 			}
-			UserHardCurrencyProduct hardCurrencyProduct = userHardCurrencyProducts[0];
-			this.CachePurchasedFeedbackViewdata(hardCurrencyProduct);
+			ILocalBalanceStorage localBalanceStorage = (ILocalBalanceStorage)state;
+			UserHardCurrencyProduct userHardCurrencyProduct = userHardCurrencyProducts[0];
+			PurchaseFeedbackComponent.Log.DebugFormat("ClientApi billing GetMyProductsNotSaw. Item:[{0}]", new object[]
+			{
+				userHardCurrencyProduct.Id
+			});
+			this.CachePurchasedFeedbackViewdata(userHardCurrencyProduct, localBalanceStorage);
 			this.LoadViewScene();
-			this.UpdateUserSawProductList(hardCurrencyProduct);
+			this.UpdateUserSawProductList(userHardCurrencyProduct);
 		}
 
 		private void TryCallEndCallback()
@@ -54,6 +60,7 @@ namespace HeavyMetalMachines.PurchaseFeedback
 				hardCurrencyProduct.Id
 			}, delegate(object obj)
 			{
+				PurchaseFeedbackComponent.Log.Debug("ClientApi billing UpdateUserSawProductList done.");
 			}, delegate(object obj, Exception exception)
 			{
 				PurchaseFeedbackComponent.Log.ErrorFormat("Error on LoadItems. Swordfish UpdateUserSawProductList - exception: {0}", new object[]
@@ -63,7 +70,7 @@ namespace HeavyMetalMachines.PurchaseFeedback
 			});
 		}
 
-		private void CachePurchasedFeedbackViewdata(UserHardCurrencyProduct hardCurrencyProduct)
+		private void CachePurchasedFeedbackViewdata(UserHardCurrencyProduct hardCurrencyProduct, ILocalBalanceStorage localBalanceStorage)
 		{
 			this._purchasedFeedbackViewData = default(PurchaseFeedbackView.PurchasedFeedbackViewData);
 			for (int i = 0; i < hardCurrencyProduct.Images.Length; i++)
@@ -76,7 +83,7 @@ namespace HeavyMetalMachines.PurchaseFeedback
 				}
 			}
 			this._purchasedFeedbackViewData.ItemHardCurrencyValue = hardCurrencyProduct.Value;
-			this._purchasedFeedbackViewData.UserCurrentCurrencyValue = GameHubScriptableObject.Hub.Store.HardCurrency.ToString("0");
+			this._purchasedFeedbackViewData.UserCurrentCurrencyValue = localBalanceStorage.HardCurrency.ToString("0");
 		}
 
 		public void RegisterView(IPurchaseFeedbackView purchaseFeedbackView)
@@ -92,14 +99,13 @@ namespace HeavyMetalMachines.PurchaseFeedback
 
 		public void OnViewClosed()
 		{
-			GameHubScriptableObject.Hub.GuiScripts.TopMenu.PlayHardCoinsUpdateAnimation();
 			this.UnloadViewScene();
 			this.TryCallEndCallback();
 		}
 
 		private void LoadViewScene()
 		{
-			SceneManager.LoadSceneAsync("UI_ADD_PurchaseFeedback", LoadSceneMode.Additive);
+			SceneManager.LoadSceneAsync("UI_ADD_PurchaseFeedback", 1);
 		}
 
 		private void UnloadViewScene()
@@ -113,6 +119,6 @@ namespace HeavyMetalMachines.PurchaseFeedback
 
 		private PurchaseFeedbackView.PurchasedFeedbackViewData _purchasedFeedbackViewData;
 
-		private System.Action _onTryToShowEnd;
+		private Action _onTryToShowEnd;
 	}
 }

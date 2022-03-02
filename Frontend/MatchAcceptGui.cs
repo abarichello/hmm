@@ -2,9 +2,13 @@
 using System.Collections;
 using System.Collections.Generic;
 using FMod;
+using HeavyMetalMachines.BI;
 using Holoville.HOTween;
+using Hoplon.Input.UiNavigation;
+using Hoplon.Input.UiNavigation.AxisSelector;
 using Pocketverse;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
@@ -18,21 +22,30 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
-		private static MainMenuGui MainMenuGui
-		{
-			get
-			{
-				return GameHubBehaviour.Hub.State.Current.GetStateGuiController<MainMenuGui>();
-			}
-		}
-
 		public void SetTitleText(string txt)
 		{
 			this.titleLabel.text = txt;
 		}
 
+		private IUiNavigationGroupHolder UiNavigationGroupHolder
+		{
+			get
+			{
+				return this._uiNavigationGroupHolder;
+			}
+		}
+
+		private IUiNavigationAxisSelector UiNavigationAxisSelector
+		{
+			get
+			{
+				return this._uiNavigationAxisSelector;
+			}
+		}
+
 		private void Start()
 		{
+			this.MainMenuGui = GameHubBehaviour.Hub.State.Current.GetStateGuiController<MainMenuGui>();
 			GameHubBehaviour.Hub.Swordfish.Msg.Matchmaking.OnMatchAcceptedEvent += this.OnMatchAcceptedEvent;
 			GameHubBehaviour.Hub.Swordfish.Msg.Matchmaking.OnMatchCanceledEvent += this.OnMatchCanceledEvent;
 			this.HideAcceptanceWindow(false);
@@ -120,13 +133,15 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
-		public void ShowMatchConfirmation(int numBots, int matchMakingAcceptTimeout)
+		public void ShowMatchConfirmation(int numBots, int matchMakingAcceptTimeout, Guid matchId)
 		{
 			this.TryToCloseShopWindow();
 			if (!this._visible)
 			{
 				this.ResetPlayersAcceptance();
 			}
+			this._matchAccepted = false;
+			this._matchId = matchId;
 			this._totalMatchAcceptTimeout = matchMakingAcceptTimeout;
 			this._visible = true;
 			this._matchAcceptTimeoutTimer = Time.time + (float)this._totalMatchAcceptTimeout / 1000f;
@@ -147,6 +162,8 @@ namespace HeavyMetalMachines.Frontend
 			}
 			this.nextBotAcceptance = Time.time + this.TimeForBotAccept;
 			this.remainingBots = numBots;
+			this.UiNavigationGroupHolder.AddHighPriorityGroup();
+			this._matchAcceptScreenBiLogger.LogOpen(matchId);
 		}
 
 		private void Update()
@@ -159,6 +176,11 @@ namespace HeavyMetalMachines.Frontend
 			if (num < 0f)
 			{
 				num = 0f;
+				if (!this._matchAccepted && !this.MainMenuGui.GameModesGui.IsPlayerBlocked())
+				{
+					this.MainMenuGui.GameModesGui.BlockPlayer();
+					this._matchAcceptScreenBiLogger.LogTimeout(this._matchId);
+				}
 			}
 			TimeSpan timeSpan = TimeSpan.FromSeconds((double)num);
 			if (this.progressTimerGroup.activeSelf)
@@ -194,12 +216,14 @@ namespace HeavyMetalMachines.Frontend
 		public void OnClickMatchAccept()
 		{
 			HOTween.Kill(this.acceptPanel);
-			GameHubBehaviour.Hub.GuiScripts.ScreenResolution.StopFlashWindow();
-			GameHubBehaviour.Hub.GuiScripts.ScreenResolution.EndTopmostWindow();
+			ScreenResolutionController.StopFlashWindow();
+			ScreenResolutionController.EndTopmostWindow();
 			this.acceptButton.gameObject.SetActive(false);
 			this.refuseButton.gameObject.SetActive(false);
 			this.progressTimerGroup.SetActive(false);
-			MatchAcceptGui.MainMenuGui.MatchStats.OnMatchAccepted();
+			this._matchAccepted = true;
+			this.MainMenuGui.MatchStats.OnMatchAccepted(GameHubBehaviour.Hub.Swordfish.Msg.Matchmaking.MatchMadeQueue);
+			this._matchAcceptScreenBiLogger.LogAccept(this._matchId);
 		}
 
 		private void TryToCloseShopWindow()
@@ -212,17 +236,21 @@ namespace HeavyMetalMachines.Frontend
 
 		public void OnClickMatchRefuse()
 		{
+			this._matchAcceptScreenBiLogger.LogReject(this._matchId);
 			HOTween.Kill(this.acceptPanel);
 			this.HideAcceptanceWindow(true);
-			MatchAcceptGui.MainMenuGui.RejectMatch();
-			GameModesGUI.MatchBlocker.BlockPlayer();
+			this.MainMenuGui.RejectMatch();
+			this.MainMenuGui.GameModesGui.BlockPlayer();
 		}
 
 		public void HideAcceptanceWindow(bool animate = false)
 		{
 			this._visible = false;
-			GameHubBehaviour.Hub.GuiScripts.ScreenResolution.StopFlashWindow();
-			GameHubBehaviour.Hub.GuiScripts.ScreenResolution.EndTopmostWindow();
+			this._matchId = Guid.Empty;
+			this.UiNavigationGroupHolder.RemoveHighPriorityGroup();
+			this.UiNavigationAxisSelector.ClearSelection();
+			ScreenResolutionController.StopFlashWindow();
+			ScreenResolutionController.EndTopmostWindow();
 			if (this._animating || !this.acceptPanel.gameObject.activeSelf)
 			{
 				return;
@@ -259,6 +287,8 @@ namespace HeavyMetalMachines.Frontend
 
 		public static readonly BitLogger Log = new BitLogger(typeof(MatchAcceptGui));
 
+		private bool _matchAccepted;
+
 		public UIPanel acceptPanel;
 
 		public ButtonScriptReference acceptButton;
@@ -291,9 +321,11 @@ namespace HeavyMetalMachines.Frontend
 
 		public string ShowAnimationName;
 
-		public FMODAsset acceptAudio;
+		public AudioEventAsset acceptAudio;
 
-		public FMODAsset refuseAudio;
+		public AudioEventAsset refuseAudio;
+
+		private MainMenuGui MainMenuGui;
 
 		public float TimeForBotAccept;
 
@@ -306,6 +338,17 @@ namespace HeavyMetalMachines.Frontend
 		private bool _desactiveWaintingPlayersFeedback;
 
 		private bool _visible;
+
+		[SerializeField]
+		private UiNavigationGroupHolder _uiNavigationGroupHolder;
+
+		[SerializeField]
+		private UiNavigationAxisSelector _uiNavigationAxisSelector;
+
+		[Inject]
+		private IClientMatchAcceptScreenBILogger _matchAcceptScreenBiLogger;
+
+		private Guid _matchId;
 
 		private List<string> _clientsAnswerGuids = new List<string>();
 

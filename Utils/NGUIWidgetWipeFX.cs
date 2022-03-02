@@ -71,9 +71,9 @@ namespace HeavyMetalMachines.Utils
 				this.fxPanel.clipSoftness = new Vector2(this.horizontalSmooth, this.verticalSmooth);
 				this.fxPanel.baseClipRegion = new Vector4(0f, 0f, this._horizontalSize, this._verticalSize);
 				this.fxPanel.depth = this._uiWidget.depth + 1;
-				this.fxClone = UnityEngine.Object.Instantiate<GameObject>(this._uiWidget.gameObject).GetComponent<UIWidget>();
+				this.fxClone = Object.Instantiate<GameObject>(this._uiWidget.gameObject).GetComponent<UIWidget>();
 				NGUIWidgetWipeFX component = this.fxClone.GetComponent<NGUIWidgetWipeFX>();
-				UnityEngine.Object.Destroy(component);
+				Object.Destroy(component);
 				this.fxClone.transform.parent = this.fxPanel.transform;
 				this.fxClone.transform.localScale = this._uiWidget.transform.localScale;
 				this.fxClone.transform.localPosition = Vector3.zero;
@@ -88,7 +88,7 @@ namespace HeavyMetalMachines.Utils
 				return;
 			}
 			HOTween.Kill(this.fxPanel);
-			UnityEngine.Object.Destroy(this.fxPanel.gameObject);
+			Object.Destroy(this.fxPanel.gameObject);
 		}
 
 		private void UpdateFX()
@@ -103,8 +103,8 @@ namespace HeavyMetalMachines.Utils
 			float num4 = this.amount;
 			float num5 = this.horizontalSmooth;
 			float num6 = this.verticalSmooth;
-			float x = 0f;
-			float y = 0f;
+			float num7 = 0f;
+			float num8 = 0f;
 			NGUIWidgetWipeFX.FxOrientation fxOrientation = this.fxOrientation;
 			if (fxOrientation != NGUIWidgetWipeFX.FxOrientation.Horizontal)
 			{
@@ -129,14 +129,14 @@ namespace HeavyMetalMachines.Utils
 				}
 				else
 				{
-					x = (float)this.fxClone.width / 2f;
+					num7 = (float)this.fxClone.width / 2f;
 					num5 *= 2f;
 					num *= 2f;
 				}
 			}
 			else
 			{
-				x = (float)(-(float)this.fxClone.width) / 2f;
+				num7 = (float)(-(float)this.fxClone.width) / 2f;
 				num5 *= 2f;
 				num *= 2f;
 			}
@@ -152,21 +152,21 @@ namespace HeavyMetalMachines.Utils
 				}
 				else
 				{
-					y = (float)this.fxClone.height / 2f;
+					num8 = (float)this.fxClone.height / 2f;
 					num6 *= 2f;
 					num2 *= 2f;
 				}
 			}
 			else
 			{
-				y = (float)(-(float)this.fxClone.height) / 2f;
+				num8 = (float)(-(float)this.fxClone.height) / 2f;
 				num6 *= 2f;
 				num2 *= 2f;
 			}
 			this._horizontalSize = num3 * (num + num5);
 			this._verticalSize = num4 * (num2 + num6);
 			this.fxPanel.clipSoftness = new Vector2(this.horizontalSmooth, this.verticalSmooth);
-			this.fxPanel.baseClipRegion = new Vector4(x, y, this._horizontalSize, this._verticalSize);
+			this.fxPanel.baseClipRegion = new Vector4(num7, num8, this._horizontalSize, this._verticalSize);
 		}
 
 		public float horizontalSmooth = 250f;

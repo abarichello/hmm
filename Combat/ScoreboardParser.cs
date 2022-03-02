@@ -1,9 +1,12 @@
 ﻿using System;
+using HeavyMetalMachines.Infra.Context;
+using HeavyMetalMachines.Playback;
 using Pocketverse;
+using Zenject;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class ScoreboardParser : KeyStateParser
+	public class ScoreboardParser : KeyStateParser, IScoreboardDispatcher
 	{
 		public override StateType Type
 		{
@@ -16,18 +19,28 @@ namespace HeavyMetalMachines.Combat
 		public override void Update(BitStream stream)
 		{
 			bool flag = stream.ReadBool();
-			BombScoreBoard.State currentState = GameHubObject.Hub.BombManager.ScoreBoard.CurrentState;
-			bool isInOvertime = GameHubObject.Hub.BombManager.ScoreBoard.IsInOvertime;
-			GameHubObject.Hub.BombManager.ScoreBoard.ReadFromBitStream(stream);
-			GameHubObject.Hub.GameTime.MatchTimer.ReadFromBitStream(stream);
-			if (flag || currentState != GameHubObject.Hub.BombManager.ScoreBoard.CurrentState)
+			BombScoreboardState currentState = this._scoreBoard.CurrentState;
+			bool isInOvertime = this._scoreBoard.IsInOvertime;
+			this._scoreBoard.ReadFromBitStream(stream);
+			this._gameTime.MatchTimer.ReadFromBitStream(stream);
+			ScoreboardParser.Log.DebugFormat("Received scoreboard update={0} state={1} oldState={2}", new object[]
 			{
-				GameHubObject.Hub.BombManager.PhaseChanged();
+				flag,
+				this._scoreBoard.CurrentState,
+				currentState
+			});
+			if (flag || currentState != this._scoreBoard.CurrentState)
+			{
+				ScoreboardParser.Log.InfoFormat("Current bomb game state changed to {0}", new object[]
+				{
+					this._scoreBoard.CurrentState
+				});
+				this._bombManager.PhaseChanged();
 			}
-			GameHubObject.Hub.BombManager.MatchUpdated();
-			if (!isInOvertime && GameHubObject.Hub.BombManager.ScoreBoard.IsInOvertime)
+			this._bombManager.MatchUpdated();
+			if (!isInOvertime && this._scoreBoard.IsInOvertime)
 			{
-				GameHubObject.Hub.BombManager.OvertimeStarted();
+				this._bombManager.OvertimeStarted();
 			}
 		}
 
@@ -35,20 +48,29 @@ namespace HeavyMetalMachines.Combat
 		{
 			BitStream stream = base.GetStream();
 			stream.WriteBool(false);
-			GameHubObject.Hub.BombManager.ScoreBoard.WriteToBitStream(stream);
+			this._scoreBoard.WriteToBitStream(stream);
 			GameHubObject.Hub.GameTime.MatchTimer.WriteToBitStream(stream);
-			GameHubObject.Hub.PlaybackManager.SendState(this.Type, stream.ToArray());
+			this._serverDispatcher.SendFrame(this.Type.Convert(), true, this._serverDispatcher.GetNextFrameId(), -1, stream.ToArray());
 		}
 
 		public void SendFull(byte to)
 		{
 			BitStream stream = base.GetStream();
 			stream.WriteBool(true);
-			GameHubObject.Hub.BombManager.ScoreBoard.WriteToBitStream(stream);
+			this._scoreBoard.WriteToBitStream(stream);
 			GameHubObject.Hub.GameTime.MatchTimer.WriteToBitStream(stream);
-			GameHubObject.Hub.PlaybackManager.SendFullState(to, this.Type, stream.ToArray());
+			this._serverDispatcher.SendSnapshot(to, this.Type.Convert(), this._serverDispatcher.GetNextFrameId(), -1, GameHubObject.Hub.GameTime.GetPlaybackTime(), stream.ToArray());
 		}
 
-		public static readonly BitLogger Log = new BitLogger(typeof(ScoreboardParser));
+		protected static readonly BitLogger Log = new BitLogger(typeof(ScoreboardParser));
+
+		[Inject]
+		protected IScoreBoard _scoreBoard;
+
+		[Inject]
+		protected IBombManager _bombManager;
+
+		[Inject]
+		protected new IGameTime _gameTime;
 	}
 }

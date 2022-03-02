@@ -26,6 +26,16 @@ namespace HeavyMetalMachines.Frontend
 			GUIUtils.PlayAnimation(this._customMatchArtAnimation, true, 1f, string.Empty);
 		}
 
+		public void AnimateIn(Animation animation)
+		{
+			GUIUtils.PlayAnimation(animation, false, 1f, string.Empty);
+		}
+
+		public void AnimateOut(Animation animation)
+		{
+			GUIUtils.PlayAnimation(animation, true, 1f, string.Empty);
+		}
+
 		[SerializeField]
 		private Animation _pvpArtAnimation;
 

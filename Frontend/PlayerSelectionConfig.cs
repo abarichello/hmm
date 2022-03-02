@@ -1,44 +1,36 @@
 ﻿using System;
+using Assets.ClientApiObjects;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids;
-using HeavyMetalMachines.Character;
 using HeavyMetalMachines.Match;
-using HeavyMetalMachines.Utils;
+using HeavyMetalMachines.ParentalControl.Restrictions;
+using HeavyMetalMachines.Players.Business;
+using HeavyMetalMachines.Players.Presenting;
+using HeavyMetalMachines.Publishing;
+using HeavyMetalMachines.Publishing.Presenting;
 using HeavyMetalMachines.VFX;
 using HeavyMetalMachines.VFX.PlotKids.VoiceChat;
 using Pocketverse;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
 	public class PlayerSelectionConfig : GameHubBehaviour
 	{
-		public void SetPlayerName(PlayerData playerData, Color teamColor)
+		public void SetPlayerName(PlayerData playerData, Color teamColor, IMatchTeams teams)
 		{
 			string text = NGUIText.EscapeSymbols(playerData.Name);
-			this._labelIsClamped = GUIUtils.ClampLabel(this.PlayerName, this.FormatPlayerName(teamColor, text));
-			if (this._labelIsClamped)
-			{
-				this.PlayerNameTooltipTrigger.TooltipText = text;
-				this.PlayerNameTooltipTrigger.enabled = true;
-			}
-			this.TitleGrid.Reposition();
-			this.TeamTagLabel.gameObject.SetActive(false);
-			TeamUtils.GetUserTagAsync(GameHubBehaviour.Hub, playerData.UserId, delegate(string teamTag)
-			{
-				if (!string.IsNullOrEmpty(teamTag))
-				{
-					this.TeamTagLabel.gameObject.SetActive(true);
-					this.TeamTagLabel.text = teamTag;
-					this.TitleGrid.Reposition();
-				}
-			}, delegate(Exception exception)
-			{
-				PlayerSelectionConfig.Log.Warn(string.Format("Error on GetUserTagAsync. Exception:{0}", exception));
-			});
+			string text2 = (!playerData.IsBot) ? this._getDisplayableNickName.GetFormattedNickNameWithPlayerTag(playerData.PlayerId, text, new long?(playerData.PlayerTag)) : text;
+			this.PlayerName.Text = this.FormatPlayerName(teamColor, text2);
 			if (SpectatorController.IsSpectating)
 			{
-				this.FounderTooltipTrigger.TooltipText = text;
+				this.FounderTooltipTrigger.TooltipText = text2;
 			}
+		}
+
+		public void RepositionTeamTagPlayerNameAndPsnInfo()
+		{
+			this.TitleGrid.Reposition();
 		}
 
 		private string FormatPlayerName(Color teamColor, string playerName)
@@ -51,12 +43,12 @@ namespace HeavyMetalMachines.Frontend
 			gridIndex++;
 			this.GridPositionGroupGameObject.SetActive(true);
 			this.GridPositonLabel.text = gridIndex.ToString();
-			UnityEngine.Debug.Log(string.Format("[PlayerSelectionConfig] reach the SetGridPositionForSpectator({0})", gridIndex));
+			Debug.Log(string.Format("[PlayerSelectionConfig] reach the SetGridPositionForSpectator({0})", gridIndex));
 		}
 
 		public void SetupVoiceChatStatusChangerGUIButton(PlayerData playerData)
 		{
-			this._voiceChatStatusChangerGuiButton.Setup(playerData.UserId, playerData.IsBot, playerData.Team != GameHubBehaviour.Hub.Players.CurrentPlayerData.Team);
+			this._voiceChatStatusChangerGuiButton.Setup(playerData.ConvertToPlayer(), playerData.IsBot, playerData.Team != GameHubBehaviour.Hub.Players.CurrentPlayerData.Team);
 		}
 
 		public void Update()
@@ -68,10 +60,29 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
+		public void UpdatePsnInfo(PlayerData playerData)
+		{
+			if (playerData.IsBot)
+			{
+				return;
+			}
+			Publisher publisherById = Publishers.GetPublisherById(playerData.PublisherId);
+			PublisherPresentingData publisherPresentingData = this._getPublisherPresentingData.Get(publisherById);
+			if (publisherPresentingData.ShouldShowPublisherUserName)
+			{
+				this.PsnIdLabel.text = playerData.PublisherUserName;
+				this.PsnIdGroupGameObject.SetActive(true);
+			}
+			else
+			{
+				this.PsnIdGroupGameObject.SetActive(false);
+			}
+		}
+
 		private static readonly BitLogger Log = new BitLogger(typeof(PlayerSelectionConfig));
 
 		[NonSerialized]
-		public HeavyMetalMachines.Character.CharacterInfo CharInfo;
+		public IItemType CharItemType;
 
 		[SerializeField]
 		private VoiceChatStatusChangerGUIButton _voiceChatStatusChangerGuiButton;
@@ -89,8 +100,6 @@ namespace HeavyMetalMachines.Frontend
 
 		public UILabel PlayerName;
 
-		public UILabel TeamTagLabel;
-
 		public UIGrid TitleGrid;
 
 		public GameObject PlayerDisconnectedGameObject;
@@ -98,6 +107,21 @@ namespace HeavyMetalMachines.Frontend
 		public GameObject GridPositionGroupGameObject;
 
 		public UILabel GridPositonLabel;
+
+		[SerializeField]
+		private GameObject PsnIdGroupGameObject;
+
+		[SerializeField]
+		private UILabel PsnIdLabel;
+
+		[Inject]
+		private IGetDisplayableNickName _getDisplayableNickName;
+
+		[Inject]
+		private ITeamNameRestriction _teamNameRestriction;
+
+		[Inject]
+		private IGetPublisherPresentingData _getPublisherPresentingData;
 
 		private bool _labelIsClamped;
 	}

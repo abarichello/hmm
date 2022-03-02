@@ -1,6 +1,7 @@
 ﻿using System;
 using Pocketverse;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines
 {
@@ -25,20 +26,23 @@ namespace HeavyMetalMachines
 			switch (this.Kind)
 			{
 			case ScreenDigits.ScreenDigitsKind.TeamRedLeft:
-				this.Digit = (float)(PlaybackManager.PlayerStats.BlueTeamDeaths / 10);
+				this.Digit = (float)(this._playerStatsFeature.BlueTeamDeaths / 10);
 				break;
 			case ScreenDigits.ScreenDigitsKind.TeamRedRight:
-				this.Digit = (float)(PlaybackManager.PlayerStats.BlueTeamDeaths % 10);
+				this.Digit = (float)(this._playerStatsFeature.BlueTeamDeaths % 10);
 				break;
 			case ScreenDigits.ScreenDigitsKind.TeamBluLeft:
-				this.Digit = (float)(PlaybackManager.PlayerStats.RedTeamDeaths / 10);
+				this.Digit = (float)(this._playerStatsFeature.RedTeamDeaths / 10);
 				break;
 			case ScreenDigits.ScreenDigitsKind.TeamBluRight:
-				this.Digit = (float)(PlaybackManager.PlayerStats.RedTeamDeaths % 10);
+				this.Digit = (float)(this._playerStatsFeature.RedTeamDeaths % 10);
 				break;
 			}
 			this._material.SetTextureOffset(this._mainTexPropertyId, new Vector2(this.Digit * 0.0625f, 0.1f));
 		}
+
+		[Inject]
+		private IPlayerStatsFeature _playerStatsFeature;
 
 		public float Digit = 1f;
 

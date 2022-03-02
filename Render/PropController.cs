@@ -77,7 +77,7 @@ namespace HeavyMetalMachines.Render
 			}
 			if (this.dead && this.lifeTime < 0f)
 			{
-				UnityEngine.Object.Destroy(base.gameObject);
+				Object.Destroy(base.gameObject);
 			}
 		}
 
@@ -119,11 +119,11 @@ namespace HeavyMetalMachines.Render
 				rigidbody.WakeUp();
 				if (num == this.projectileLayer)
 				{
-					rigidbody.AddExplosionForce((float)UnityEngine.Random.Range(400, 800) * rigidbody.mass, col.transform.position, 10f);
+					rigidbody.AddExplosionForce((float)Random.Range(400, 800) * rigidbody.mass, col.transform.position, 10f);
 				}
 				else
 				{
-					rigidbody.AddForce(0f, (float)UnityEngine.Random.Range(200, 300) * rigidbody.mass, 0f);
+					rigidbody.AddForce(0f, (float)Random.Range(200, 300) * rigidbody.mass, 0f);
 				}
 			}
 			this.lifeTime = 5f;

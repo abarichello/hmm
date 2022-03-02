@@ -11,7 +11,7 @@ namespace HeavyMetalMachines.Tutorial
 
 		public void ForceStep(int stepIndex)
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1009, 2, base.IsReliable, new object[]
+			base.Dispatch(base.DispatchDestination(), base.OID, 1010, 3, base.IsReliable, new object[]
 			{
 				stepIndex
 			});
@@ -19,7 +19,7 @@ namespace HeavyMetalMachines.Tutorial
 
 		public void StepChangedOnServer(int step)
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1009, 8, base.IsReliable, new object[]
+			base.Dispatch(base.DispatchDestination(), base.OID, 1010, 9, base.IsReliable, new object[]
 			{
 				step
 			});
@@ -27,7 +27,7 @@ namespace HeavyMetalMachines.Tutorial
 
 		public void SyncBehaviourCompletedOnClient(int pStep, int pBehaviourIndex)
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1009, 11, base.IsReliable, new object[]
+			base.Dispatch(base.DispatchDestination(), base.OID, 1010, 12, base.IsReliable, new object[]
 			{
 				pStep,
 				pBehaviourIndex
@@ -36,7 +36,7 @@ namespace HeavyMetalMachines.Tutorial
 
 		public void SyncBehaviourCompletedOnServer(int pStep, int pBehaviourIndex)
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1009, 13, base.IsReliable, new object[]
+			base.Dispatch(base.DispatchDestination(), base.OID, 1010, 14, base.IsReliable, new object[]
 			{
 				pStep,
 				pBehaviourIndex
@@ -45,7 +45,7 @@ namespace HeavyMetalMachines.Tutorial
 
 		public void SetPlayerInputsActive(bool activeInput)
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1009, 14, base.IsReliable, new object[]
+			base.Dispatch(base.DispatchDestination(), base.OID, 1010, 15, base.IsReliable, new object[]
 			{
 				activeInput
 			});

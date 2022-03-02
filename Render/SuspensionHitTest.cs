@@ -8,7 +8,7 @@ namespace HeavyMetalMachines.Render
 		private void Awake()
 		{
 			this.rb = base.gameObject.AddComponent<Rigidbody>();
-			this.rb.constraints = (RigidbodyConstraints)84;
+			this.rb.constraints = 84;
 			this.rb.angularDrag = 10f;
 			this.cc = base.gameObject.AddComponent<CapsuleCollider>();
 			this.cc.direction = 2;
@@ -19,7 +19,6 @@ namespace HeavyMetalMachines.Render
 
 		private void DoHit()
 		{
-			CarCamera.Singleton.Shake(0.4f);
 			Vector3 vector = this.target.carBody.transform.InverseTransformDirection(Vector3.Cross(this.lastDir, Vector3.up)) * Vector3.Dot(this.lastDir * this.force, this.lastDir) * 0.4f;
 			this.target.backLeftWheel.AddForce(Vector3.up * (vector.x - vector.z));
 			this.target.backRightWheel.AddForce(Vector3.up * (vector.x + vector.z));
@@ -47,13 +46,13 @@ namespace HeavyMetalMachines.Render
 			if (this.driveMode)
 			{
 				this.timer = 5f;
-				this.cf.relativeForce = new Vector3(0f, 0f, (float)((!this.dir) ? (-(float)UnityEngine.Random.Range(10, 40)) : UnityEngine.Random.Range(10, 40)));
-				this.cf.torque = new Vector3(0f, (float)((UnityEngine.Random.Range(0, 10) <= 5) ? (-(float)UnityEngine.Random.Range(2, 60)) : UnityEngine.Random.Range(2, 60)), 0f);
+				this.cf.relativeForce = new Vector3(0f, 0f, (float)((!this.dir) ? (-(float)Random.Range(10, 40)) : Random.Range(10, 40)));
+				this.cf.torque = new Vector3(0f, (float)((Random.Range(0, 10) <= 5) ? (-(float)Random.Range(2, 60)) : Random.Range(2, 60)), 0f);
 				this.dir = !this.dir;
 				return;
 			}
 			this.timer = 2f;
-			this.lastDir = UnityEngine.Random.onUnitSphere;
+			this.lastDir = Random.onUnitSphere;
 			this.lastDir.y = 0f;
 			this.lastDir.Normalize();
 			this.DoHit();

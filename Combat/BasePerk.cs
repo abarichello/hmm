@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Pocketverse;
 using UnityEngine;
 using UnityEngine.Serialization;
+using Zenject;
 
 namespace HeavyMetalMachines.Combat
 {
@@ -45,11 +46,16 @@ namespace HeavyMetalMachines.Combat
 		{
 		}
 
-		protected virtual void OnDestroy()
+		protected void OnDestroy()
+		{
+			this.Destroying();
+		}
+
+		protected virtual void Destroying()
 		{
 		}
 
-		public virtual void PerkDestroyed(DestroyEffect destroyEffect)
+		public virtual void PerkDestroyed(DestroyEffectMessage destroyEffectMessage)
 		{
 		}
 
@@ -104,7 +110,7 @@ namespace HeavyMetalMachines.Combat
 			combatHits.Clear();
 			Vector3 position = this.Body.position;
 			this.Body.position += BasePerk.Translation;
-			RaycastHit[] array = this.Body.SweepTestAll(Vector3.down, 100f, QueryTriggerInteraction.Collide);
+			RaycastHit[] array = this.Body.SweepTestAll(Vector3.down, 100f, 2);
 			this.Body.position = position;
 			foreach (RaycastHit raycastHit in array)
 			{
@@ -138,7 +144,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				return target.transform;
 			}
-			Transform dummy = bitComponentInChildren.GetDummy(kind, customDummyName);
+			Transform dummy = bitComponentInChildren.GetDummy(kind, customDummyName, null);
 			if (dummy == null)
 			{
 				return target.transform;
@@ -157,6 +163,9 @@ namespace HeavyMetalMachines.Combat
 		[HideInInspector]
 		[SerializeField]
 		public BaseFX Effect;
+
+		[Inject]
+		private StateMachine _stateMachine;
 
 		protected bool wasActive;
 

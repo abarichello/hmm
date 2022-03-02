@@ -1,8 +1,9 @@
 ﻿using System;
 using FMod;
 using HeavyMetalMachines.Car;
-using HeavyMetalMachines.Character;
 using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Infra.Context;
+using HeavyMetalMachines.Match;
 using Pocketverse;
 using UnityEngine;
 
@@ -23,14 +24,6 @@ namespace HeavyMetalMachines.Audio
 			get
 			{
 				return this._carHub.carMovement;
-			}
-		}
-
-		private HeavyMetalMachines.Character.CharacterInfo characterInfo
-		{
-			get
-			{
-				return this._carHub.Player.Character;
 			}
 		}
 
@@ -68,7 +61,7 @@ namespace HeavyMetalMachines.Audio
 			{
 				this.StartEngineAudio();
 			}
-			this.engineAudioSrc.SetParameter(CarAudioController.LimiterParam, 0f);
+			this.engineAudioSrc.SetParameter(CarAudioController._limiterParam, 0f);
 			this.engineState = CarAudioController.State.Moving;
 			if (this.IsLocalPlayer && GameHubBehaviour.Hub.BombManager.GridController.CurrentPlayer != null)
 			{
@@ -82,9 +75,9 @@ namespace HeavyMetalMachines.Audio
 			{
 				this.StartEngineAudio();
 			}
-			this.targetRPM = this.characterInfo.carAudio.RpmGridCurve.Evaluate(value);
-			this.rpm = Mathf.Clamp(Mathf.Lerp(this.rpm, this.targetRPM, this.characterInfo.carAudio.rpmGain), this.characterInfo.carAudio.idleRPM, this.characterInfo.carAudio.maxRPM);
-			this.engineAudioSrc.SetParameter(CarAudioController.RPMParam, this.rpm);
+			this.targetRPM = this._carAudioData.RpmGridCurve.Evaluate(value);
+			this.rpm = Mathf.Clamp(Mathf.Lerp(this.rpm, this.targetRPM, this._carAudioData.rpmGain), this._carAudioData.idleRPM, this._carAudioData.maxRPM);
+			this.engineAudioSrc.SetParameter(CarAudioController._rpmParam, this.rpm);
 		}
 
 		private void GridController_ListenToGridGameStarted()
@@ -98,7 +91,7 @@ namespace HeavyMetalMachines.Audio
 				this.StartEngineAudio();
 			}
 			this.engineState = CarAudioController.State.OnGrid;
-			this.engineAudioSrc.SetParameter(CarAudioController.LimiterParam, 1f);
+			this.engineAudioSrc.SetParameter(CarAudioController._limiterParam, 1f);
 			if (GameHubBehaviour.Hub.BombManager.GridController.CurrentPlayer != null)
 			{
 				GameHubBehaviour.Hub.BombManager.GridController.CurrentPlayer.OnValueChanged += this.CurrentPlayer_OnValueChanged;
@@ -130,6 +123,10 @@ namespace HeavyMetalMachines.Audio
 			{
 				this.engineAudioSrc.Stop();
 				FMODAudioManager.Clean(this.engineAudioSrc);
+				CarAudioController.Log.DebugFormat("engine cleanup: {0}", new object[]
+				{
+					base.name
+				});
 			}
 		}
 
@@ -177,7 +174,7 @@ namespace HeavyMetalMachines.Audio
 
 		public void StartEngineAudio()
 		{
-			if (this._carHub == null || this.carMovement == null || this.characterInfo == null || this.characterInfo.carAudio == null)
+			if (this._carHub == null || this.carMovement == null || this._carAudioData == null)
 			{
 				CarAudioController.Log.Warn("engine initialization failed");
 				return;
@@ -188,8 +185,12 @@ namespace HeavyMetalMachines.Audio
 				this.engineAudioSrc.ResetTimeline();
 				return;
 			}
-			FMODAsset fmodasset = (!this.IsLocalPlayer) ? this.characterInfo.carAudio.Engine_Others : this.characterInfo.carAudio.Engine_Player;
-			if (fmodasset == null)
+			CarAudioController.Log.DebugFormat("creating new engineAudioSrc for {0}", new object[]
+			{
+				base.name
+			});
+			AudioEventAsset audioEventAsset = (!this.IsLocalPlayer) ? this._carAudioData.Engine_Others : this._carAudioData.Engine_Player;
+			if (audioEventAsset == null)
 			{
 				CarAudioController.Log.ErrorFormat("null engine. Player: {0} IsLocalPlayer: {1}", new object[]
 				{
@@ -198,7 +199,7 @@ namespace HeavyMetalMachines.Audio
 				});
 				return;
 			}
-			this.engineAudioSrc = FMODAudioManager.PlayAtVolume(fmodasset, this.RenderTransform, 1f, true);
+			this.engineAudioSrc = FMODAudioManager.PlayAtVolume(audioEventAsset, this.RenderTransform, 1f, true);
 		}
 
 		public void PlayDriftAudio()
@@ -211,7 +212,7 @@ namespace HeavyMetalMachines.Audio
 			{
 				return;
 			}
-			this.engineAudioSrc.SetParameter(CarAudioController.DriftParam, (float)((Mathf.Abs(this.carMovement.SpeedZ) <= 0.1f) ? 0 : 1));
+			this.engineAudioSrc.SetParameter(CarAudioController._driftParam, (float)((Mathf.Abs(this.carMovement.SpeedZ) <= 0.1f) ? 0 : 1));
 		}
 
 		public void StopEngineAudio()
@@ -228,7 +229,7 @@ namespace HeavyMetalMachines.Audio
 			{
 				return;
 			}
-			this.engineAudioSrc.SetParameter(CarAudioController.DriftParam, 0f);
+			this.engineAudioSrc.SetParameter(CarAudioController._driftParam, 0f);
 		}
 
 		private void OnCarCollision(Vector3 position, Vector3 direction, float intensity, byte otherLayer)
@@ -255,14 +256,14 @@ namespace HeavyMetalMachines.Audio
 			if (this.carMovement.IsDrifting)
 			{
 				this.timeDrifting += deltaTime;
-				this.driftRPM = Mathf.Lerp(this.driftRPM, this.characterInfo.carAudio.MaxDriftRPMGain, this.characterInfo.carAudio.driftRPMGain);
+				this.driftRPM = Mathf.Lerp(this.driftRPM, this._carAudioData.MaxDriftRPMGain, this._carAudioData.driftRPMGain);
 				if (this.gearShiftDelay <= 0f && this.currentGear > 0)
 				{
 					this.GearShiftDown();
 				}
-				if (this.timeDrifting > this.characterInfo.carAudio.driftDelay)
+				if (this.timeDrifting > this._carAudioData.driftDelay)
 				{
-					this.timeDrifting = this.characterInfo.carAudio.driftDelay;
+					this.timeDrifting = this._carAudioData.driftDelay;
 				}
 			}
 			else if (this.timeDrifting > 0f)
@@ -276,7 +277,7 @@ namespace HeavyMetalMachines.Audio
 			}
 			else
 			{
-				this.driftRPM = Mathf.Lerp(this.driftRPM, 0f, this.characterInfo.carAudio.driftRPMGain);
+				this.driftRPM = Mathf.Lerp(this.driftRPM, 0f, this._carAudioData.driftRPMGain);
 			}
 			bool flag;
 			if (this.combat.Id.IsOwner)
@@ -290,8 +291,8 @@ namespace HeavyMetalMachines.Audio
 			if (flag)
 			{
 				this.fakeRPMSpeed += deltaTime;
-				float time = Mathf.Clamp(this.fakeRPMSpeed, 0f, this.gearLengths[this.currentGear]);
-				this.desiredRPM = this.characterInfo.carAudio.RpmGearCurves[this.currentGear].Evaluate(time) + (float)this.characterInfo.carAudio.rpmFloor;
+				float num = Mathf.Clamp(this.fakeRPMSpeed, 0f, this.gearLengths[this.currentGear]);
+				this.desiredRPM = this._carAudioData.RpmGearCurves[this.currentGear].Evaluate(num) + (float)this._carAudioData.rpmFloor;
 				if (this.carInput.TargetV > 0f)
 				{
 					if (this.timeDrifting <= 0f && this.gearShiftDelay <= 0f && this.fakeRPMSpeed >= this.gearLengths[this.currentGear])
@@ -303,56 +304,56 @@ namespace HeavyMetalMachines.Audio
 				{
 					this.currentGear = 0;
 				}
-				int num = Mathf.FloorToInt(Mathf.Abs(this.carInput.TargetY));
-				this.rpmLoss = this.characterInfo.carAudio.RpmTurningCurve.Evaluate((float)num);
-				int num2 = Mathf.FloorToInt(Mathf.Abs(this.carMovement.SpeedZ));
-				this.targetRPM = this.desiredRPM + this.driftRPM + this.characterInfo.carAudio.RpmGainBySpeedCurve.Evaluate((float)num2);
-				if (this.fakeRPMSpeed > this.characterInfo.carAudio.releaseTime)
+				int num2 = Mathf.FloorToInt(Mathf.Abs(this.carInput.TargetY));
+				this.rpmLoss = this._carAudioData.RpmTurningCurve.Evaluate((float)num2);
+				int num3 = Mathf.FloorToInt(Mathf.Abs(this.carMovement.SpeedZ));
+				this.targetRPM = this.desiredRPM + this.driftRPM + this._carAudioData.RpmGainBySpeedCurve.Evaluate((float)num3);
+				if (this.fakeRPMSpeed > this._carAudioData.releaseTime)
 				{
-					this.engineAudioSrc.SetParameter(CarAudioController.ReleaseParam, 0f);
+					this.engineAudioSrc.SetParameter(CarAudioController._releaseParam, 0f);
 				}
 				if (this.castTimer <= 0f && this.IsLocalPlayer)
 				{
-					this.engineAudioSrc.SetParameter(CarAudioController.ShortCastParam, 1f);
+					this.engineAudioSrc.SetParameter(CarAudioController._shortCastParam, 1f);
 					this.castTimer = 1f;
 				}
-				this.targetRPM = Mathf.Clamp(this.targetRPM, this.characterInfo.carAudio.idleRPM, this.characterInfo.carAudio.maxRPM);
+				this.targetRPM = Mathf.Clamp(this.targetRPM, this._carAudioData.idleRPM, this._carAudioData.maxRPM);
 			}
 			else
 			{
 				if (!this.carInput.IsAccelerating && !this.carInput.IsReverse && this.IsLocalPlayer)
 				{
-					this.engineAudioSrc.SetParameter(CarAudioController.ReleaseParam, 1f);
+					this.engineAudioSrc.SetParameter(CarAudioController._releaseParam, 1f);
 				}
 				if (this.castTimer > 0f)
 				{
 					this.castTimer -= Time.deltaTime;
-					this.engineAudioSrc.SetParameter(CarAudioController.ShortCastParam, 0f);
+					this.engineAudioSrc.SetParameter(CarAudioController._shortCastParam, 0f);
 				}
 				this.currentGear = 0;
 				this.fakeRPMSpeed = 0f;
 				this.rpmLoss = 0f;
-				this.targetRPM = this.characterInfo.carAudio.idleRPM;
+				this.targetRPM = this._carAudioData.idleRPM;
 			}
-			this.rpm = Mathf.Clamp(Mathf.Lerp(this.rpm, this.targetRPM - this.rpmLoss, this.characterInfo.carAudio.rpmGain), this.characterInfo.carAudio.idleRPM, this.characterInfo.carAudio.maxRPM);
-			this.engineAudioSrc.SetParameter(CarAudioController.RPMParam, this.rpm);
-			this.engineAudioSrc.SetParameter(CarAudioController.ReverseParam, (float)((this.carInput.TargetV >= 0f) ? 0 : 1));
+			this.rpm = Mathf.Clamp(Mathf.Lerp(this.rpm, this.targetRPM - this.rpmLoss, this._carAudioData.rpmGain), this._carAudioData.idleRPM, this._carAudioData.maxRPM);
+			this.engineAudioSrc.SetParameter(CarAudioController._rpmParam, this.rpm);
+			this.engineAudioSrc.SetParameter(CarAudioController._reverseParam, (float)((this.carInput.TargetV >= 0f) ? 0 : 1));
 			this.lastSpeed = this.carMovement.SpeedZ;
 		}
 
 		private void GearShiftUp()
 		{
 			this.currentGear = 1;
-			this.desiredRPM -= this.characterInfo.carAudio.gearShitRPMLoss * SysRandom.Float(0f, 1f);
+			this.desiredRPM -= this._carAudioData.gearShitRPMLoss * SysRandom.Float(0f, 1f);
 			this.fakeRPMSpeed = 0f;
-			this.gearShiftDelay = this.characterInfo.carAudio.gearUpDelay;
+			this.gearShiftDelay = this._carAudioData.gearUpDelay;
 		}
 
 		private void GearShiftDown()
 		{
 			this.currentGear = 0;
-			this.fakeRPMSpeed = this.gearLengths[this.currentGear] * this.characterInfo.carAudio.rpmGearShiftPercent;
-			this.gearShiftDelay = this.characterInfo.carAudio.gearDownDelay;
+			this.fakeRPMSpeed = this.gearLengths[this.currentGear] * this._carAudioData.rpmGearShiftPercent;
+			this.gearShiftDelay = this._carAudioData.gearDownDelay;
 		}
 
 		private void ResetEngineParams()
@@ -362,11 +363,11 @@ namespace HeavyMetalMachines.Audio
 				return;
 			}
 			this.engineState = CarAudioController.State.Stopped;
-			this.engineAudioSrc.SetParameter(CarAudioController.RPMParam, 0f);
-			this.engineAudioSrc.SetParameter(CarAudioController.DriftParam, 0f);
-			this.engineAudioSrc.SetParameter(CarAudioController.ReleaseParam, 0f);
-			this.engineAudioSrc.SetParameter(CarAudioController.ShortCastParam, 0f);
-			this.engineAudioSrc.SetParameter(CarAudioController.LimiterParam, 0f);
+			this.engineAudioSrc.SetParameter(CarAudioController._rpmParam, 0f);
+			this.engineAudioSrc.SetParameter(CarAudioController._driftParam, 0f);
+			this.engineAudioSrc.SetParameter(CarAudioController._releaseParam, 0f);
+			this.engineAudioSrc.SetParameter(CarAudioController._shortCastParam, 0f);
+			this.engineAudioSrc.SetParameter(CarAudioController._limiterParam, 0f);
 		}
 
 		private void Update()
@@ -382,17 +383,23 @@ namespace HeavyMetalMachines.Audio
 			}
 			switch (GameHubBehaviour.Hub.BombManager.CurrentBombGameState)
 			{
-			case BombScoreBoard.State.Warmup:
-			case BombScoreBoard.State.Shop:
-			case BombScoreBoard.State.EndGame:
+			case BombScoreboardState.Warmup:
+			case BombScoreboardState.Shop:
+			case BombScoreboardState.EndGame:
 				this.ResetEngineParams();
 				return;
-			case BombScoreBoard.State.PreBomb:
+			case BombScoreboardState.PreBomb:
 				return;
-			case BombScoreBoard.State.BombDelivery:
-			case BombScoreBoard.State.PreReplay:
-			case BombScoreBoard.State.Replay:
+			case BombScoreboardState.BombDelivery:
+			case BombScoreboardState.PreReplay:
+			case BombScoreboardState.Replay:
 				this.UpdateEngineAudio();
+				break;
+			default:
+				CarAudioController.Log.DebugFormat("unknown BombGameState: {0}", new object[]
+				{
+					GameHubBehaviour.Hub.BombManager.CurrentBombGameState
+				});
 				break;
 			}
 		}
@@ -405,29 +412,35 @@ namespace HeavyMetalMachines.Audio
 				return;
 			}
 			this._carHub = carHub;
-			this.gearLengths = new float[this.characterInfo.carAudio.RpmGearCurves.Length];
+			this.CacheCarAudioData();
+			this.gearLengths = new float[this._carAudioData.RpmGearCurves.Length];
 			for (int i = 0; i < this.gearLengths.Length; i++)
 			{
-				AnimationCurve animationCurve = this.characterInfo.carAudio.RpmGearCurves[i];
+				AnimationCurve animationCurve = this._carAudioData.RpmGearCurves[i];
 				this.gearLengths[i] = animationCurve.keys[animationCurve.length - 1].time;
 			}
 			this.ActivateListeners();
-			this.characterInfo.carAudio.Preload();
+			this._carAudioData.Preload();
+		}
+
+		private void CacheCarAudioData()
+		{
+			this._carAudioData = this._carHub.Player.GetCharacterCarAudioData();
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(CarAudioController));
 
-		private static readonly byte[] RPMParam = FMODAudioManager.GetBytes("RPM");
+		private static readonly byte[] _rpmParam = FmodUtilities.GetBytes("RPM");
 
-		private static readonly byte[] DriftParam = FMODAudioManager.GetBytes("Drift");
+		private static readonly byte[] _driftParam = FmodUtilities.GetBytes("Drift");
 
-		private static readonly byte[] ReleaseParam = FMODAudioManager.GetBytes("Release");
+		private static readonly byte[] _releaseParam = FmodUtilities.GetBytes("Release");
 
-		private static readonly byte[] ShortCastParam = FMODAudioManager.GetBytes("ShortCast");
+		private static readonly byte[] _shortCastParam = FmodUtilities.GetBytes("ShortCast");
 
-		private static readonly byte[] LimiterParam = FMODAudioManager.GetBytes("Limiter");
+		private static readonly byte[] _limiterParam = FmodUtilities.GetBytes("Limiter");
 
-		private static readonly byte[] ReverseParam = FMODAudioManager.GetBytes("Reverse");
+		private static readonly byte[] _reverseParam = FmodUtilities.GetBytes("Reverse");
 
 		private bool _isServer;
 
@@ -438,6 +451,8 @@ namespace HeavyMetalMachines.Audio
 		private float lastCollision;
 
 		private float lastRelease;
+
+		private CarAudioData _carAudioData;
 
 		private CarComponentHub _carHub;
 

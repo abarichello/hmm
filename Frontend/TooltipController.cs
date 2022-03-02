@@ -15,12 +15,12 @@ namespace HeavyMetalMachines.Frontend
 			this.HideWindow();
 		}
 
-		private bool IsVisible()
+		public bool IsVisible()
 		{
 			return this.TooltipWindowGameObject.activeSelf;
 		}
 
-		public void TryToOpenWindow(TooltipInfo tooltipInfo)
+		public void ToggleOpenWindow(TooltipInfo tooltipInfo)
 		{
 			if (this.IsVisible())
 			{
@@ -29,6 +29,7 @@ namespace HeavyMetalMachines.Frontend
 			}
 			this.PopulateTooltip(tooltipInfo);
 			this.TooltipWindowGameObject.SetActive(true);
+			this.DescriptionTitleGrid.Reposition();
 		}
 
 		public void HideWindow()
@@ -132,7 +133,8 @@ namespace HeavyMetalMachines.Frontend
 			}
 			this.TooltipWindowGameObject.transform.localPosition = localPosition2;
 			Vector3 localPosition3 = this.TooltipWindowGameObject.transform.localPosition;
-			Vector3 vector2 = new Vector3(localPosition3.x + (float)this.BackgroundUi2DSprite.width * 0.5f + (float)ui2DSprite.width, localPosition3.y + (float)this.BackgroundUi2DSprite.height * 0.5f + (float)ui2DSprite.height);
+			Vector3 vector2;
+			vector2..ctor(localPosition3.x + (float)this.BackgroundUi2DSprite.width * 0.5f + (float)ui2DSprite.width, localPosition3.y + (float)this.BackgroundUi2DSprite.height * 0.5f + (float)ui2DSprite.height);
 			if (vector2.x >= (float)Screen.width)
 			{
 				Vector3 localPosition4 = this.TooltipWindowGameObject.transform.localPosition;
@@ -178,6 +180,8 @@ namespace HeavyMetalMachines.Frontend
 		public HMMUI2DDynamicSprite BorderIcon;
 
 		public UILabel SimpleTextUiLabel;
+
+		public UIGrid DescriptionTitleGrid;
 
 		public UILabel TitleUiLabel;
 

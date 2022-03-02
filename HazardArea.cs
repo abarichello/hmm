@@ -1,5 +1,6 @@
 ﻿using System;
 using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.Match;
 using Pocketverse;
 using UnityEngine;
@@ -15,14 +16,23 @@ namespace HeavyMetalMachines
 				base.enabled = false;
 				return;
 			}
+			if (base.Id)
+			{
+				this._hasIdentifiable = true;
+				this._combatObject = base.Id.GetBitComponent<CombatObject>();
+			}
 			this._dirCalculator = new HazardDirectionProvider(this.Direction, base.transform, this.DirectionTransform);
 			this._hitChecker = new HazardHit(this);
 			GameHubBehaviour.Hub.BombManager.ListenToPhaseChange += this.OnPhaseChanged;
+			if (this.AiRepairPoint && !GameHubBehaviour.Hub.BotAIHub.RepairPoints.Contains(base.transform))
+			{
+				GameHubBehaviour.Hub.BotAIHub.RepairPoints.Add(base.transform);
+			}
 		}
 
 		private void OnEnable()
 		{
-			if (this.Modifiers == null)
+			if (this.Modifiers == null && this.OnEnterModifiers == null && this.OnExitModifiers == null)
 			{
 				HazardArea.Log.ErrorFormat("GD: HazardArea with null Modifier on {0}", new object[]
 				{
@@ -39,6 +49,7 @@ namespace HeavyMetalMachines
 				return;
 			}
 			GameHubBehaviour.Hub.BombManager.ListenToPhaseChange -= this.OnPhaseChanged;
+			GameHubBehaviour.Hub.BotAIHub.RepairPoints.Remove(base.transform);
 		}
 
 		protected virtual void OnCollisionEnter(Collision col)
@@ -48,17 +59,35 @@ namespace HeavyMetalMachines
 				return;
 			}
 			this._currentTarget = CombatRef.GetCombat(col.collider);
-			if (this._currentTarget == null)
+			if (this._currentTarget == null || this.Modifiers == null)
 			{
 				return;
 			}
+			this._currentModifiers = this.Modifiers;
 			this.Modifiers.Data.SetDirection(this._dirCalculator.GetUpdatedDirection(this.InvertDirectionIfOpposite, this._currentTarget.Transform.position, this._currentTarget.Movement.LastVelocity, col.contacts[0].normal));
 			this._hitChecker.TryHit(this._currentTarget);
+			this._currentModifiers = null;
+			this._currentTarget = null;
+		}
+
+		protected virtual void OnTriggerEnter(Collider col)
+		{
+			this.InternalTrigger(col, this.OnEnterModifiers);
 		}
 
 		protected virtual void OnTriggerStay(Collider col)
 		{
-			if (!base.enabled)
+			this.InternalTrigger(col, this.Modifiers);
+		}
+
+		protected virtual void OnTriggerExit(Collider col)
+		{
+			this.InternalTrigger(col, this.OnExitModifiers);
+		}
+
+		private void InternalTrigger(Collider col, HazardModifiers modifiers)
+		{
+			if (!base.enabled || modifiers == null)
 			{
 				return;
 			}
@@ -67,8 +96,11 @@ namespace HeavyMetalMachines
 			{
 				return;
 			}
-			this.Modifiers.Data.SetDirection(this._dirCalculator.GetUpdatedDirection(this.InvertDirectionIfOpposite, this._currentTarget.Transform.position, this._currentTarget.Movement.LastVelocity, default(Vector3)));
+			this._currentModifiers = modifiers;
+			modifiers.Data.SetDirection(this._dirCalculator.GetUpdatedDirection(this.InvertDirectionIfOpposite, this._currentTarget.Transform.position, this._currentTarget.Movement.LastVelocity, default(Vector3)));
 			this._hitChecker.TryHit(this._currentTarget);
+			this._currentModifiers = null;
+			this._currentTarget = null;
 		}
 
 		public TeamKind Team
@@ -113,13 +145,21 @@ namespace HeavyMetalMachines
 
 		public void HitTarget()
 		{
-			this._currentTarget.Controller.AddModifiers(this.Modifiers.Data, null, -1, false);
+			if (this._hasIdentifiable)
+			{
+				this._currentTarget.Controller.AddModifiers(this._currentModifiers.Data, this._combatObject, -1, false);
+			}
+			else
+			{
+				this._currentTarget.Controller.AddModifiers(this._currentModifiers.Data, null, -1, false);
+			}
+			this._currentModifiers = null;
 			this._currentTarget = null;
 		}
 
-		protected void OnPhaseChanged(BombScoreBoard.State state)
+		protected void OnPhaseChanged(BombScoreboardState state)
 		{
-			if (state != BombScoreBoard.State.PreReplay && state != BombScoreBoard.State.BombDelivery)
+			if (state != BombScoreboardState.PreReplay && state != BombScoreboardState.BombDelivery)
 			{
 				base.enabled = false;
 			}
@@ -131,7 +171,14 @@ namespace HeavyMetalMachines
 
 		private static readonly BitLogger Log = new BitLogger(typeof(HazardArea));
 
+		[Tooltip("Modifiers to apply on TriggerStay or on CollisionEnter")]
 		public HazardModifiers Modifiers;
+
+		[Tooltip("Modifiers to apply on TriggerEnter")]
+		public HazardModifiers OnEnterModifiers;
+
+		[Tooltip("Modifiers to apply on TriggerExit")]
+		public HazardModifiers OnExitModifiers;
 
 		[SerializeField]
 		public TeamKind _team;
@@ -150,5 +197,14 @@ namespace HeavyMetalMachines
 		private HazardHit _hitChecker;
 
 		private CombatObject _currentTarget;
+
+		private HazardModifiers _currentModifiers;
+
+		private bool _hasIdentifiable;
+
+		private ICombatObject _combatObject;
+
+		[Tooltip("Set this to add this hazard's transform to AI targets when searching for repair")]
+		public bool AiRepairPoint;
 	}
 }

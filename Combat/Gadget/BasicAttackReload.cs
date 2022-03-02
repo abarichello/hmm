@@ -18,7 +18,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 		{
 			get
 			{
-				return this.Combat.GadgetStates.GetGadgetState(base.Slot).CoolDown > (long)GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
+				return this.Combat.GadgetStates.GetGadgetState(base.Slot).Cooldown > (long)GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
 			}
 		}
 

@@ -26,6 +26,25 @@ namespace HeavyMetalMachines.Combat.Gadget
 		KillGadget,
 		BombExplosionGadget,
 		SprayGadget,
-		GridHighlightGadget
+		GridHighlightGadget,
+		EffectBehaviourGadget,
+		BombPassGadget,
+		EmoteRadialGadget,
+		EmoteGadget0,
+		EmoteGadget1,
+		EmoteGadget2,
+		EmoteGadget3,
+		[Obsolete("GD Lucas removed this last emote")]
+		EmoteGadget4,
+		QuickChatMenu,
+		QuickChat00,
+		QuickChat01,
+		QuickChat02,
+		QuickChat03,
+		QuickChat04,
+		QuickChat05,
+		QuickChat06,
+		QuickChat07,
+		QuickChatSystem
 	}
 }

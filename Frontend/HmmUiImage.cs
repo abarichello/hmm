@@ -1,5 +1,6 @@
 ﻿using System;
 using HeavyMetalMachines.Utils;
+using Hoplon.Unity.Loading;
 using Pocketverse;
 using SharedUtils.Loading;
 using UnityEngine;
@@ -17,21 +18,23 @@ namespace HeavyMetalMachines.Frontend
 				HmmUiImage.Log.Warn("Asset name is null. Ignoring.");
 				return;
 			}
-			string text = assetName.ToLower();
-			if (text.Equals(this._assetName))
+			if (base.IsDestroyed())
 			{
 				return;
 			}
-			this._assetName = text;
+			if (assetName.Equals(this._assetName, StringComparison.OrdinalIgnoreCase))
+			{
+				return;
+			}
+			this._assetName = assetName;
 			if (!this._isLoadingAsset)
 			{
 				this._alphaBeforeLoadAsset = this.color.a;
 				this._isLoadingAsset = true;
 			}
 			this.SetAlpha(0f);
-			if (!SingletonMonoBehaviour<LoadingManager>.Instance.TextureManager.GetAssetAsync(this._assetName, this))
+			if (!Loading.TextureManager.GetAssetAsync(this._assetName, this))
 			{
-				HeavyMetalMachines.Utils.Debug.Assert(false, string.Format("HmmUiImage: Image/Bundle not found -> {0}", this._assetName), HeavyMetalMachines.Utils.Debug.TargetTeam.GUI);
 				this.SetAlpha(this._alphaBeforeLoadAsset);
 				this._isLoadingAsset = false;
 			}
@@ -60,7 +63,16 @@ namespace HeavyMetalMachines.Frontend
 			}
 			else
 			{
-				HeavyMetalMachines.Utils.Debug.Assert(false, string.Format("HmmUiImage: Image failed to load -> {0}", this._assetName), HeavyMetalMachines.Utils.Debug.TargetTeam.GUI);
+				Debug.Assert(false, string.Format("HmmUiImage: Image failed to load -> {0}", this._assetName), Debug.TargetTeam.GUI);
+			}
+		}
+
+		public void SetSprite(Sprite sprite)
+		{
+			base.sprite = sprite;
+			if (this._resizeAfterLoad)
+			{
+				this.SetNativeSize();
 			}
 		}
 

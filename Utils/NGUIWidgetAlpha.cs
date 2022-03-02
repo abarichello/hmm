@@ -1,25 +1,24 @@
 ﻿using System;
 using System.Collections.Generic;
+using HeavyMetalMachines.Presenting;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Utils
 {
 	[ExecuteInEditMode]
-	public class NGUIWidgetAlpha : MonoBehaviour
+	public class NGUIWidgetAlpha : MonoBehaviour, IAlpha
 	{
-		public void Update()
+		private void OnDidApplyAnimationProperties()
 		{
-			int frameCount = Time.frameCount;
-			if (this.mUpdateFrame != frameCount)
-			{
-				this.UpdateAlphaValues();
-			}
+			this.UpdateAlphaValues();
 		}
 
 		private void UpdateAlphaValues()
 		{
-			this.mUpdateFrame = Time.frameCount;
-			this.widget.alpha = this.alpha;
+			if (this.widget != null)
+			{
+				this.widget.alpha = this.alpha;
+			}
 			for (int i = 0; i < this._extraUIRects.Count; i++)
 			{
 				UIRect uirect = this._extraUIRects[i];
@@ -60,6 +59,19 @@ namespace HeavyMetalMachines.Utils
 			this.UpdateAlphaValues();
 		}
 
+		public float Alpha
+		{
+			get
+			{
+				return this.alpha;
+			}
+			set
+			{
+				this.alpha = value;
+				this.UpdateAlphaValues();
+			}
+		}
+
 		public float alpha = 1f;
 
 		public UIWidget widget;
@@ -70,9 +82,6 @@ namespace HeavyMetalMachines.Utils
 		[Header("Useful for animating extra UIRects, such as child panels")]
 		[SerializeField]
 		private List<UIRect> _extraUIRects;
-
-		[NonSerialized]
-		private int mUpdateFrame = -1;
 
 		private UIPanel[] _childPanels;
 	}

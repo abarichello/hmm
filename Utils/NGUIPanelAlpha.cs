@@ -1,10 +1,11 @@
 ﻿using System;
+using HeavyMetalMachines.Presenting;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Utils
 {
 	[ExecuteInEditMode]
-	public class NGUIPanelAlpha : MonoBehaviour
+	public class NGUIPanelAlpha : MonoBehaviour, IAlpha
 	{
 		public void Update()
 		{
@@ -19,6 +20,18 @@ namespace HeavyMetalMachines.Utils
 		public void OnEnable()
 		{
 			this.panel.alpha = this.alpha;
+		}
+
+		public float Alpha
+		{
+			get
+			{
+				return this.alpha;
+			}
+			set
+			{
+				this.alpha = value;
+			}
 		}
 
 		public float alpha;

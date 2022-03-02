@@ -52,9 +52,9 @@ namespace HeavyMetalMachines.Combat
 			this._refsSet = true;
 		}
 
-		public override void PerkDestroyed(DestroyEffect destroyEffect)
+		public override void PerkDestroyed(DestroyEffectMessage destroyEffectMessage)
 		{
-			base.PerkDestroyed(destroyEffect);
+			base.PerkDestroyed(destroyEffectMessage);
 			if (this._refsSet)
 			{
 				this.SetCombatToRefs(null);

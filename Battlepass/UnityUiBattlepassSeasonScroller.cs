@@ -4,7 +4,14 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using EnhancedUI.EnhancedScroller;
 using HeavyMetalMachines.Frontend;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Localization;
+using HeavyMetalMachines.Store.Business;
 using HeavyMetalMachines.UnityUI;
+using Hoplon.Input.UiNavigation;
+using Hoplon.Input.UiNavigation.ContextInputNotifier;
+using Hoplon.ToggleableFeatures;
+using UniRx;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -12,6 +19,22 @@ namespace HeavyMetalMachines.Battlepass
 {
 	public class UnityUiBattlepassSeasonScroller : MonoBehaviour, IBattlepassSeasonScroller, IEnhancedScrollerDelegate
 	{
+		private IUiNavigationSubGroupHolder UiNavigationSubGroupHolder
+		{
+			get
+			{
+				return this._uiNavigationSubGroupHolder;
+			}
+		}
+
+		private IUiNavigationContextInputNotifier UiNavigationContextInputNotifier
+		{
+			get
+			{
+				return this._uiNavigationContextInputNotifier;
+			}
+		}
+
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event UnityUiBattlepassSeasonScroller.SlotAnimationTriggerDelegate SlotAnimationTrigger;
 
@@ -25,13 +48,14 @@ namespace HeavyMetalMachines.Battlepass
 			this._scroller.Delegate = this;
 			this._scroller.ScrollRect.horizontal = false;
 			this._slotSelector.SetTarget(null, false, false);
+			ObservableExtensions.Subscribe<UiNavigationInputCode>(this.UiNavigationContextInputNotifier.ObserveInputDown(), new Action<UiNavigationInputCode>(this.OnInputDown));
 		}
 
 		protected void OnEnable()
 		{
 			this._buyButtons.AddBuyCallbacks(new UnityUiBattlepassSeasonBuyButtons.SeasonBuyButtonClickDelegate(this.OnUnlockPremiumButton), new UnityUiBattlepassSeasonBuyButtons.SeasonBuyButtonClickDelegate(this.OnBuyLevelsButton), new UnityUiBattlepassSeasonBuyButtons.SeasonBuyButtonClickDelegate(this.OnBuyAllLevelsButton));
 			this.TryToRestorePendingAnimationData();
-			this.SetupByPremiumState(this._userHasPremium);
+			this.SetupByPremiumState();
 		}
 
 		private void TryToRestorePendingAnimationData()
@@ -46,7 +70,7 @@ namespace HeavyMetalMachines.Battlepass
 					this.SetAnimationSeasonScrollerData(i, this._unlockAnimationTargetLevel);
 				}
 				this._scroller.RefreshActiveCellViews();
-				this.UpdateBuyLevelButton();
+				this.UpdateBuyLevelButtons();
 				this.JumpToPageOfSlotIndex(this.GetSelectedLevel(), true);
 			}
 		}
@@ -57,12 +81,22 @@ namespace HeavyMetalMachines.Battlepass
 			base.StopAllCoroutines();
 			this._isJumping = false;
 			this._slotSelector.ResetTarget();
+			this.DisposeStoreItemObservation();
+		}
+
+		private void DisposeStoreItemObservation()
+		{
+			if (this._storeItemObservation != null)
+			{
+				this._storeItemObservation.Dispose();
+			}
 		}
 
 		public void SetVisibility(bool isVisible, bool imediate = false)
 		{
 			base.StopAllCoroutines();
 			base.gameObject.SetActive(true);
+			this.SetUiNavigationFocus(isVisible);
 			if (imediate)
 			{
 				this._mainCanvasGroup.alpha = ((!isVisible) ? 0f : 1f);
@@ -79,6 +113,18 @@ namespace HeavyMetalMachines.Battlepass
 			}
 		}
 
+		private void SetUiNavigationFocus(bool focused)
+		{
+			if (focused)
+			{
+				this.UiNavigationSubGroupHolder.SubGroupFocusGet();
+			}
+			else
+			{
+				this.UiNavigationSubGroupHolder.SubGroupFocusRelease();
+			}
+		}
+
 		private void ReselectCurrentSlotArtPreview()
 		{
 			UnityUiBattlepassArtPreview.ArtPreviewData artPreviewData = (this._selectedPremiumSlotLevel == -1) ? this._seasonScrollerArtPreviewDatas[this._selectedFreeSlotLevel].FreeDataArtPreview : this._seasonScrollerArtPreviewDatas[this._selectedPremiumSlotLevel].PremiumDataArtPreview;
@@ -92,14 +138,18 @@ namespace HeavyMetalMachines.Battlepass
 			yield break;
 		}
 
-		protected void Update()
+		private void OnInputDown(UiNavigationInputCode inputCode)
 		{
-			this.ArrowInputCheckUpdate();
+			bool left = inputCode == 14 || inputCode == 20;
+			bool right = inputCode == 15 || inputCode == 21;
+			bool up = inputCode == 12 || inputCode == 18;
+			bool down = inputCode == 13 || inputCode == 19;
+			this.ArrowInputCheckUpdate(left, right, up, down);
 		}
 
-		private void ArrowInputCheckUpdate()
+		private void ArrowInputCheckUpdate(bool left, bool right, bool up, bool down)
 		{
-			if (Input.GetKeyUp(KeyCode.LeftArrow))
+			if (left)
 			{
 				int i = this.GetSelectedLevel();
 				bool isPremium = this._selectedPremiumSlotLevel != -1;
@@ -113,7 +163,7 @@ namespace HeavyMetalMachines.Battlepass
 					}
 				}
 			}
-			else if (Input.GetKeyUp(KeyCode.RightArrow))
+			else if (right)
 			{
 				int j = this.GetSelectedLevel();
 				bool isPremium2 = this._selectedPremiumSlotLevel != -1;
@@ -127,7 +177,7 @@ namespace HeavyMetalMachines.Battlepass
 					}
 				}
 			}
-			else if (Input.GetKeyUp(KeyCode.UpArrow) || Input.GetKeyUp(KeyCode.DownArrow))
+			else if (up || down)
 			{
 				int selectedLevel = this.GetSelectedLevel();
 				bool flag = this._selectedPremiumSlotLevel != -1;
@@ -146,7 +196,14 @@ namespace HeavyMetalMachines.Battlepass
 			this._maxSlots = maxSlots;
 			this._numPages = this._maxSlots / this._pageSize;
 			this._currentLevel = currentLevel;
-			this._buyLevelPriceValue = dataSeason.LevelPriceValue;
+			this._buyLevelsStoreItem = this._storeBusinessFactory.CreateGetStoreItem().Get(dataSeason.ItemTypeId);
+			this._buyLevelPriceValue = (int)this._buyLevelsStoreItem.HardPrice;
+			this._storeItemObservation = ObservableExtensions.Subscribe<HeavyMetalMachines.Store.Business.StoreItem>(this._storeBusinessFactory.CreateObserveStoreItem().CreateObservable(dataSeason.ItemTypeId), delegate(HeavyMetalMachines.Store.Business.StoreItem changedStoreItem)
+			{
+				this._buyLevelsStoreItem = changedStoreItem;
+				this._buyLevelPriceValue = (int)this._buyLevelsStoreItem.HardPrice;
+				this.UpdateBuyLevelButtons();
+			});
 			this._selectedFreeSlotLevel = -1;
 			this._selectedPremiumSlotLevel = -1;
 			this.UpdatePageInfo();
@@ -186,10 +243,9 @@ namespace HeavyMetalMachines.Battlepass
 				this._seasonCellViewDatas[unlockLevel2].PremiumSlotData = this.GetSetupDataSlot(premiumSeasonItems[k], this._selectedPremiumSlotLevel);
 				this._seasonScrollerArtPreviewDatas[unlockLevel2].PremiumDataArtPreview = this.GetSetupDataArtPreview(premiumSeasonItems[k]);
 			}
-			this.SetupByPremiumState(dataSeason.UserHasPremium);
-			this._buyButtons.SetPremiumButtonInteractable(!dataSeason.UserHasPremium);
-			this._buyButtons.SetupBuyLevels(this._buyLevelPriceValue.ToString("0"));
-			this.UpdateBuyAllLevelsText(this._maxSlots, this._currentLevel, dataSeason.LevelPriceValue);
+			this.SetupByPremiumState();
+			this._buyButtons.SetPremiumButtonVisibility(!dataSeason.UserHasPremium);
+			this.UpdateBuyLevelButtons();
 			this._scroller.ReloadData(0f);
 		}
 
@@ -200,7 +256,7 @@ namespace HeavyMetalMachines.Battlepass
 				IconAssetName = dataSlotItem.IconAssetName,
 				SlotHasReward = true,
 				CurrencyAmount = dataSlotItem.CurrencyAmount,
-				IsHardCurrency = (dataSlotItem.RewardKind == ProgressionInfo.RewardKind.HardCurrency),
+				IsHardCurrency = (dataSlotItem.RewardKind == 4),
 				IsLocked = (dataSlotItem.UnlockLevel > this._currentLevel),
 				IsSelected = (selectedSlotLevel == dataSlotItem.UnlockLevel),
 				IsRepeated = dataSlotItem.IsRepeated
@@ -215,40 +271,39 @@ namespace HeavyMetalMachines.Battlepass
 			result.TitleText = dataSlotItem.TitleDraft;
 			result.DescriptionText = dataSlotItem.DescriptionDraft;
 			result.ShowCurrencyIcon = (dataSlotItem.CurrencyAmount > 0);
-			result.IsHardCurrency = (dataSlotItem.RewardKind == ProgressionInfo.RewardKind.HardCurrency);
+			result.IsHardCurrency = (dataSlotItem.RewardKind == 4);
 			result.CurrencyReward = dataSlotItem.CurrencyAmount;
 			result.LoreData.TitleText = dataSlotItem.LoreTitleDraft;
 			result.LoreData.SubtitleText = dataSlotItem.LoreSubtitleDraft;
 			result.LoreData.DescriptionText = dataSlotItem.LoreDescriptionDraft;
 			result.LoreData.IsLocked = (dataSlotItem.UnlockLevel > this._currentLevel);
 			result.ArtPreviewBackGroundAssetName = dataSlotItem.ArtPreviewBackGroundAssetName;
-			result.SkinCustomizations = dataSlotItem.SkinCustomizations;
+			result.SkinPrefabComponent = dataSlotItem.SkinPrefabComponent;
 			return result;
 		}
 
 		public void RefreshData(BattlepassViewData.BattlepassViewDataLevels dataLevels, BattlepassViewData.BattlepassViewDataSeason dataSeason)
 		{
-			this.UpdateBuyAllLevelsText(dataLevels.MaxLevels, dataLevels.CurrentLevel, dataSeason.LevelPriceValue);
+			this.UpdateBuyAllLevelsText();
 		}
 
-		private void UpdateBuyAllLevelsText(int maxSlots, int currentLevel, int levelPrice)
+		private void UpdateBuyAllLevelsText()
 		{
-			string allLevelsButtonHoverValue = ((maxSlots - (currentLevel + 1)) * levelPrice).ToString("0");
+			int allLevelsButtonHoverValue = (this._maxSlots - (this._currentLevel + 1)) * this._buyLevelPriceValue;
 			this._buyButtons.SetAllLevelsButtonHoverValue(allLevelsButtonHoverValue);
 		}
 
-		private void SetupByPremiumState(bool userHasPremium)
+		private void SetupByPremiumState()
 		{
 			for (int i = 0; i < this._maxSlots; i++)
 			{
-				bool isLocked = !userHasPremium || i > this._currentLevel;
+				bool isLocked = !this._userHasPremium || i > this._currentLevel;
 				this._seasonCellViewDatas[i].PremiumSlotData.IsLocked = isLocked;
 				this._seasonScrollerArtPreviewDatas[i].PremiumDataArtPreview.LoreData.IsLocked = isLocked;
 			}
-			this._buyButtons.SetupByPremiumState(userHasPremium, this._currentLevel, this._maxSlots);
-			this._premiumLockCanvasGroup.alpha = ((!userHasPremium) ? 1f : 0f);
-			this._premiumLockCanvasGroup.interactable = !userHasPremium;
-			this._premiumLockCanvasGroup.blocksRaycasts = !userHasPremium;
+			this._premiumLockCanvasGroup.alpha = ((!this._userHasPremium) ? 1f : 0f);
+			this._premiumLockCanvasGroup.interactable = !this._userHasPremium;
+			this._premiumLockCanvasGroup.blocksRaycasts = !this._userHasPremium;
 		}
 
 		public UnityUiBattlepassSeasonCellView.SeasonCellViewData GetSeasonCellViewData(int slotLevel)
@@ -316,7 +371,7 @@ namespace HeavyMetalMachines.Battlepass
 				this._seasonCellViewDatas[slotLevel].FreeSlotData.IsSelected = true;
 			}
 			this._scroller.RefreshActiveCellViews();
-			this.UpdateBuyLevelButton();
+			this.UpdateBuyLevelButtons();
 			return true;
 		}
 
@@ -325,9 +380,22 @@ namespace HeavyMetalMachines.Battlepass
 			this._slotSelector.SetTarget(slotTransform, slotLevel != this._currentLevel, false);
 		}
 
-		private void UpdateBuyLevelButton()
+		private void UpdateBuyLevelButtons()
 		{
-			this._buyButtons.UpdateBuyLevelButton(this.GetSelectedLevel(), this._currentLevel, this._buyLevelPriceValue);
+			int selectedLevel = this.GetSelectedLevel();
+			int targetLevel = (selectedLevel > this._currentLevel) ? selectedLevel : (this._currentLevel + 1);
+			int num = (selectedLevel > this._currentLevel) ? (selectedLevel - this._currentLevel) : 1;
+			int price = this._buyLevelPriceValue * num;
+			this._buyButtons.SetupBuyLevels(price, targetLevel);
+			this.UpdateBuyAllLevelsText();
+			if (this._buyLevelsStoreItem.IsPurchasable && this.HasLevelsToBuy())
+			{
+				this._buyButtons.ShowLevelButtons();
+			}
+			else
+			{
+				this._buyButtons.HideLevelButtons();
+			}
 		}
 
 		private void TryToClearSlotSelection()
@@ -350,6 +418,7 @@ namespace HeavyMetalMachines.Battlepass
 			{
 				this._currentSlotIndex = num;
 				this.TryToJump(num);
+				this.SelectLevelAfterJumpArrowButton();
 			}
 		}
 
@@ -361,6 +430,41 @@ namespace HeavyMetalMachines.Battlepass
 			{
 				this._currentSlotIndex = num;
 				this.TryToJump(num);
+				this.SelectLevelAfterJumpArrowButton();
+			}
+		}
+
+		private void SelectLevelAfterJumpArrowButton()
+		{
+			int num = this.GetSelectedLevel() % this._pageSize;
+			int slotLevel = this._currentSlotIndex + num;
+			int num2 = this._currentSlotIndex + this._pageSize;
+			bool flag = this._selectedPremiumSlotLevel != -1;
+			if (this.OnSlotSelected(flag, slotLevel))
+			{
+				return;
+			}
+			if (this.OnSlotSelected(!flag, slotLevel))
+			{
+				return;
+			}
+			int num3 = this._currentSlotIndex;
+			while (num3 < num2 && num3 < this._maxSlots)
+			{
+				if (this.OnSlotSelected(flag, num3))
+				{
+					return;
+				}
+				num3++;
+			}
+			int num4 = this._currentSlotIndex;
+			while (num4 < num2 && num4 < this._maxSlots)
+			{
+				if (this.OnSlotSelected(!flag, num4))
+				{
+					return;
+				}
+				num4++;
 			}
 		}
 
@@ -449,7 +553,7 @@ namespace HeavyMetalMachines.Battlepass
 			this._pageText.text = string.Format("<color=#{0}>{1} {2}</color> / {3}", new object[]
 			{
 				HudUtils.RGBToHex(this._pageTextColor),
-				Language.Get("BATTLEPASS_PAGE", TranslationSheets.Battlepass),
+				Language.Get("BATTLEPASS_PAGE", TranslationContext.Battlepass),
 				num + 1,
 				this._numPages
 			});
@@ -473,6 +577,7 @@ namespace HeavyMetalMachines.Battlepass
 		private IEnumerator ShowUnlockPremiumAnimationCoroutine(Action onAnimationFinished)
 		{
 			this._mainCanvasGroup.interactable = false;
+			this.UpdateBuyLevelButtons();
 			this._unlockPremiumAnimation.Play();
 			yield return new WaitForSeconds(this._delayAfterUnlockPremiumAnimationInSec);
 			for (int i = 0; i < this._maxSlots; i++)
@@ -480,17 +585,13 @@ namespace HeavyMetalMachines.Battlepass
 				this._seasonCellViewDatas[i].PremiumSlotData.IsLocked = (i > this._currentLevel);
 			}
 			this._scroller.RefreshActiveCellViews();
-			bool levelMaxedOut = this._currentLevel == this._maxSlots - 1;
-			if (levelMaxedOut)
-			{
-				this._buyButtons.DisableButtonsCanvas();
-			}
 			yield return new WaitForSeconds(this._buyButtons.PlayUnlockAnimation());
 			while (this._unlockPremiumAnimation.isPlaying)
 			{
 				yield return null;
 			}
-			this.SetupByPremiumState(true);
+			this.SetupByPremiumState();
+			this._buyButtons.SetPremiumButtonVisibility(!this._userHasPremium);
 			this._mainCanvasGroup.interactable = true;
 			onAnimationFinished();
 			yield break;
@@ -516,7 +617,7 @@ namespace HeavyMetalMachines.Battlepass
 			this._isAnimatingUnlockLevels = true;
 			this._unlockAnimationTargetLevel = targetLevel;
 			this._mainCanvasGroup.interactable = false;
-			this._buyButtons.DisableLevelButtons();
+			this._buyButtons.HideLevelButtons();
 			this.JumpToPageOfSlotIndex(this._currentLevel + 1, false);
 			while (this._scroller.IsTweening)
 			{
@@ -556,14 +657,10 @@ namespace HeavyMetalMachines.Battlepass
 			while (slotLevel <= targetLevel);
 			yield return new WaitForSeconds(this._unlockLevelsAnimationConfig.DelayBeforeEndButtonUpdateInSec);
 			this._currentLevel = targetLevel;
-			if (this._currentLevel < this._maxSlots - 1)
-			{
-				this._buyButtons.EnableLevelButtons();
-			}
 			this._seasonCellViewDatas[this._currentLevel].IsCurrentLevel = true;
 			this._scroller.RefreshActiveCellViews();
-			this.UpdateBuyLevelButton();
-			this.SetupByPremiumState(true);
+			this.UpdateBuyLevelButtons();
+			this.SetupByPremiumState();
 			this._slotSelector.ResetTarget();
 			this._isAnimatingUnlockLevels = false;
 			onAnimationFinished();
@@ -609,6 +706,16 @@ namespace HeavyMetalMachines.Battlepass
 		public void ReloadArtPreviewScene()
 		{
 			this._artPreview.ReloadModelViewerScene();
+		}
+
+		private bool HasLevelsToBuy()
+		{
+			return this._userHasPremium && this._currentLevel < this._maxSlots - 1;
+		}
+
+		public bool IsAnimatingUnlockLevels()
+		{
+			return this._isAnimatingUnlockLevels;
 		}
 
 		[Header("[Components]")]
@@ -666,9 +773,21 @@ namespace HeavyMetalMachines.Battlepass
 		[SerializeField]
 		private UnityUiBattlepassSeasonBuyButtons _buyButtons;
 
+		[InjectOnClient]
+		private IStoreBusinessFactory _storeBusinessFactory;
+
+		private IDisposable _storeItemObservation;
+
 		[Header("[Animation Configs]")]
 		[SerializeField]
 		private UnityUiBattlepassSeasonScroller.UnlockLevelsAnimationConfig _unlockLevelsAnimationConfig;
+
+		[Header("[Ui Navigation]")]
+		[SerializeField]
+		private UiNavigationSubGroupHolder _uiNavigationSubGroupHolder;
+
+		[SerializeField]
+		private UiNavigationContextInputNotifier _uiNavigationContextInputNotifier;
 
 		private UnityUiBattlepassSeasonCellView.SeasonCellViewData[] _seasonCellViewDatas;
 
@@ -698,6 +817,8 @@ namespace HeavyMetalMachines.Battlepass
 
 		private int _selectedPremiumSlotLevel;
 
+		private HeavyMetalMachines.Store.Business.StoreItem _buyLevelsStoreItem;
+
 		private IBattlepassBuyUiActions _buyUiActions;
 
 		private IBattlepassLevelProgress _levelProgress;
@@ -705,6 +826,12 @@ namespace HeavyMetalMachines.Battlepass
 		private bool _isAnimatingUnlockLevels;
 
 		private int _unlockAnimationTargetLevel;
+
+		[InjectOnClient]
+		private IInputUiNavigationPoller _inputUiNavigationPoller;
+
+		[InjectOnClient]
+		private IIsFeatureToggled _isFeatureToggled;
 
 		[Serializable]
 		private struct UnlockLevelsAnimationConfig

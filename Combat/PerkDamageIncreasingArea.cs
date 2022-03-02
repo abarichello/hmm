@@ -75,7 +75,7 @@ namespace HeavyMetalMachines.Combat
 				this._isShrinking = true;
 			}
 			this._hitsCache.Clear();
-			BarrierUtils.OverlapSphereRaycastFromCenter(this.GetCenter(), radius, 1077058560, this._hitsCache);
+			BarrierUtils.OverlapSphereRaycastFromCenter(this.GetCenter(), radius, 1077054464, this._hitsCache);
 			List<BarrierUtils.CombatHit> list = null;
 			List<CombatObject> list2 = null;
 			if (this.IsPartialCallbackEnabled || this.ReduceDamageOnHit)
@@ -107,8 +107,8 @@ namespace HeavyMetalMachines.Combat
 			}
 			if (this.ReduceDamageOnHit && list != null && list.Count > 0)
 			{
-				float a = (float)(this.TargetAmountReduceModifier + list.Count) * this.ReducedDamagePercentValue;
-				this.Modifiers = ModifierData.RemoveAmountPercent(this.Modifiers, Mathf.Min(a, this.MaxDamageReductionPercent));
+				float num = (float)(this.TargetAmountReduceModifier + list.Count) * this.ReducedDamagePercentValue;
+				this.Modifiers = ModifierData.RemoveAmountPercent(this.Modifiers, Mathf.Min(num, this.MaxDamageReductionPercent));
 				for (int j = 0; j < list.Count; j++)
 				{
 					BarrierUtils.CombatHit combatHit = list[j];
@@ -153,9 +153,9 @@ namespace HeavyMetalMachines.Combat
 		{
 			Gizmos.color = Color.red;
 			Vector3 position = base.transform.position;
-			float radius = ((!this._isShrinking) ? (this._rangeDelta * (float)this._iterationCount) : (this._rangeDelta * (float)(this._iterationMax - (this._iterationCount - this._iterationMax)))) + this.MinimumRange;
+			float num = ((!this._isShrinking) ? (this._rangeDelta * (float)this._iterationCount) : (this._rangeDelta * (float)(this._iterationMax - (this._iterationCount - this._iterationMax)))) + this.MinimumRange;
 			Gizmos.color = Color.blue;
-			Gizmos.DrawWireSphere(position, radius);
+			Gizmos.DrawWireSphere(position, num);
 			Gizmos.color = Color.red;
 			Gizmos.DrawWireSphere(position, this.MaxRange);
 		}

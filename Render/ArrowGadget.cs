@@ -18,7 +18,7 @@ namespace HeavyMetalMachines.Render
 			gameObject.SetActive(false);
 			for (int i = 0; i < this.PrecacheCount; i++)
 			{
-				ArrowData arrowData = UnityEngine.Object.Instantiate<ArrowData>(this.ArrowPrefab);
+				ArrowData arrowData = Object.Instantiate<ArrowData>(this.ArrowPrefab);
 				this.myCache.Push(arrowData);
 				arrowData.transform.parent = this.myCacheTransform;
 			}
@@ -88,20 +88,20 @@ namespace HeavyMetalMachines.Render
 			}
 			else
 			{
-				arrowData = UnityEngine.Object.Instantiate<ArrowData>(this.ArrowPrefab, transform.position, Quaternion.LookRotation(transform.forward));
+				arrowData = Object.Instantiate<ArrowData>(this.ArrowPrefab, transform.position, Quaternion.LookRotation(transform.forward));
 			}
 			arrowData.homingTime = homingTime;
 			arrowData.startTime = Time.time;
-			Vector3 a = ((!this.Target) ? this.RelativePosition : this.Target.TransformPoint(this.RelativePosition)) - transform.position;
-			float magnitude = a.magnitude;
-			Vector3 a2 = a / magnitude;
+			Vector3 vector = ((!this.Target) ? this.RelativePosition : this.Target.TransformPoint(this.RelativePosition)) - transform.position;
+			float magnitude = vector.magnitude;
+			Vector3 vector2 = vector / magnitude;
 			arrowData.curveInfo = new ArrowCurveInfo();
 			arrowData.curveInfo.Source = transform;
 			arrowData.curveInfo.InitialPosition = transform.position;
-			arrowData.curveInfo.SourceTangent = a2 + new Vector3(0f, this.arcHeight, 0f);
+			arrowData.curveInfo.SourceTangent = vector2 + new Vector3(0f, this.arcHeight, 0f);
 			arrowData.curveInfo.Target = this.Target;
-			arrowData.curveInfo.TargetTangent = -a2 + new Vector3(0f, this.arcHeight, 0f);
-			arrowData.curveInfo.RelativePosition = this.RelativePosition + UnityEngine.Random.insideUnitSphere * this.maxTargetVariationOffset;
+			arrowData.curveInfo.TargetTangent = -vector2 + new Vector3(0f, this.arcHeight, 0f);
+			arrowData.curveInfo.RelativePosition = this.RelativePosition + Random.insideUnitSphere * this.maxTargetVariationOffset;
 			arrowData.curveInfo.lastEvaluation = arrowData.curveInfo.InitialPosition;
 			this.currentMissiles.AddLast(arrowData);
 		}
@@ -116,24 +116,24 @@ namespace HeavyMetalMachines.Render
 				this.derivative = Vector3.Normalize(vector2 - vector);
 				return vector;
 			}
-			Vector3 a = Vector3.Lerp(vector, vector2, time);
-			Vector3 vector3 = Vector3.Lerp(a, a + Vector3.up * this.arcHeight, Mathf.Sin(time * 3.14159274f));
-			this.derivative = Vector3.Normalize(vector3 - curveInfo.lastEvaluation);
-			curveInfo.lastEvaluation = vector3;
-			return vector3;
+			Vector3 vector3 = Vector3.Lerp(vector, vector2, time);
+			Vector3 vector4 = Vector3.Lerp(vector3, vector3 + Vector3.up * this.arcHeight, Mathf.Sin(time * 3.1415927f));
+			this.derivative = Vector3.Normalize(vector4 - curveInfo.lastEvaluation);
+			curveInfo.lastEvaluation = vector4;
+			return vector4;
 		}
 
 		private void OnDrawGizmos()
 		{
 			foreach (ArrowData arrowData in this.currentMissiles)
 			{
-				Vector3 from = this.Evaluate(0f, arrowData.curveInfo, Vector3.zero);
+				Vector3 vector = this.Evaluate(0f, arrowData.curveInfo, Vector3.zero);
 				for (int i = 1; i < 50; i++)
 				{
 					float time = (float)i / 50f;
-					Vector3 vector = this.Evaluate(time, arrowData.curveInfo, Vector3.zero);
-					Gizmos.DrawLine(from, vector);
-					from = vector;
+					Vector3 vector2 = this.Evaluate(time, arrowData.curveInfo, Vector3.zero);
+					Gizmos.DrawLine(vector, vector2);
+					vector = vector2;
 				}
 			}
 		}
@@ -169,10 +169,10 @@ namespace HeavyMetalMachines.Render
 		[AudioDrawer]
 		public string MissAudio;
 
-		public FMODAsset tmpShotAudio;
+		public AudioEventAsset tmpShotAudio;
 
-		public FMODAsset tmpHitAudio;
+		public AudioEventAsset tmpHitAudio;
 
-		public FMODAsset tmpMissAudio;
+		public AudioEventAsset tmpMissAudio;
 	}
 }

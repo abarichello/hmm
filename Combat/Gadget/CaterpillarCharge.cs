@@ -38,7 +38,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 				this.DestroyMyEffects();
 				CaterpillarCharge.DestroyOtherEffect(evt);
 			}
-			else if (evt.FX == null && !this._carriedsEffects.ContainsKey(evt.Combat))
+			else if (evt.FX == null && !this._carriedsEffects.ContainsKey(evt.Combat) && BaseFX.CheckHit(this.Combat, evt.Combat, this.ChargeInfo.GrabbedEffect))
 			{
 				this._carriedsEffects.Add(evt.Combat, this.FireExtraGadget(this.ChargeInfo.GrabbedEffect, this._grabbedModifiers, null, delegate(EffectEvent data)
 				{
@@ -80,7 +80,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			}
 		}
 
-		public override void OnDestroyEffect(DestroyEffect evt)
+		public override void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			base.OnDestroyEffect(evt);
 			if (evt.RemoveData.DestroyReason == BaseFX.EDestroyReason.Lifetime && evt.EffectData.EffectInfo.EffectId != this.ChargeInfo.WarmupEffect.EffectId)

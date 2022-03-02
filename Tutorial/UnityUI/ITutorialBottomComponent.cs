@@ -6,10 +6,6 @@ namespace HeavyMetalMachines.Tutorial.UnityUI
 	{
 		string TitleLabelDraft { get; }
 
-		TranslationSheets TitleSheet { get; }
-
-		string DescriptionLabelDraft { get; }
-
-		TranslationSheets DescriptionSheet { get; }
+		TutorialBottomDataDescription[] DataDescriptions { get; }
 	}
 }

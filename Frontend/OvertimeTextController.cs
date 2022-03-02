@@ -1,4 +1,6 @@
 ﻿using System;
+using HeavyMetalMachines.Arena;
+using HeavyMetalMachines.Localization;
 using Pocketverse;
 using UnityEngine;
 using UnityEngine.UI;
@@ -15,12 +17,12 @@ namespace HeavyMetalMachines.Frontend
 				base.gameObject.SetActive(false);
 				return;
 			}
-			string text = Language.Get(this.OvertimeDraft, TranslationSheets.Hud);
+			string text = Language.Get(this.OvertimeDraft, TranslationContext.Hud);
 			this.OvertimeLabel.text = text;
 			this.OvertimeAnimLabel.text = text;
 			this._overtimeAnimation = base.GetComponent<Animation>();
 			GameHubBehaviour.Hub.BombManager.ListenToOvertimeStarted += this.OnOvertimeStarted;
-			GameArenaInfo currentArena = GameHubBehaviour.Hub.ArenaConfig.GetCurrentArena();
+			IGameArenaInfo currentArena = GameHubBehaviour.Hub.ArenaConfig.GetCurrentArena();
 			this._overtimeDuration = (int)(currentArena.OvertimeDurationSeconds * 1000f);
 			this._roundDuration = (int)(currentArena.RoundTimeSeconds * 1000f);
 		}

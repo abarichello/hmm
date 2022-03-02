@@ -69,7 +69,7 @@ namespace HeavyMetalMachines.Scene
 		{
 			time = curveInfo.timeCurve.Evaluate(time);
 			int num = Mathf.FloorToInt(Mathf.Clamp01(time) * (float)(curveInfo.Steps.Length + 1));
-			float time2 = time;
+			float num2 = time;
 			if (time < 1f)
 			{
 				time = time * (float)(curveInfo.Steps.Length + 1) - (float)num;
@@ -107,18 +107,18 @@ namespace HeavyMetalMachines.Scene
 				vector3 = curveInfo.Source.position + curveInfo.Steps[num - 1].Center;
 				vector4 = vector3 + curveInfo.Steps[num - 1].Tangent;
 			}
-			float num2 = 1f - time;
-			float num3 = num2 * num2;
-			float d = num2 * num2 * num2;
-			Vector3 vector5 = d * vector3 + 3f * time * num3 * vector4 + 3f * (time * time) * num2 * vector2 + time * time * time * vector;
+			float num3 = 1f - time;
+			float num4 = num3 * num3;
+			float num5 = num3 * num3 * num3;
+			Vector3 vector5 = num5 * vector3 + 3f * time * num4 * vector4 + 3f * (time * time) * num3 * vector2 + time * time * time * vector;
 			if (curveInfo.useDirection)
 			{
-				this.derivative = 3f * num3 * (vector4 - vector3) + 6f * num2 * time * (vector2 - vector4) + 3f * (time * time) * (vector - vector2);
-				Vector3 a = curveInfo.Target.position - curveInfo.Source.position;
-				a.y = 0f;
-				a.Normalize();
+				this.derivative = 3f * num4 * (vector4 - vector3) + 6f * num3 * time * (vector2 - vector4) + 3f * (time * time) * (vector - vector2);
+				Vector3 vector6 = curveInfo.Target.position - curveInfo.Source.position;
+				vector6.y = 0f;
+				vector6.Normalize();
 				this.derivative.Normalize();
-				this.derivative = Vector3.Lerp(a, this.derivative, curveInfo.followDirectionCurve.Evaluate(time2));
+				this.derivative = Vector3.Lerp(vector6, this.derivative, curveInfo.followDirectionCurve.Evaluate(num2));
 			}
 			else
 			{
@@ -150,24 +150,24 @@ namespace HeavyMetalMachines.Scene
 				return;
 			}
 			Vector3 vector = this.Evaluate(0f, curveInfo, Vector3.zero);
-			float a = 0f;
-			float num = curveInfo.timeCurve.Evaluate(Time.realtimeSinceStartup % curveInfo.Duration / curveInfo.Duration);
+			float num = 0f;
+			float num2 = curveInfo.timeCurve.Evaluate(Time.realtimeSinceStartup % curveInfo.Duration / curveInfo.Duration);
 			for (int i = 1; i <= 30; i++)
 			{
-				float time = (float)i / 30f;
-				Vector3 vector2 = this.Evaluate(time, curveInfo, Vector3.zero);
+				float num3 = (float)i / 30f;
+				Vector3 vector2 = this.Evaluate(num3, curveInfo, Vector3.zero);
 				float magnitude = (vector2 - vector).magnitude;
-				a = Mathf.Max(a, magnitude);
+				num = Mathf.Max(num, magnitude);
 				Gizmos.color = Color.Lerp(Color.green, Color.red, magnitude / this.currentCurveMaxVelocity);
 				Gizmos.DrawLine(vector, vector2);
-				Gizmos.color = Color.Lerp(Color.black, Color.white, curveInfo.followDirectionCurve.Evaluate(time));
+				Gizmos.color = Color.Lerp(Color.black, Color.white, curveInfo.followDirectionCurve.Evaluate(num3));
 				Gizmos.DrawSphere(vector2, 0.1f);
 				vector = vector2;
 			}
-			Gizmos.matrix = Matrix4x4.TRS(this.Evaluate(num, curveInfo, Vector3.zero), Quaternion.LookRotation(this.derivative, Vector3.up), new Vector3(3f, 3f, 3f));
-			Gizmos.color = Color.Lerp(Color.green, Color.red, this.derivative.magnitude / this.currentCurveMaxVelocity * (1f - (num - curveInfo.timeCurve.Evaluate(num))));
+			Gizmos.matrix = Matrix4x4.TRS(this.Evaluate(num2, curveInfo, Vector3.zero), Quaternion.LookRotation(this.derivative, Vector3.up), new Vector3(3f, 3f, 3f));
+			Gizmos.color = Color.Lerp(Color.green, Color.red, this.derivative.magnitude / this.currentCurveMaxVelocity * (1f - (num2 - curveInfo.timeCurve.Evaluate(num2))));
 			Gizmos.DrawCube(new Vector3(0f, 0.5f, 0f), Vector3.one);
-			this.currentCurveMaxVelocity = a;
+			this.currentCurveMaxVelocity = num;
 		}
 
 		public void OnDrawGizmos()

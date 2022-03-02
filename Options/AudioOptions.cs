@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using FMod;
-using HeavyMetalMachines.VFX.PlotKids.VoiceChat;
+using HeavyMetalMachines.VoiceChat.Business;
 using Pocketverse;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Options
 {
@@ -131,10 +133,6 @@ namespace HeavyMetalMachines.Options
 				{
 					this.masterVolumeVCA.Volume = this._masterVolume;
 				}
-				if (this.OnMasterVolumeChanged != null)
-				{
-					this.OnMasterVolumeChanged(this._masterVolume);
-				}
 				this.HasPendingChanges = true;
 			}
 		}
@@ -152,13 +150,13 @@ namespace HeavyMetalMachines.Options
 					return;
 				}
 				this._voiceChatVolume = Mathf.Clamp(value, 0f, 2f);
-				if (this.OnVoiceChatVolumeChanged != null)
-				{
-					this.OnVoiceChatVolumeChanged(this._voiceChatVolume);
-				}
+				this._voiceChatAudioSetVolume.SetVolume(this._voiceChatVolume, this._masterVolume);
 				this.HasPendingChanges = true;
 			}
 		}
+
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
+		public event Action OnAnnouncerIndexChanged;
 
 		public int AnnouncerIndex
 		{
@@ -200,25 +198,25 @@ namespace HeavyMetalMachines.Options
 
 		public string[] DriverNames { get; set; }
 
-		private void LoadPrefs()
+		public void LoadPrefs()
 		{
 			this.ForceValues = true;
-			this.DriverIndex = GameHubBehaviour.Hub.Config.GetIntSetting(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_DRIVERINDEX.ToString(), this.DriverDefaultIndex);
-			this.AnnouncerVolume = GameHubBehaviour.Hub.Config.GetFloatSetting(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_ANNOUNCERVOLUME.ToString(), 1f);
-			this.MasterVolume = GameHubBehaviour.Hub.Config.GetFloatSetting(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_MASTERVOLUME.ToString(), 1f);
-			this.SfxGameplayVolume = GameHubBehaviour.Hub.Config.GetFloatSetting(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_SFXGAMEPLAYVOLUME.ToString(), 1f);
-			this.MusicVolume = GameHubBehaviour.Hub.Config.GetFloatSetting(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_MUSICVOLUME.ToString(), 1f);
-			this.SfxAmbientVolume = GameHubBehaviour.Hub.Config.GetFloatSetting(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_SFXAMBIENTVOLUME.ToString(), 1f);
-			this.VoiceOverVolume = GameHubBehaviour.Hub.Config.GetFloatSetting(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_VOICEOVERVOLUME.ToString(), 1f);
-			this.VoiceChatVolume = GameHubBehaviour.Hub.Config.GetFloatSetting(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_VOICECHATVOLUME.ToString(), 1f);
-			this.AnnouncerIndex = GameHubBehaviour.Hub.Config.GetIntSetting(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_ANNOUNCER_INDEX.ToString(), new Func<int>(this.GetDefaultAnnouncerIndex));
+			this.DriverIndex = GameHubBehaviour.Hub.PlayerPrefs.GetInt(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_DRIVERINDEX.ToString(), this.DriverDefaultIndex);
+			this.AnnouncerVolume = GameHubBehaviour.Hub.PlayerPrefs.GetFloat(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_ANNOUNCERVOLUME.ToString(), 1f);
+			this.MasterVolume = GameHubBehaviour.Hub.PlayerPrefs.GetFloat(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_MASTERVOLUME.ToString(), 1f);
+			this.SfxGameplayVolume = GameHubBehaviour.Hub.PlayerPrefs.GetFloat(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_SFXGAMEPLAYVOLUME.ToString(), 1f);
+			this.MusicVolume = GameHubBehaviour.Hub.PlayerPrefs.GetFloat(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_MUSICVOLUME.ToString(), 1f);
+			this.SfxAmbientVolume = GameHubBehaviour.Hub.PlayerPrefs.GetFloat(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_SFXAMBIENTVOLUME.ToString(), 1f);
+			this.VoiceOverVolume = GameHubBehaviour.Hub.PlayerPrefs.GetFloat(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_VOICEOVERVOLUME.ToString(), 1f);
+			this.VoiceChatVolume = GameHubBehaviour.Hub.PlayerPrefs.GetFloat(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_VOICECHATVOLUME.ToString(), 1f);
+			this.AnnouncerIndex = GameHubBehaviour.Hub.PlayerPrefs.GetInt(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_ANNOUNCER_INDEX.ToString(), this.GetDefaultAnnouncerIndex());
 			this.ForceValues = false;
 		}
 
 		private int GetDefaultAnnouncerIndex()
 		{
-			LanguageCode languageCode = Language.CurrentLanguage();
-			if (languageCode != LanguageCode.PT && languageCode != LanguageCode.PT_BR)
+			LanguageCode currentLanguage = Language.CurrentLanguage;
+			if (currentLanguage != LanguageCode.PT && currentLanguage != LanguageCode.PT_BR)
 			{
 				return 0;
 			}
@@ -295,17 +293,18 @@ namespace HeavyMetalMachines.Options
 			{
 				this.announcerVolumeVCA.Volume = this.AnnouncerVolume;
 			}
-			GameHubBehaviour.Hub.Config.SetIntSetting(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_DRIVERINDEX.ToString(), this.DriverIndex);
-			GameHubBehaviour.Hub.Config.SetFloatSetting(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_ANNOUNCERVOLUME.ToString(), this.AnnouncerVolume);
-			GameHubBehaviour.Hub.Config.SetFloatSetting(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_MASTERVOLUME.ToString(), this.MasterVolume);
-			GameHubBehaviour.Hub.Config.SetFloatSetting(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_SFXGAMEPLAYVOLUME.ToString(), this.SfxGameplayVolume);
-			GameHubBehaviour.Hub.Config.SetFloatSetting(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_MUSICVOLUME.ToString(), this.MusicVolume);
-			GameHubBehaviour.Hub.Config.SetFloatSetting(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_SFXAMBIENTVOLUME.ToString(), this.SfxAmbientVolume);
-			GameHubBehaviour.Hub.Config.SetFloatSetting(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_VOICEOVERVOLUME.ToString(), this.VoiceOverVolume);
-			GameHubBehaviour.Hub.Config.SetFloatSetting(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_VOICECHATVOLUME.ToString(), this.VoiceChatVolume);
-			GameHubBehaviour.Hub.Config.SetIntSetting(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_ANNOUNCER_INDEX.ToString(), this.AnnouncerIndex);
+			this._voiceChatAudioSetVolume.SetVolume(this._voiceChatVolume, this._masterVolume);
+			GameHubBehaviour.Hub.PlayerPrefs.SetInt(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_DRIVERINDEX.ToString(), this.DriverIndex);
+			GameHubBehaviour.Hub.PlayerPrefs.SetFloat(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_ANNOUNCERVOLUME.ToString(), this.AnnouncerVolume);
+			GameHubBehaviour.Hub.PlayerPrefs.SetFloat(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_MASTERVOLUME.ToString(), this.MasterVolume);
+			GameHubBehaviour.Hub.PlayerPrefs.SetFloat(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_SFXGAMEPLAYVOLUME.ToString(), this.SfxGameplayVolume);
+			GameHubBehaviour.Hub.PlayerPrefs.SetFloat(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_MUSICVOLUME.ToString(), this.MusicVolume);
+			GameHubBehaviour.Hub.PlayerPrefs.SetFloat(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_SFXAMBIENTVOLUME.ToString(), this.SfxAmbientVolume);
+			GameHubBehaviour.Hub.PlayerPrefs.SetFloat(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_VOICEOVERVOLUME.ToString(), this.VoiceOverVolume);
+			GameHubBehaviour.Hub.PlayerPrefs.SetFloat(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_VOICECHATVOLUME.ToString(), this.VoiceChatVolume);
+			GameHubBehaviour.Hub.PlayerPrefs.SetInt(AudioOptions.AudioOptionPrefs.OPTIONS_AUDIO_ANNOUNCER_INDEX.ToString(), this.AnnouncerIndex);
 			this.HasPendingChanges = false;
-			GameHubBehaviour.Hub.Config.SaveSettings();
+			GameHubBehaviour.Hub.PlayerPrefs.Save();
 		}
 
 		public void ResetDefault()
@@ -318,8 +317,7 @@ namespace HeavyMetalMachines.Options
 			this.SfxAmbientVolume = 1f;
 			this.VoiceOverVolume = 1f;
 			this.VoiceChatVolume = 1f;
-			SingletonMonoBehaviour<VoiceChatController>.Instance.VoiceChatInputType = VoiceChatInputType.Pressed;
-			SingletonMonoBehaviour<VoiceChatController>.Instance.VoiceChatTeamStatus = VoiceChatTeamStatus.Enable;
+			this._voiceChatPreferences.ResetDefault();
 			this.AnnouncerIndex = this.GetDefaultAnnouncerIndex();
 		}
 
@@ -353,18 +351,24 @@ namespace HeavyMetalMachines.Options
 			this.HasPendingChanges = false;
 		}
 
-		private void Start()
+		public void Setup()
 		{
-			this.masterVolumeVCA = new FModVCAController(GameHubBehaviour.Hub.AudioSettings.masterVolumeVCAAsset);
-			this.musicVolumeVCA = new FModVCAController(GameHubBehaviour.Hub.AudioSettings.musicVolumeVCAAsset);
-			this.sfxGameplayVolumeVCA = new FModVCAController(GameHubBehaviour.Hub.AudioSettings.sfxGameplayVolumeVCAAsset);
-			this.sfxAmbientVolumeVCA = new FModVCAController(GameHubBehaviour.Hub.AudioSettings.sfxAmbientVolumeVCAAsset);
-			this.announcerVolumeVCA = new FModVCAController(GameHubBehaviour.Hub.AudioSettings.announcerVolumeVCAAsset);
-			this.voiceOverVolumeVCA = new FModVCAController(GameHubBehaviour.Hub.AudioSettings.voiceOverVolumeVCAAsset);
+			this.masterVolumeVCA = new FModVCAController(VcaReferences.Master);
+			this.musicVolumeVCA = new FModVCAController(VcaReferences.Soundtrack);
+			this.sfxGameplayVolumeVCA = new FModVCAController(VcaReferences.Gameplay);
+			this.sfxAmbientVolumeVCA = new FModVCAController(VcaReferences.Ambient);
+			this.announcerVolumeVCA = new FModVCAController(VcaReferences.Announcer);
+			this.voiceOverVolumeVCA = new FModVCAController(VcaReferences.Characters);
 			this.Refresh();
 			this.LoadPrefs();
 			this.Apply();
 		}
+
+		[Inject]
+		private IVoiceChatPreferences _voiceChatPreferences;
+
+		[Inject]
+		private IVoiceChatAudioSetVolume _voiceChatAudioSetVolume;
 
 		public bool HasPendingChanges;
 
@@ -394,15 +398,9 @@ namespace HeavyMetalMachines.Options
 
 		private float _masterVolume;
 
-		public Action<float> OnMasterVolumeChanged;
-
 		public float _voiceChatVolume = 1f;
 
-		public Action<float> OnVoiceChatVolumeChanged;
-
 		public int _announcerIndex;
-
-		public Action OnAnnouncerIndexChanged;
 
 		public const float VolumeMin = 0f;
 

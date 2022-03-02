@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using HeavyMetalMachines.Arena;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Combat.Gadget;
+using HeavyMetalMachines.Counselor;
 using HeavyMetalMachines.Match;
 using Hoplon.SensorSystem;
 using Pocketverse;
@@ -10,27 +12,35 @@ namespace HeavyMetalMachines.Infra.Counselor
 {
 	public class ServerCounselorController : GameHubObject, IObserver
 	{
-		public void Initialize(SensorController sensorContext, string redBombDistanceToGoalParameterName, string blueBombDistanceToGoalParameterName)
+		public void Initialize(SensorController sensorContext, string redBombDistanceToGoalParameterName, string blueBombDistanceToGoalParameterName, ICounselorDispatcher counselorDispatcher)
 		{
 			this._sensorContext = sensorContext;
-			for (int i = 0; i < GameHubObject.Hub.Players.Players.Count; i++)
+			this._counselorDispatcher = counselorDispatcher;
+			this._advices = new Dictionary<int, CounselorAdvice>();
+			for (int i = 0; i < GameHubObject.Hub.Players.PlayersAndBots.Count; i++)
 			{
-				PlayerData playerData = GameHubObject.Hub.Players.Players[i];
-				Dictionary<ServerCounselorController.CounselorConditions, SensorCondition> conditions = new Dictionary<ServerCounselorController.CounselorConditions, SensorCondition>();
+				PlayerData playerData = GameHubObject.Hub.Players.PlayersAndBots[i];
 				CombatObject bitComponent = playerData.CharacterInstance.GetBitComponent<CombatObject>();
-				int objId = bitComponent.Id.ObjId;
-				this.CreatePlayerScanners(bitComponent);
-				CarComponentHub componentHub = bitComponent.Id.GetComponentHub<CarComponentHub>();
+				this.CreatePlayerToBombScanner(bitComponent);
+			}
+			for (int j = 0; j < GameHubObject.Hub.Players.Players.Count; j++)
+			{
+				PlayerData playerData2 = GameHubObject.Hub.Players.Players[j];
+				Dictionary<ServerCounselorController.CounselorConditions, SensorCondition> conditions = new Dictionary<ServerCounselorController.CounselorConditions, SensorCondition>();
+				CombatObject bitComponent2 = playerData2.CharacterInstance.GetBitComponent<CombatObject>();
+				int objId = bitComponent2.Id.ObjId;
+				this.CreatePlayerScanner(bitComponent2);
+				CarComponentHub componentHub = bitComponent2.Id.GetComponentHub<CarComponentHub>();
 				this.ConfigureGadgets(componentHub, conditions, objId);
-				for (int j = 0; j < GameHubObject.Hub.CounselorConfig._conditionalValues.Length; j++)
+				for (int k = 0; k < GameHubObject.Hub.CounselorConfig._conditionalValues.Length; k++)
 				{
-					CounselorConfig.ConditionalConfig condition = GameHubObject.Hub.CounselorConfig._conditionalValues[j];
-					this.AddCustomConditions(condition, conditions, bitComponent);
+					CounselorConfig.ConditionalConfig condition = GameHubObject.Hub.CounselorConfig._conditionalValues[k];
+					this.AddCustomConditions(condition, conditions, bitComponent2);
 				}
-				this.AddGeneralConditions(conditions, bitComponent, redBombDistanceToGoalParameterName, blueBombDistanceToGoalParameterName);
-				NumericCondition sensor = new NumericCondition(this._sensorContext, ServerCounselorController.ScannerParameters.SpawnState.ToString() + objId, NumericCondition.NumericSensorType.Equals, 1f);
-				int checkAliveId = this._sensorContext.AddCondition(sensor);
-				this.ConfigureAdvicesForPlayer(playerData, checkAliveId, conditions);
+				this.AddGeneralConditions(conditions, bitComponent2, redBombDistanceToGoalParameterName, blueBombDistanceToGoalParameterName);
+				NumericCondition numericCondition = new NumericCondition(this._sensorContext, ServerCounselorController.ScannerParameters.SpawnState.ToString() + objId, 0, 1f);
+				int checkAliveId = this._sensorContext.AddCondition(numericCondition);
+				this.ConfigureAdvicesForPlayer(playerData2, checkAliveId, conditions);
 			}
 		}
 
@@ -41,26 +51,27 @@ namespace HeavyMetalMachines.Infra.Counselor
 				CounselorConfig.AdvicesConfig advicesConfig = GameHubObject.Hub.CounselorConfig.Advices[i];
 				if (this.IsCharacterAllowed(advicesConfig, player))
 				{
+					ISensor sensor = this._sensorContext.AddSensor();
 					CounselorAdvice counselorAdvice = new CounselorAdvice();
 					counselorAdvice.TargetPlayerAddress = player.PlayerAddress;
 					counselorAdvice.ConfigIndex = i;
 					if (advicesConfig.CheckAlive)
 					{
-						counselorAdvice.AddConditionId(checkAliveId);
+						sensor.AddConditionId(checkAliveId);
 					}
-					this.ConfigureAdvice(counselorAdvice, advicesConfig, conditions);
-					this._sensorContext.AddSensor(counselorAdvice);
+					this.ConfigureAdvice(sensor, advicesConfig, conditions);
+					this._advices.Add(sensor.Id, counselorAdvice);
 				}
 			}
 		}
 
-		private void ConfigureAdvice(CounselorAdvice advice, CounselorConfig.AdvicesConfig adviceConfig, Dictionary<ServerCounselorController.CounselorConditions, SensorCondition> conditions)
+		private void ConfigureAdvice(ISensor advice, CounselorConfig.AdvicesConfig adviceConfig, Dictionary<ServerCounselorController.CounselorConditions, SensorCondition> conditions)
 		{
 			for (int i = 0; i < adviceConfig.Conditions.Length; i++)
 			{
 				ServerCounselorController.CounselorConditions counselorConditions = adviceConfig.Conditions[i];
-				SensorCondition sensor;
-				if (!conditions.TryGetValue(counselorConditions, out sensor))
+				SensorCondition sensorCondition;
+				if (!conditions.TryGetValue(counselorConditions, out sensorCondition))
 				{
 					ServerCounselorController.Log.ErrorFormat("unconfigured advice: Name: {0} Condition {1}", new object[]
 					{
@@ -70,8 +81,8 @@ namespace HeavyMetalMachines.Infra.Counselor
 				}
 				else
 				{
-					int conditionId = this._sensorContext.AddCondition(sensor);
-					advice.AddConditionId(conditionId);
+					int num = this._sensorContext.AddCondition(sensorCondition);
+					advice.AddConditionId(num);
 				}
 			}
 			if (adviceConfig.WarmupSeconds > 0f)
@@ -84,17 +95,19 @@ namespace HeavyMetalMachines.Infra.Counselor
 		private void AddGeneralConditions(Dictionary<ServerCounselorController.CounselorConditions, SensorCondition> conditions, CombatObject currentCombat, string redBombDistanceToGoalParameterName, string blueBombDistanceToGoalParameterName)
 		{
 			int objId = currentCombat.Id.ObjId;
-			conditions.Add(ServerCounselorController.CounselorConditions.BombWrongDirection, new NumericCondition(this._sensorContext, (currentCombat.Team != TeamKind.Red) ? "BlueAdvance" : "RedAdvance", NumericCondition.NumericSensorType.Less, 0f));
-			GameArenaInfo currentArena = GameHubObject.Hub.ArenaConfig.GetCurrentArena();
-			conditions.Add(ServerCounselorController.CounselorConditions.NearAttackGoal, new NumericCondition(this._sensorContext, (currentCombat.Team != TeamKind.Red) ? blueBombDistanceToGoalParameterName : redBombDistanceToGoalParameterName, NumericCondition.NumericSensorType.Less, currentArena.NearGoalDistance));
-			conditions.Add(ServerCounselorController.CounselorConditions.CollisionWithBlocker, new NumericCondition(this._sensorContext, ServerCounselorController.CounselorConditions.CollisionWithBlocker.ToString(), NumericCondition.NumericSensorType.More, 0.5f));
-			conditions.Add(ServerCounselorController.CounselorConditions.DropBombByBrokenLink, new NumericCondition(this._sensorContext, ServerCounselorController.CounselorConditions.DropBombByBrokenLink.ToString() + objId, NumericCondition.NumericSensorType.More, 0f));
-			conditions.Add(ServerCounselorController.CounselorConditions.DropBombByYellow, new NumericCondition(this._sensorContext, ServerCounselorController.CounselorConditions.DropBombByYellow.ToString() + objId, NumericCondition.NumericSensorType.More, 0f));
-			conditions.Add(ServerCounselorController.CounselorConditions.DropBombByDeath, new NumericCondition(this._sensorContext, ServerCounselorController.CounselorConditions.DropBombByDeath.ToString() + objId, NumericCondition.NumericSensorType.More, 0f));
-			conditions.Add(ServerCounselorController.CounselorConditions.FullLife, new NumericCondition(this._sensorContext, ServerCounselorController.ScannerParameters.PlayerHP.ToString() + objId, NumericCondition.NumericSensorType.Equals, 1f));
-			conditions.Add(ServerCounselorController.CounselorConditions.IsMatchPoint, new NumericCondition(this._sensorContext, ServerCounselorController.CounselorConditions.IsMatchPoint.ToString(), NumericCondition.NumericSensorType.More, 0f));
-			conditions.Add(ServerCounselorController.CounselorConditions.IsNotTutorial, new NumericCondition(this._sensorContext, ServerCounselorController.ScannerParameters.ArenaIndex.ToString(), NumericCondition.NumericSensorType.More, 0f));
-			conditions.Add(ServerCounselorController.CounselorConditions.IsTutorial, new NumericCondition(this._sensorContext, ServerCounselorController.ScannerParameters.ArenaIndex.ToString(), NumericCondition.NumericSensorType.Less, 1f));
+			conditions.Add(ServerCounselorController.CounselorConditions.BombWrongDirection, new NumericCondition(this._sensorContext, (currentCombat.Team != TeamKind.Red) ? "BlueAdvance" : "RedAdvance", 1, 0f));
+			IGameArenaInfo currentArena = GameHubObject.Hub.ArenaConfig.GetCurrentArena();
+			conditions.Add(ServerCounselorController.CounselorConditions.NearAttackGoal, new NumericCondition(this._sensorContext, (currentCombat.Team != TeamKind.Red) ? blueBombDistanceToGoalParameterName : redBombDistanceToGoalParameterName, 1, currentArena.NearGoalDistance));
+			conditions.Add(ServerCounselorController.CounselorConditions.CollisionWithBlocker, new NumericCondition(this._sensorContext, ServerCounselorController.CounselorConditions.CollisionWithBlocker.ToString(), 2, 0.5f));
+			conditions.Add(ServerCounselorController.CounselorConditions.DropBombByBrokenLink, new NumericCondition(this._sensorContext, ServerCounselorController.CounselorConditions.DropBombByBrokenLink.ToString() + objId, 2, 0f));
+			conditions.Add(ServerCounselorController.CounselorConditions.DropBombByYellow, new NumericCondition(this._sensorContext, ServerCounselorController.CounselorConditions.DropBombByYellow.ToString() + objId, 2, 0f));
+			conditions.Add(ServerCounselorController.CounselorConditions.DropBombByDeath, new NumericCondition(this._sensorContext, ServerCounselorController.CounselorConditions.DropBombByDeath.ToString() + objId, 2, 0f));
+			conditions.Add(ServerCounselorController.CounselorConditions.FullLife, new NumericCondition(this._sensorContext, ServerCounselorController.ScannerParameters.PlayerHP.ToString() + objId, 0, 1f));
+			conditions.Add(ServerCounselorController.CounselorConditions.IsMatchPoint, new NumericCondition(this._sensorContext, ServerCounselorController.CounselorConditions.IsMatchPoint.ToString(), 2, 0f));
+			conditions.Add(ServerCounselorController.CounselorConditions.IsNotTutorial, new NumericCondition(this._sensorContext, ServerCounselorController.ScannerParameters.ArenaIndex.ToString(), 2, 0f));
+			conditions.Add(ServerCounselorController.CounselorConditions.IsNotTrainingMode1, new NumericCondition(this._sensorContext, ServerCounselorController.ScannerParameters.ArenaIndex.ToString(), 3, 6f));
+			conditions.Add(ServerCounselorController.CounselorConditions.IsNotTrainingMode2, new NumericCondition(this._sensorContext, ServerCounselorController.ScannerParameters.ArenaIndex.ToString(), 3, 7f));
+			conditions.Add(ServerCounselorController.CounselorConditions.IsTutorial, new NumericCondition(this._sensorContext, ServerCounselorController.ScannerParameters.ArenaIndex.ToString(), 1, 1f));
 		}
 
 		private void AddCustomConditions(CounselorConfig.ConditionalConfig condition, Dictionary<ServerCounselorController.CounselorConditions, SensorCondition> conditions, CombatObject currentCombat)
@@ -124,10 +137,15 @@ namespace HeavyMetalMachines.Infra.Counselor
 			}
 		}
 
-		private void CreatePlayerScanners(CombatObject currentCombat)
+		private void CreatePlayerToBombScanner(CombatObject currentCombat)
 		{
 			int objId = currentCombat.Id.ObjId;
 			this._sensorContext.AddScanner(new PlayerToBombScanner(this._sensorContext, ServerCounselorController.ScannerParameters.PlayerDistanceToBomb.ToString() + objId, ServerCounselorController.ScannerParameters.PlayerCarryingBomb.ToString() + objId, currentCombat));
+		}
+
+		private void CreatePlayerScanner(CombatObject currentCombat)
+		{
+			int objId = currentCombat.Id.ObjId;
 			this._sensorContext.AddScanner(new CombatScanner(this._sensorContext, ServerCounselorController.ScannerParameters.PlayerHP.ToString() + objId, ServerCounselorController.ScannerParameters.PlayerHasHealed.ToString() + objId, ServerCounselorController.ScannerParameters.HeavyDmg.ToString() + objId, ServerCounselorController.CounselorConditions.DropBombByBrokenLink.ToString() + objId, ServerCounselorController.CounselorConditions.DropBombByYellow.ToString() + objId, ServerCounselorController.CounselorConditions.DropBombByDeath.ToString() + objId, ServerCounselorController.ScannerParameters.Deaths.ToString() + objId, ServerCounselorController.ScannerParameters.SpawnState.ToString() + objId, ServerCounselorController.ScannerParameters.PlayerRole.ToString() + objId, ServerCounselorController.ScannerParameters.NotMovingSeconds.ToString() + objId, currentCombat));
 		}
 
@@ -142,9 +160,9 @@ namespace HeavyMetalMachines.Infra.Counselor
 
 		private void ConfigureGadgetScannerAndCondition(CarComponentHub carhub, Dictionary<ServerCounselorController.CounselorConditions, SensorCondition> conditionsDictionary, GadgetSlot slot, ServerCounselorController.CounselorConditions shouldUseCondition, string shouldUseParameterName, ServerCounselorController.CounselorConditions isIdleCondition, string isIdleParameterName)
 		{
-			this._sensorContext.AddScanner(new BotGadgetScanner(this._sensorContext, shouldUseParameterName, isIdleParameterName, carhub.botAIGoalManager.GetGadgetState(slot)));
-			conditionsDictionary.Add(shouldUseCondition, new NumericCondition(this._sensorContext, shouldUseParameterName, NumericCondition.NumericSensorType.Equals, 1f));
-			conditionsDictionary.Add(isIdleCondition, new NumericCondition(this._sensorContext, isIdleParameterName, NumericCondition.NumericSensorType.Equals, 1f));
+			this._sensorContext.AddScanner(new BotGadgetScanner(this._sensorContext, shouldUseParameterName, isIdleParameterName, carhub.AIAgent.GoalManager.GetGadgetState(slot)));
+			conditionsDictionary.Add(shouldUseCondition, new NumericCondition(this._sensorContext, shouldUseParameterName, 0, 1f));
+			conditionsDictionary.Add(isIdleCondition, new NumericCondition(this._sensorContext, isIdleParameterName, 0, 1f));
 		}
 
 		private bool IsCharacterAllowed(CounselorConfig.AdvicesConfig config, PlayerData player)
@@ -163,15 +181,22 @@ namespace HeavyMetalMachines.Infra.Counselor
 			return false;
 		}
 
-		public void Notify(Sensor sensor)
+		public void Notify(int id, bool isActive, int count)
 		{
-			CounselorAdvice counselorAdvice = (CounselorAdvice)sensor;
-			PlaybackManager.Counselor.Send(counselorAdvice.TargetPlayerAddress, counselorAdvice.ConfigIndex, counselorAdvice.IsActive);
+			CounselorAdvice counselorAdvice;
+			if (this._advices.TryGetValue(id, out counselorAdvice))
+			{
+				this._counselorDispatcher.Send(counselorAdvice.TargetPlayerAddress, counselorAdvice.ConfigIndex, isActive);
+			}
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(ServerCounselorController));
 
 		private SensorController _sensorContext;
+
+		private ICounselorDispatcher _counselorDispatcher;
+
+		private Dictionary<int, CounselorAdvice> _advices;
 
 		public enum CounselorConditions
 		{
@@ -215,7 +240,9 @@ namespace HeavyMetalMachines.Infra.Counselor
 			FirstRound,
 			HeavyDmgTaken,
 			IsNotTutorial,
-			IsTutorial
+			IsTutorial,
+			IsNotTrainingMode1,
+			IsNotTrainingMode2
 		}
 
 		public enum ScannerParameters

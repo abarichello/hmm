@@ -3,14 +3,22 @@ using System.Collections;
 using System.Collections.Generic;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids;
 using ClientAPI.Objects;
-using Commons.Swordfish.Progression;
 using FMod;
+using HeavyMetalMachines.Audio.Music;
+using HeavyMetalMachines.DataTransferObjects.Battlepass;
+using HeavyMetalMachines.DataTransferObjects.Player;
+using HeavyMetalMachines.DataTransferObjects.Progression;
 using HeavyMetalMachines.Match;
-using HeavyMetalMachines.Swordfish.Player;
+using HeavyMetalMachines.ParentalControl.Restrictions;
+using HeavyMetalMachines.Players.Presenting;
+using HeavyMetalMachines.PostProcessing;
+using HeavyMetalMachines.Publishing.Presenting;
 using HeavyMetalMachines.Utils;
 using HeavyMetalMachines.VFX;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
@@ -28,8 +36,8 @@ namespace HeavyMetalMachines.Frontend
 					num++;
 				}
 			}
-			GUIUtils.CreateGridPool(this.WinnersGrid, num);
-			this._backgroundEffect = new HudWinnerBackgroundEffect(this.HudWinnerBackgroundEffectParameters);
+			GUIUtils.CreateGridPoolInjected(this.WinnersGrid, this.HudWinnerObjectReference.gameObject, num, this._diContainer);
+			this._backgroundEffect = new HudWinnerBackgroundEffect(this.HudWinnerBackgroundEffectParameters, this._postProcessing);
 			base.ChangeWindowVisibility(false);
 			this.waitForDelayToShowCards = new WaitForSeconds(this.WindowDelayToShowCards);
 			this.waitForOpenCardAnimationInSec = new WaitForSeconds(this.WindowOpenCardAnimationInSec);
@@ -71,6 +79,14 @@ namespace HeavyMetalMachines.Frontend
 		{
 			this.Setup();
 			FMODAudioManager.PlayAt(this.sfx_ui_matchend_team_characters, base.transform);
+			if (!SpectatorController.IsSpectating)
+			{
+				int characterMusicId = GameHubBehaviour.Hub.Players.CurrentPlayerData.GetCharacterMusicId();
+				if (characterMusicId > 0)
+				{
+					MusicManager.PlayCharacterMusic(characterMusicId);
+				}
+			}
 			yield return base.StartCoroutine(this.RunCardAnimations());
 			base.SetWindowVisibility(false);
 			yield break;
@@ -102,7 +118,7 @@ namespace HeavyMetalMachines.Frontend
 					RewardsBag rewardsBag = new RewardsBag();
 					rewardsBag.MissionProgresses = new MissionProgress[0];
 					rewardsBag.OldMissionProgresses = new MissionProgress[0];
-					rewardsBag.MissionsCompleted = new int[0];
+					rewardsBag.MissionsCompleted = new MissionCompleted[0];
 					GameHubBehaviour.Hub.MatchHistory.OnRewardSet(rewardsBag);
 				}
 			}
@@ -124,9 +140,9 @@ namespace HeavyMetalMachines.Frontend
 		{
 			GameHubBehaviour.Hub.CursorManager.ShowAndSetCursor(true, CursorManager.CursorTypes.MatchstatsCursor);
 			TeamKind teamKind = (GameHubBehaviour.Hub.Match.State != MatchData.MatchState.MatchOverRedWins) ? TeamKind.Blue : TeamKind.Red;
-			bool isAllyVictory = GameHubBehaviour.Hub.Players.CurrentPlayerData.Team == teamKind;
-			this._windowSprites.BackgroundSprite.color = ((!isAllyVictory) ? this._windowSprites.BackgroundEnemyColor : this._windowSprites.BackgroundAllyColor);
-			this._windowSprites.GlowSprite.color = ((!isAllyVictory) ? this._windowSprites.GlowEnemyColor : this._windowSprites.GlowAllyColor);
+			bool flag = GameHubBehaviour.Hub.Players.CurrentPlayerData.Team == teamKind;
+			this._windowSprites.BackgroundSprite.color = ((!flag) ? this._windowSprites.BackgroundEnemyColor : this._windowSprites.BackgroundAllyColor);
+			this._windowSprites.GlowSprite.color = ((!flag) ? this._windowSprites.GlowEnemyColor : this._windowSprites.GlowAllyColor);
 			List<PlayerData> playersAndBots = GameHubBehaviour.Hub.Players.PlayersAndBots;
 			playersAndBots.Sort(delegate(PlayerData p1, PlayerData p2)
 			{
@@ -146,34 +162,58 @@ namespace HeavyMetalMachines.Frontend
 				{
 					HudWinnerObject component = childList[num++].GetComponent<HudWinnerObject>();
 					component.gameObject.SetActive(true);
-					component.Setup(playerData);
+					component.Setup(playerData, this._teams, this._getDisplayableNickName, this._teamNameRestriction);
 				}
 				i++;
 			}
 			this.WinnersGrid.Reposition();
 			this._teamGui.MainGroupGameObject.SetActive(false);
-			TeamUtils.GetGroupTeamAsync(GameHubBehaviour.Hub, teamKind, delegate(Team groupTeam)
+			Team groupTeam = this._teams.GetGroupTeam(teamKind);
+			if (groupTeam == null)
 			{
-				if (groupTeam == null)
-				{
-					return;
-				}
-				this._teamGui.MainGroupGameObject.SetActive(true);
-				this._teamGui.TeamImageSprite.SpriteName = groupTeam.ImageUrl;
-				this._teamGui.BannerSprite.sprite2D = ((!isAllyVictory) ? this._teamGui.TeamEnemyBannerSprite : this._teamGui.TeamAllyBannerSprite);
-				this._teamGui.TeamTagLabel.text = NGUIText.EscapeSymbols(string.Format("[{0}]", groupTeam.Tag));
-				this._teamGui.TeamTagLabel.gradientBottom = ((!isAllyVictory) ? this._windowSprites.LabelTeamEnemyColorBottom : this._windowSprites.LabelTeamAllyColorBottom);
-				this._teamGui.TeamTagLabel.gradientTop = ((!isAllyVictory) ? this._windowSprites.LabelTeamEnemyColorTop : this._windowSprites.LabelTeamAllyColorTop);
-				this._teamGui.TeamTagLabel.effectColor = ((!isAllyVictory) ? this._windowSprites.LabelTeamEnemyColorShadow : this._windowSprites.LabelTeamAllyColorShadow);
-				this._teamGui.TeamImageSprite.gradientBottom = ((!isAllyVictory) ? this._windowSprites.IconTeamEnemyColorBottom : this._windowSprites.IconTeamAllyColorBottom);
-				this._teamGui.TeamImageSprite.gradientTop = ((!isAllyVictory) ? this._windowSprites.IconTeamEnemyColorTop : this._windowSprites.IconTeamAllyColorTop);
-			}, delegate(Exception exception)
+				return;
+			}
+			string anyTeamTagRestriction = this._teamNameRestriction.GetAnyTeamTagRestriction(groupTeam.CurrentUgmUserPlayerId, groupTeam.Tag);
+			this._teamGui.MainGroupGameObject.SetActive(true);
+			this._teamGui.TeamImageSprite.SpriteName = groupTeam.ImageUrl;
+			this._teamGui.BannerSprite.sprite2D = ((!flag) ? this._teamGui.TeamEnemyBannerSprite : this._teamGui.TeamAllyBannerSprite);
+			this._teamGui.TeamTagLabel.text = NGUIText.EscapeSymbols(string.Format("[{0}]", anyTeamTagRestriction));
+			this._teamGui.TeamTagLabel.gradientBottom = ((!flag) ? this._windowSprites.LabelTeamEnemyColorBottom : this._windowSprites.LabelTeamAllyColorBottom);
+			this._teamGui.TeamTagLabel.gradientTop = ((!flag) ? this._windowSprites.LabelTeamEnemyColorTop : this._windowSprites.LabelTeamAllyColorTop);
+			this._teamGui.TeamTagLabel.effectColor = ((!flag) ? this._windowSprites.LabelTeamEnemyColorShadow : this._windowSprites.LabelTeamAllyColorShadow);
+			this._teamGui.TeamImageSprite.gradientBottom = ((!flag) ? this._windowSprites.IconTeamEnemyColorBottom : this._windowSprites.IconTeamAllyColorBottom);
+			this._teamGui.TeamImageSprite.gradientTop = ((!flag) ? this._windowSprites.IconTeamEnemyColorTop : this._windowSprites.IconTeamAllyColorTop);
+			this.FetchAndFillTeamUserGeneratedContentPublisherUserName(groupTeam, this._teamGui.TeamUserGeneratedContentCurrentOwnerPublisherUserNameLabel);
+		}
+
+		private void FetchAndFillTeamUserGeneratedContentPublisherUserName(Team team, UILabel label)
+		{
+			label.text = string.Empty;
+			ObservableExtensions.Subscribe<string>(Observable.Do<string>(this._getDisplayablePublisherUserName.GetAsTeamUgcOwner(team.CurrentUgmUserUniversalId), delegate(string displayablePublisherUserName)
 			{
-				HudWinnerController.Log.Error(string.Format("Error on GetGroupTeamAsync. Exception:{0}", exception));
-			});
+				label.Text = displayablePublisherUserName;
+			}));
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(HudWinnerController));
+
+		[Inject]
+		private IMatchTeams _teams;
+
+		[Inject]
+		private IGamePostProcessing _postProcessing;
+
+		[Inject]
+		private IGetDisplayableNickName _getDisplayableNickName;
+
+		[Inject]
+		private ITeamNameRestriction _teamNameRestriction;
+
+		[Inject]
+		private DiContainer _diContainer;
+
+		[Inject]
+		private IGetDisplayablePublisherUserName _getDisplayablePublisherUserName;
 
 		[Header("[Time Config]")]
 		public float WindowDelayToShowCards = 1f;
@@ -185,7 +225,7 @@ namespace HeavyMetalMachines.Frontend
 		public float WindowCloseTimeInSec = 3f;
 
 		[Header("[Audio]")]
-		public FMODAsset sfx_ui_matchend_team_characters;
+		public AudioEventAsset sfx_ui_matchend_team_characters;
 
 		[Header("[Grid Ref]")]
 		public UIGrid WinnersGrid;
@@ -228,6 +268,8 @@ namespace HeavyMetalMachines.Frontend
 			public HMMUI2DDynamicSprite TeamImageSprite;
 
 			public UILabel TeamTagLabel;
+
+			public UILabel TeamUserGeneratedContentCurrentOwnerPublisherUserNameLabel;
 		}
 
 		[Serializable]

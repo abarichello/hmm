@@ -8,6 +8,8 @@ namespace HeavyMetalMachines
 	{
 		IFuture SetInfo(MatchData data);
 
+		IFuture SetPlayerCompetitiveState(string state);
+
 		IFuture SetPlayerRewards(string rewardString);
 
 		IFuture PlaybackReady(long playbackStartTime, int lastSynchTimeScaleChange, int accumulatedSynchDelay, float timeScale);

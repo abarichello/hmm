@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using Commons.Swordfish.Progression;
+using System.Diagnostics;
+using HeavyMetalMachines.DataTransferObjects.Battlepass;
+using HeavyMetalMachines.DataTransferObjects.Progression;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Infra.ScriptableObjects
@@ -28,21 +30,22 @@ namespace HeavyMetalMachines.Infra.ScriptableObjects
 				this._progress.MissionProgresses = new List<MissionProgress>();
 				this._progress.FreeLevelsClaimed = new bool[0];
 				this._progress.PremiumLevelsClaimed = new bool[0];
-				this._progress.MissionsCompleted = new bool[0];
+				this._progress.MissionsCompleted = new List<MissionCompleted>();
 			}
 		}
+
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
+		public static event Action<BattlepassProgress> OnBattlepassProgressSet;
 
 		public void UpdateBattlepassProgress(BattlepassProgress progress)
 		{
 			this.Progress = progress;
 			if (BattlepassProgressScriptableObject.OnBattlepassProgressSet != null)
 			{
-				BattlepassProgressScriptableObject.OnBattlepassProgressSet();
+				BattlepassProgressScriptableObject.OnBattlepassProgressSet(progress);
 			}
 		}
 
 		private BattlepassProgress _progress;
-
-		public static Action OnBattlepassProgressSet;
 	}
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.Localization;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Frontend
@@ -29,7 +30,7 @@ namespace HeavyMetalMachines.Frontend
 			this.OnStateStart(this.FourthStateSignal);
 			this.FourthStateAnim.gameObject.SetActive(true);
 			this.FourthStateAnim.Play();
-			string text = Language.Get("WAIT_FOR_OTHER_PLAYERS_STATE_FEEDBACK", TranslationSheets.PickMode);
+			string text = Language.Get("WAIT_FOR_OTHER_PLAYERS_STATE_FEEDBACK", TranslationContext.PickMode);
 			this.ConfirmButtonLabel.text = text;
 		}
 

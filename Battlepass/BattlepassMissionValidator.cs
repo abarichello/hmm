@@ -1,219 +1,68 @@
 ﻿using System;
 using System.Collections.Generic;
-using Commons.Swordfish.Battlepass;
-using Commons.Swordfish.Progression;
+using Assets.ClientApiObjects;
+using HeavyMetalMachines.DataTransferObjects.Battlepass;
+using HeavyMetalMachines.DataTransferObjects.Progression;
 using HeavyMetalMachines.Infra.Context;
-using HeavyMetalMachines.Match;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Battlepass
 {
-	public class BattlepassMissionValidator : GameHubObject
+	public class BattlepassMissionValidator
 	{
-		public void ValidateMissionCompletion(BattlepassProgress battlepassProgress, IPlayerStats playerStats, IMatchStats matchHistory)
+		public void ValidateMissionCompletion(Mission[] missionList, BattlepassProgress battlepassProgress, IPlayerStats playerStats, IMatchStats matchHistory, IMatchPlayers mathPlayers, ICollectionScriptableObject inventoryCollection)
 		{
 			List<MissionProgress> missionProgresses = battlepassProgress.MissionProgresses;
-			List<int> missionsCompletedIndex = playerStats.MissionsCompletedIndex;
+			List<MissionCompleted> missionsCompletedIndex = playerStats.MissionsCompletedIndex;
 			for (int i = 0; i < missionProgresses.Count; i++)
 			{
 				MissionProgress missionProgress = missionProgresses[i];
-				Mission[] missions = GameHubObject.Hub.SharedConfigs.Battlepass.Mission.Missions;
-				if (this.CheckCompletion(missionProgress, playerStats, matchHistory, missions))
+				int objectiveCompletedIndex = 0;
+				if (this.CheckCompletion(missionProgress, playerStats, matchHistory, mathPlayers, missionList, inventoryCollection, out objectiveCompletedIndex))
 				{
-					missionsCompletedIndex.Add(missionProgress.MissionIndex);
+					MissionCompleted item = new MissionCompleted
+					{
+						MissionIndex = missionProgress.MissionIndex,
+						ObjectiveCompletedIndex = objectiveCompletedIndex,
+						CurrentProgressValue = missionProgress.CurrentProgressValue
+					};
+					missionsCompletedIndex.Add(item);
 				}
 			}
 		}
 
-		private bool CheckCompletion(MissionProgress missionProgress, IPlayerStats playerStats, IMatchStats matchHistory, Mission[] missionList)
+		private bool CheckCompletion(MissionProgress missionProgress, IPlayerStats playerStats, IMatchStats matchHistory, IMatchPlayers mathPlayers, Mission[] missionList, ICollectionScriptableObject inventoryCollection, out int objectiveIndex)
 		{
 			Mission mission = missionList[missionProgress.MissionIndex];
-			switch (mission.Objective)
+			MissionObjectiveToProgressUpdaterMapper missionObjectiveToProgressUpdaterMapper = new MissionObjectiveToProgressUpdaterMapper(playerStats, matchHistory, mathPlayers, mission, inventoryCollection);
+			objectiveIndex = 0;
+			bool result = false;
+			for (int i = 0; i < mission.Objectives.Length; i++)
 			{
-			case MissionObjective.TeamDelivery:
-			{
-				TeamKind team = playerStats.Team;
-				if (team != TeamKind.Red)
+				BattlepassMissionValidator.Log.DebugFormat("Validating mission progress. Index: {0}", new object[]
 				{
-					if (team == TeamKind.Blue)
-					{
-						missionProgress.CurrentValue += (float)matchHistory.GetDeliveriesBlue();
-					}
-				}
-				else
-				{
-					missionProgress.CurrentValue += (float)matchHistory.GetDeliveriesRed();
-				}
-				break;
-			}
-			case MissionObjective.TeamHeal:
-			{
-				TeamKind team2 = playerStats.Team;
-				if (team2 != TeamKind.Red)
-				{
-					if (team2 == TeamKind.Blue)
-					{
-						missionProgress.CurrentValue += matchHistory.GetTotalBlueTeamHeal();
-					}
-				}
-				else
-				{
-					missionProgress.CurrentValue += matchHistory.GetTotalRedTeamHeal();
-				}
-				break;
-			}
-			case MissionObjective.TeamDamage:
-			{
-				TeamKind team3 = playerStats.Team;
-				if (team3 != TeamKind.Red)
-				{
-					if (team3 == TeamKind.Blue)
-					{
-						missionProgress.CurrentValue += matchHistory.GetTotalBlueTeamDamage();
-					}
-				}
-				else
-				{
-					missionProgress.CurrentValue += matchHistory.GetTotalRedTeamDamage();
-				}
-				break;
-			}
-			case MissionObjective.TeamKill:
-			{
-				TeamKind team4 = playerStats.Team;
-				if (team4 != TeamKind.Red)
-				{
-					if (team4 == TeamKind.Blue)
-					{
-						missionProgress.CurrentValue += (float)matchHistory.GetTotalKillsBlue();
-					}
-				}
-				else
-				{
-					missionProgress.CurrentValue += (float)matchHistory.GetTotalKillsRed();
-				}
-				break;
-			}
-			case MissionObjective.TeamBombCarrierKill:
-			{
-				TeamKind team5 = playerStats.Team;
-				if (team5 != TeamKind.Red)
-				{
-					if (team5 == TeamKind.Blue)
-					{
-						missionProgress.CurrentValue += (float)matchHistory.GetTotalBombCarrierKillsBlue();
-					}
-				}
-				else
-				{
-					missionProgress.CurrentValue += (float)matchHistory.GetTotalBombCarrierKillsRed();
-				}
-				break;
-			}
-			case MissionObjective.TeamTacklerKill:
-			{
-				TeamKind team6 = playerStats.Team;
-				if (team6 != TeamKind.Red)
-				{
-					if (team6 == TeamKind.Blue)
-					{
-						missionProgress.CurrentValue += (float)matchHistory.GetTotalTacklerKillsBlue();
-					}
-				}
-				else
-				{
-					missionProgress.CurrentValue += (float)matchHistory.GetTotalTacklerKillsRed();
-				}
-				break;
-			}
-			case MissionObjective.TeamCarrierKill:
-			{
-				TeamKind team7 = playerStats.Team;
-				if (team7 != TeamKind.Red)
-				{
-					if (team7 == TeamKind.Blue)
-					{
-						missionProgress.CurrentValue += (float)matchHistory.GetTotalCarrierKillsBlue();
-					}
-				}
-				else
-				{
-					missionProgress.CurrentValue += (float)matchHistory.GetTotalCarrierKillsRed();
-				}
-				break;
-			}
-			case MissionObjective.TeamSupportKill:
-			{
-				TeamKind team8 = playerStats.Team;
-				if (team8 != TeamKind.Red)
-				{
-					if (team8 == TeamKind.Blue)
-					{
-						missionProgress.CurrentValue += (float)matchHistory.GetTotalSupportKillsBlue();
-					}
-				}
-				else
-				{
-					missionProgress.CurrentValue += (float)matchHistory.GetTotalSupportKillsRed();
-				}
-				break;
-			}
-			case MissionObjective.MedalCountOnSingleVictory:
-				if (playerStats.MatchWon)
-				{
-					missionProgress.CurrentValue = (float)playerStats.NumberOfMedals;
-				}
-				break;
-			case MissionObjective.DamagePerMinuteOnSingleVictory:
-				if (playerStats.MatchWon)
-				{
-					missionProgress.CurrentValue = playerStats.GetDamagePerMinuteDealt(matchHistory);
-				}
-				break;
-			case MissionObjective.HealPerMinuteOnSingleVictory:
-				if (playerStats.MatchWon)
-				{
-					missionProgress.CurrentValue = playerStats.GetHealingPerMinuteProvided(matchHistory);
-				}
-				break;
-			case MissionObjective.MedalCountOnVictories:
-				if (playerStats.MatchWon)
-				{
-					missionProgress.CurrentValue += (float)playerStats.NumberOfMedals;
-				}
-				break;
-			case MissionObjective.DamageOnVictories:
-				if (playerStats.MatchWon)
-				{
-					missionProgress.CurrentValue += playerStats.DamageDealtToPlayers;
-				}
-				break;
-			case MissionObjective.HealOnVictories:
-				if (playerStats.MatchWon)
-				{
-					missionProgress.CurrentValue += playerStats.HealingProvided;
-				}
-				break;
-			case MissionObjective.PlayMatch:
-				missionProgress.CurrentValue += 1f;
-				break;
-			case MissionObjective.WinMatch:
-				if (playerStats.MatchWon)
-				{
-					missionProgress.CurrentValue += 1f;
-				}
-				break;
-			case MissionObjective.MedalCountOnMatches:
-				missionProgress.CurrentValue += (float)playerStats.NumberOfMedals;
-				break;
-			default:
-				BattlepassMissionValidator.Log.ErrorFormat("Not implemented MissionObjective: {0}", new object[]
-				{
-					mission.Objective
+					missionProgress.MissionIndex
 				});
-				break;
+				Objectives missionObjectives = mission.Objectives[i];
+				IMissionProgressUpdater missionProgressUpdater = missionObjectiveToProgressUpdaterMapper.MapperResolver(missionObjectives.Objective);
+				if (missionProgressUpdater == null)
+				{
+					BattlepassMissionValidator.Log.ErrorFormat("Not implemented MissionObjective: {0}", new object[]
+					{
+						missionObjectives.Objective
+					});
+				}
+				else
+				{
+					missionProgressUpdater.Update(missionProgress.CurrentProgressValue[i], missionObjectives);
+					if (missionProgress.CurrentProgressValue[i].CurrentValue >= (float)missionObjectives.Target)
+					{
+						objectiveIndex = i;
+						result = true;
+					}
+				}
 			}
-			return missionProgress.CurrentValue >= (float)mission.Target;
+			return result;
 		}
 
 		public static readonly BitLogger Log = new BitLogger(typeof(BattlepassMissionValidator));

@@ -17,8 +17,6 @@ namespace HeavyMetalMachines.Customization
 
 		public ItemPreviewKind PreviewKind;
 
-		public bool IsEquipped;
-
 		public bool IsSelected;
 
 		public bool IsDefault;
@@ -41,6 +39,6 @@ namespace HeavyMetalMachines.Customization
 
 		public string ArtPreviewBackGroundAssetName;
 
-		public SkinPrefabItemTypeComponent.SkinCustomizations SkinCustomizations;
+		public SkinPrefabItemTypeComponent SkinPrefabComponent;
 	}
 }

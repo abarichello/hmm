@@ -3,14 +3,22 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
 using ClientAPI.Utils;
-using Commons.Swordfish.Battlepass;
 using HeavyMetalMachines.Bank;
+using HeavyMetalMachines.BI.Battlepass;
+using HeavyMetalMachines.BI.CharacterSelection;
+using HeavyMetalMachines.BI.GameServer;
+using HeavyMetalMachines.BI.Matches;
+using HeavyMetalMachines.BI.Players;
+using HeavyMetalMachines.BotAI;
 using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Combat.Gadget;
+using HeavyMetalMachines.DataTransferObjects.Battlepass;
+using HeavyMetalMachines.DataTransferObjects.Player;
 using HeavyMetalMachines.Event;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Matches.DataTransferObjects;
 using HeavyMetalMachines.Swordfish;
-using HeavyMetalMachines.Swordfish.Logs;
-using HeavyMetalMachines.Swordfish.Player;
+using NativePlugins;
 using Pocketverse;
 using UnityEngine;
 
@@ -26,7 +34,7 @@ namespace HeavyMetalMachines.BI
 			}
 		}
 
-		private static T FillBasicInfo<T>(T log) where T : IBaseLog
+		public static T FillBasicInfo<T>(T log) where T : IBaseLog
 		{
 			log.EventAt = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
 			log.MatchId = MatchLogWriter.Hub.Swordfish.Connection.ServerMatchId.ToString();
@@ -94,7 +102,11 @@ namespace HeavyMetalMachines.BI
 				text = "match.log";
 			}
 			text = text.Replace(".", DateTime.Now.ToString("-yyyyMMdd-HHmmss-") + MatchLogWriter.Hub.Swordfish.Connection.ServerMatchId.ToString() + ".");
-			MatchLogWriter._fileHandle = CppLogger.CreateLogger(text, CppFileMode.WriteBinary);
+			MatchLogWriter.Log.DebugFormat("Creating BI Log file={0}", new object[]
+			{
+				text
+			});
+			MatchLogWriter._fileHandle = LoggerPlugin.CreateLogger(text, CppFileMode.WriteBinary);
 		}
 
 		public static void Release()
@@ -103,18 +115,28 @@ namespace HeavyMetalMachines.BI
 			{
 				return;
 			}
-			CppLogger.ReleaseLogger(MatchLogWriter._fileHandle);
+			MatchLogWriter.Log.Debug("Releasing BI log file");
+			LoggerPlugin.ReleaseLogger(MatchLogWriter._fileHandle);
 			MatchLogWriter._enabled = false;
 		}
 
-		private static void WriteLog(IBaseLog log)
+		public static void WriteLog(IBaseLog log)
 		{
+			MatchLogWriter.WriteLog(log, false);
+		}
+
+		private static void WriteLog(IBaseLog log, bool devLog)
+		{
+			if (devLog)
+			{
+				MatchLogWriter.Log.Info(Json.ToJSON(log));
+			}
 			if (!MatchLogWriter._enabled)
 			{
 				return;
 			}
 			string szMessage = Json.ToJSON(log);
-			CppLogger.Log(MatchLogWriter._fileHandle, szMessage);
+			LoggerPlugin.Log(MatchLogWriter._fileHandle, szMessage);
 		}
 
 		public static void AddListeners()
@@ -131,17 +153,11 @@ namespace HeavyMetalMachines.BI
 				MatchLogWriter.<>f__mg$cache1 = new BaseSpawnManager.PlayerUnspawnListener(MatchLogWriter.OnPlayerUnspawned);
 			}
 			bots.ListenToObjectUnspawn += MatchLogWriter.<>f__mg$cache1;
-			CreepSpawnManager creeps = MatchLogWriter.Hub.Events.Creeps;
 			if (MatchLogWriter.<>f__mg$cache2 == null)
 			{
-				MatchLogWriter.<>f__mg$cache2 = new CreepSpawnManager.CreepUnspawnListener(MatchLogWriter.OnCreepUnspawned);
+				MatchLogWriter.<>f__mg$cache2 = new PauseController.InGamePauseStateChangedEvent(MatchLogWriter.OnPauseStateChanged);
 			}
-			creeps.ListenToCreepUnspawn += MatchLogWriter.<>f__mg$cache2;
-			if (MatchLogWriter.<>f__mg$cache3 == null)
-			{
-				MatchLogWriter.<>f__mg$cache3 = new PauseController.InGamePauseStateChangedEvent(MatchLogWriter.OnPauseStateChanged);
-			}
-			PauseController.OnInGamePauseStateChanged += MatchLogWriter.<>f__mg$cache3;
+			PauseController.OnInGamePauseStateChanged += MatchLogWriter.<>f__mg$cache2;
 		}
 
 		private static void OnPauseStateChanged(PauseController.PauseState oldstate, PauseController.PauseState newstate, PlayerData playerdata)
@@ -163,15 +179,6 @@ namespace HeavyMetalMachines.BI
 			MatchLogWriter.WriteLog(pauseStateChange);
 		}
 
-		private static void OnCreepUnspawned(CreepRemoveEvent data)
-		{
-			if (data.Reason != SpawnReason.Death)
-			{
-				return;
-			}
-			MatchLogWriter.CreepKilled(data.CauserId);
-		}
-
 		private static void OnPlayerUnspawned(PlayerEvent data)
 		{
 			if (data.Reason != SpawnReason.Death)
@@ -191,10 +198,13 @@ namespace HeavyMetalMachines.BI
 			MatchLogWriter.AddListeners();
 			MatchLogWriter._bombEventId = 0;
 			GameServerMatchStart gameServerMatchStart = MatchLogWriter.FillBasicInfo<GameServerMatchStart>(default(GameServerMatchStart));
-			gameServerMatchStart.GameVersion = "2.07.972";
+			gameServerMatchStart.GameVersion = "Release.15.00.250";
 			gameServerMatchStart.Team1 = new List<string>();
 			gameServerMatchStart.Team2 = new List<string>();
 			gameServerMatchStart.ArenaIndex = MatchLogWriter.Hub.Match.ArenaIndex;
+			gameServerMatchStart.MatchKind = MatchLogWriter.ConvertMatchKindToMatchKindBi(MatchLogWriter.Hub.Match.Kind).ToString();
+			gameServerMatchStart.QueueName = MatchLogWriter.Hub.Swordfish.Connection.QueueName;
+			gameServerMatchStart.RegionName = MatchLogWriter.Hub.Swordfish.Connection.RegionName;
 			foreach (SwordfishConnection.MatchUser matchUser in MatchLogWriter.Hub.Swordfish.Connection.Users)
 			{
 				TeamKind team = matchUser.Team;
@@ -210,7 +220,32 @@ namespace HeavyMetalMachines.BI
 					gameServerMatchStart.Team1.Add(matchUser.Id);
 				}
 			}
-			MatchLogWriter.WriteLog(gameServerMatchStart);
+			MatchLogWriter.WriteLog(gameServerMatchStart, true);
+		}
+
+		private static MatchLogWriter.BiMatchKind ConvertMatchKindToMatchKindBi(MatchKind kind)
+		{
+			switch (kind)
+			{
+			case 0:
+				return MatchLogWriter.BiMatchKind.PvP;
+			case 1:
+				return MatchLogWriter.BiMatchKind.PvE;
+			case 2:
+				return MatchLogWriter.BiMatchKind.Tutorial;
+			case 3:
+				return MatchLogWriter.BiMatchKind.Ranked;
+			case 4:
+				return MatchLogWriter.BiMatchKind.Custom;
+			case 5:
+				return MatchLogWriter.BiMatchKind.Tournament;
+			case 6:
+				return MatchLogWriter.BiMatchKind.Training;
+			case 7:
+				return MatchLogWriter.BiMatchKind.Novice;
+			default:
+				throw new Exception(string.Format("Unknown match kind: {0}", kind));
+			}
 		}
 
 		public static void WriteMatchCustomizationsBI()
@@ -225,13 +260,18 @@ namespace HeavyMetalMachines.BI
 				MatchStartCustomizations matchStartCustomizations = MatchLogWriter.FillBasicInfo<MatchStartCustomizations>(default(MatchStartCustomizations));
 				matchStartCustomizations.Season = MatchLogWriter.Hub.SharedConfigs.Battlepass.Season;
 				matchStartCustomizations.SteamID = playerData.UserSF.UniversalID;
-				matchStartCustomizations.SkinGUID = playerData.Customizations.SelectedSkin.ToString();
-				matchStartCustomizations.KillVfxGUID = playerData.Customizations.SelectedKillVfxItemTypeId.ToString();
-				matchStartCustomizations.PortraitGUID = playerData.Customizations.SelectedPortraitItemTypeId.ToString();
-				matchStartCustomizations.RespawnGUID = playerData.Customizations.SelectedRespawnVfxItemTypeId.ToString();
-				matchStartCustomizations.ScoreVfxGUID = playerData.Customizations.SelectedScoreVfxItemTypeId.ToString();
-				matchStartCustomizations.SprayGUID = playerData.Customizations.SelectedSprayItemTypeId.ToString();
-				matchStartCustomizations.TakeOffVfxGUID = playerData.Customizations.SelectedTakeOffVfxItemTypeId.ToString();
+				matchStartCustomizations.SkinGUID = playerData.Customizations.GetGuidBySlot(59).ToString();
+				matchStartCustomizations.KillVfxGUID = playerData.Customizations.GetGuidBySlot(4).ToString();
+				matchStartCustomizations.PortraitGUID = playerData.Customizations.GetGuidBySlot(60).ToString();
+				matchStartCustomizations.RespawnGUID = playerData.Customizations.GetGuidBySlot(5).ToString();
+				matchStartCustomizations.ScoreVfxGUID = playerData.Customizations.GetGuidBySlot(3).ToString();
+				matchStartCustomizations.SprayGUID = playerData.Customizations.GetGuidBySlot(1).ToString();
+				matchStartCustomizations.TakeOffVfxGUID = playerData.Customizations.GetGuidBySlot(2).ToString();
+				matchStartCustomizations.Emote0GUID = playerData.Customizations.GetGuidBySlot(40).ToString();
+				matchStartCustomizations.Emote1GUID = playerData.Customizations.GetGuidBySlot(41).ToString();
+				matchStartCustomizations.Emote2GUID = playerData.Customizations.GetGuidBySlot(42).ToString();
+				matchStartCustomizations.Emote3GUID = playerData.Customizations.GetGuidBySlot(43).ToString();
+				matchStartCustomizations.Emote4GUID = playerData.Customizations.GetGuidBySlot(44).ToString();
 				MatchLogWriter.WriteLog(matchStartCustomizations);
 			}
 		}
@@ -254,7 +294,7 @@ namespace HeavyMetalMachines.BI
 			{
 				gameServerMatchEnd.Winner = MatchLogWriter.GetTeam(TeamKind.Blue);
 			}
-			MatchLogWriter.WriteLog(gameServerMatchEnd);
+			MatchLogWriter.WriteLog(gameServerMatchEnd, true);
 			MatchLogWriter.Release();
 		}
 
@@ -268,6 +308,8 @@ namespace HeavyMetalMachines.BI
 			playerPerformance.SwordfishSessionID = Guid.Empty.ToString();
 			playerPerformance.SteamID = player.UserSF.UniversalID;
 			playerPerformance.KillAndAssists = stats.KillsAndAssists;
+			playerPerformance.Kill = stats.Kills;
+			playerPerformance.Assists = stats.Assists;
 			playerPerformance.Deaths = stats.Deaths;
 			playerPerformance.TotalDamageDone = stats.DamageDealtToPlayers;
 			playerPerformance.TotalDamageReceived = stats.DamageReceived;
@@ -294,11 +336,16 @@ namespace HeavyMetalMachines.BI
 			playerPerformance.Debuffmetal = debuffMedal.ToString();
 			playerPerformance.DebuffTimePerformance = rewards.DebuffTime;
 			playerPerformance.TimeBotControlledMillis = stats.TimeBotControlled;
-			playerPerformance.Gadget0Count = stats.Gadget0Count;
-			playerPerformance.Gadget1Count = stats.Gadget1Count;
-			playerPerformance.Gadget2Count = stats.Gadget2Count;
-			playerPerformance.BombGrabberGadgetCount = stats.BombGadgetGrabberCount;
-			playerPerformance.BoostGadgetCount = stats.BoostGadgetCount;
+			playerPerformance.Gadget0Count = stats.GetGadgetUses(GadgetSlot.CustomGadget0);
+			playerPerformance.Gadget1Count = stats.GetGadgetUses(GadgetSlot.CustomGadget1);
+			playerPerformance.Gadget2Count = stats.GetGadgetUses(GadgetSlot.CustomGadget2);
+			playerPerformance.BombGrabberGadgetCount = stats.GetGadgetUses(GadgetSlot.BombGadget);
+			playerPerformance.BoostGadgetCount = stats.GetGadgetUses(GadgetSlot.BoostGadget);
+			playerPerformance.Emote0Uses = stats.GetGadgetUses(GadgetSlot.EmoteGadget0);
+			playerPerformance.Emote1Uses = stats.GetGadgetUses(GadgetSlot.EmoteGadget1);
+			playerPerformance.Emote2Uses = stats.GetGadgetUses(GadgetSlot.EmoteGadget2);
+			playerPerformance.Emote3Uses = stats.GetGadgetUses(GadgetSlot.EmoteGadget3);
+			playerPerformance.Emote4Uses = stats.GetGadgetUses(GadgetSlot.EmoteGadget4);
 			playerPerformance.ReverseCount = stats.ReverseCount;
 			playerPerformance.BombLostDeathCount = stats.BombLostDeathCount;
 			playerPerformance.BombLostBlockerCount = stats.BombLostBlockerCount;
@@ -308,7 +355,13 @@ namespace HeavyMetalMachines.BI
 			MatchLogWriter.WriteLog(playerPerformance);
 		}
 
-		public static void PlayerAction(LogAction action, int objectId, string reason)
+		public static void LogGadgetAction(IMatchLog log)
+		{
+			IMatchLog log2 = MatchLogWriter.FillMatchInfo<IMatchLog>(log);
+			MatchLogWriter.WriteLog(log2);
+		}
+
+		public static void UserAction(LogAction action, string userId, string reason)
 		{
 			if (!MatchLogWriter._enabled)
 			{
@@ -316,19 +369,68 @@ namespace HeavyMetalMachines.BI
 			}
 			GameServerPlayerAction gameServerPlayerAction = MatchLogWriter.FillBasicInfo<GameServerPlayerAction>(default(GameServerPlayerAction));
 			gameServerPlayerAction.Action = action;
-			gameServerPlayerAction.PlayerId = MatchLogWriter.GetPlayerId(objectId);
+			gameServerPlayerAction.PlayerId = userId;
 			gameServerPlayerAction.Reason = reason;
 			MatchLogWriter.WriteLog(gameServerPlayerAction);
 		}
 
-		public static void CharacterSelected(int objectId, string characterId)
+		public static void PlayerDisconnect(LogAction action, string universalId, Heartbeat.DisconnectReason reason, double lastInputTimeSeconds)
+		{
+			if (!MatchLogWriter._enabled)
+			{
+				return;
+			}
+			GameServerPlayerDisconnect gameServerPlayerDisconnect = MatchLogWriter.FillBasicInfo<GameServerPlayerDisconnect>(default(GameServerPlayerDisconnect));
+			gameServerPlayerDisconnect.Action = action;
+			gameServerPlayerDisconnect.PlayerId = universalId;
+			gameServerPlayerDisconnect.Reason = MatchLogWriter.GetBiReasonName(reason);
+			gameServerPlayerDisconnect.SecondsWithoutInput = lastInputTimeSeconds.ToString("e3");
+			MatchLogWriter.WriteLog(gameServerPlayerDisconnect);
+		}
+
+		public static void PlayerInputFroze(long playerId, double lastInputTimeSeconds)
+		{
+			if (!MatchLogWriter._enabled)
+			{
+				return;
+			}
+			GameServerPlayerInputFroze gameServerPlayerInputFroze = MatchLogWriter.FillBasicInfo<GameServerPlayerInputFroze>(default(GameServerPlayerInputFroze));
+			gameServerPlayerInputFroze.PlayerId = playerId.ToString();
+			gameServerPlayerInputFroze.SecondsWithoutInput = lastInputTimeSeconds.ToString("e3");
+			MatchLogWriter.WriteLog(gameServerPlayerInputFroze);
+		}
+
+		private static string GetBiReasonName(Heartbeat.DisconnectReason reason)
+		{
+			switch (reason)
+			{
+			case Heartbeat.DisconnectReason.Unknown:
+				return "Unknown";
+			case Heartbeat.DisconnectReason.ConnectionClosed:
+				return "ConnectionClosed";
+			case Heartbeat.DisconnectReason.PlayerDisconnect:
+				return "PlayerDisconnect";
+			case Heartbeat.DisconnectReason.ConnectionLost:
+				return "ConnectionLost";
+			case Heartbeat.DisconnectReason.ServerAlone:
+				return "ServerAlone";
+			case Heartbeat.DisconnectReason.MatchCanceledByMissingPlayers:
+				return "MatchCanceledByMissingPlayers";
+			case Heartbeat.DisconnectReason.MatchCanceledByServerLoadingStuck:
+				return "MatchCanceledByServerLoadingStuck";
+			default:
+				return "Undefined";
+			}
+		}
+
+		public static void CharacterSelected(string playerUniversalId, string characterId)
 		{
 			if (!MatchLogWriter._enabled)
 			{
 				return;
 			}
 			GameServerPlayerSelectCharacter gameServerPlayerSelectCharacter = MatchLogWriter.FillBasicInfo<GameServerPlayerSelectCharacter>(default(GameServerPlayerSelectCharacter));
-			gameServerPlayerSelectCharacter.PlayerId = MatchLogWriter.GetPlayerId(objectId);
+			gameServerPlayerSelectCharacter.PlayerId = playerUniversalId;
 			gameServerPlayerSelectCharacter.CharacterId = characterId;
 			MatchLogWriter.WriteLog(gameServerPlayerSelectCharacter);
 		}
@@ -364,18 +466,18 @@ namespace HeavyMetalMachines.BI
 			default:
 				if (reason != SpawnReason.Death)
 				{
-					goto IL_7F;
+					goto IL_81;
 				}
 				break;
 			case SpawnReason.ScoreRed:
 				kind = TeamKind.Red;
-				goto IL_7F;
+				goto IL_81;
 			case SpawnReason.ScoreBlu:
 				kind = TeamKind.Blue;
-				goto IL_7F;
+				goto IL_81;
 			}
 			kind = MatchLogWriter.GetTeamKind(objectId);
-			IL_7F:
+			IL_81:
 			gameServerBombDrop.Team = MatchLogWriter.GetTeam(kind);
 			gameServerBombDrop.PositionX = position.x;
 			gameServerBombDrop.PositionZ = position.z;
@@ -425,11 +527,11 @@ namespace HeavyMetalMachines.BI
 			gameServerPlayerKill.PlayerTeam = MatchLogWriter.GetTeam(objTeam);
 			gameServerPlayerKill.VictimId = MatchLogWriter.GetPlayerId(victimId);
 			gameServerPlayerKill.VictimTeam = MatchLogWriter.GetTeam(victimTeam);
-			if (MatchLogWriter.<>f__mg$cache4 == null)
+			if (MatchLogWriter.<>f__mg$cache3 == null)
 			{
-				MatchLogWriter.<>f__mg$cache4 = new Converter<int, string>(MatchLogWriter.GetPlayerId);
+				MatchLogWriter.<>f__mg$cache3 = new Converter<int, string>(MatchLogWriter.GetPlayerId);
 			}
-			gameServerPlayerKill.Assists = assists.ConvertAll<string>(MatchLogWriter.<>f__mg$cache4);
+			gameServerPlayerKill.Assists = assists.ConvertAll<string>(MatchLogWriter.<>f__mg$cache3);
 			gameServerPlayerKill.PositionX = position.x;
 			gameServerPlayerKill.PositionZ = position.z;
 			MatchLogWriter.WriteLog(gameServerPlayerKill);
@@ -462,16 +564,16 @@ namespace HeavyMetalMachines.BI
 			{
 				string playerId = MatchLogWriter.GetPlayerId(keyValuePair.Key);
 				float damageDealtToPlayers = keyValuePair.Value.DamageDealtToPlayers;
-				matchInfoPlayerDamage.Damage.Add(new MatchInfoPlayerDamage.PlayerEntry
-				{
-					PlayerId = playerId,
-					Damage = damageDealtToPlayers
-				});
+				List<MatchInfoPlayerDamage.PlayerEntry> damage = matchInfoPlayerDamage.Damage;
+				MatchInfoPlayerDamage.PlayerEntry item = default(MatchInfoPlayerDamage.PlayerEntry);
+				item.PlayerId = playerId;
+				item.Damage = damageDealtToPlayers;
+				damage.Add(item);
 			}
 			MatchLogWriter.WriteLog(matchInfoPlayerDamage);
 		}
 
-		public static void WriteAfk()
+		public static void WriteAfk(IAFKManager afkManager)
 		{
 			if (!MatchLogWriter._enabled)
 			{
@@ -479,16 +581,16 @@ namespace HeavyMetalMachines.BI
 			}
 			GameServerPlayerAfk gameServerPlayerAfk = MatchLogWriter.FillBasicInfo<GameServerPlayerAfk>(default(GameServerPlayerAfk));
 			gameServerPlayerAfk.Afk = new List<GameServerPlayerAfk.PlayerAfk>();
-			for (int i = 0; i < MatchLogWriter.Hub.afkController.Entries.Count; i++)
+			for (int i = 0; i < afkManager.Entries.Count; i++)
 			{
-				AFKController.AFKEntry afkentry = MatchLogWriter.Hub.afkController.Entries[i];
-				gameServerPlayerAfk.Afk.Add(new GameServerPlayerAfk.PlayerAfk
-				{
-					AfkTime = afkentry.AFKTime,
-					DisconnectionTime = afkentry.DisconnectionTime,
-					IsLeaver = afkentry.IsLeaver(),
-					PlayerId = afkentry.Player.UserId
-				});
+				AFKController.AFKEntry afkentry = afkManager.Entries[i];
+				List<GameServerPlayerAfk.PlayerAfk> afk = gameServerPlayerAfk.Afk;
+				GameServerPlayerAfk.PlayerAfk item = default(GameServerPlayerAfk.PlayerAfk);
+				item.AfkTime = afkentry.AFKTime;
+				item.DisconnectionTime = afkentry.DisconnectionTime;
+				item.IsLeaver = afkentry.IsLeaver();
+				item.PlayerId = afkentry.Player.UserId;
+				afk.Add(item);
 			}
 			MatchLogWriter.WriteLog(gameServerPlayerAfk);
 		}
@@ -504,16 +606,16 @@ namespace HeavyMetalMachines.BI
 			for (int i = 0; i < MatchLogWriter.Hub.Players.Players.Count; i++)
 			{
 				PlayerData playerData = MatchLogWriter.Hub.Players.Players[i];
-				matchCounselorInfo.CounselorInfos.Add(new MatchCounselorInfo.CounselorInfo
-				{
-					PlayerId = playerData.UserId,
-					IsActive = ((!playerData.HasCounselor) ? 0 : 1)
-				});
+				List<MatchCounselorInfo.CounselorInfo> counselorInfos = matchCounselorInfo.CounselorInfos;
+				MatchCounselorInfo.CounselorInfo item = default(MatchCounselorInfo.CounselorInfo);
+				item.PlayerId = playerData.UserId;
+				item.IsActive = ((!playerData.HasCounselor) ? 0 : 1);
+				counselorInfos.Add(item);
 			}
 			MatchLogWriter.WriteLog(matchCounselorInfo);
 		}
 
-		public static void WriteBotsDifficulty()
+		public static void WriteBotsDifficulty(IGetBotDifficulty getBotDifficulty)
 		{
 			if (!MatchLogWriter._enabled)
 			{
@@ -521,8 +623,8 @@ namespace HeavyMetalMachines.BI
 			}
 			MatchInfoBotDifficulty matchInfoBotDifficulty = MatchLogWriter.FillBasicInfo<MatchInfoBotDifficulty>(default(MatchInfoBotDifficulty));
 			matchInfoBotDifficulty.teamsBotDifficulty = new List<MatchInfoBotDifficulty.TeamBotDifficulty>();
-			matchInfoBotDifficulty.teamsBotDifficulty.Add(MatchLogWriter.GetTeamBotDifficulty(TeamKind.Blue));
-			matchInfoBotDifficulty.teamsBotDifficulty.Add(MatchLogWriter.GetTeamBotDifficulty(TeamKind.Red));
+			matchInfoBotDifficulty.teamsBotDifficulty.Add(MatchLogWriter.GetTeamBotDifficulty(TeamKind.Blue, getBotDifficulty));
+			matchInfoBotDifficulty.teamsBotDifficulty.Add(MatchLogWriter.GetTeamBotDifficulty(TeamKind.Red, getBotDifficulty));
 			MatchLogWriter.WriteLog(matchInfoBotDifficulty);
 		}
 
@@ -537,11 +639,10 @@ namespace HeavyMetalMachines.BI
 			for (int i = 0; i < MatchLogWriter.Hub.Players.Players.Count; i++)
 			{
 				PlayerData playerData = MatchLogWriter.Hub.Players.Players[i];
-				PlayerEndGamePresence.PresenceData item = new PlayerEndGamePresence.PresenceData
-				{
-					PlayerId = playerData.UserId,
-					Present = playerData.Connected
-				};
+				PlayerEndGamePresence.PresenceData presenceData = default(PlayerEndGamePresence.PresenceData);
+				presenceData.PlayerId = playerData.UserId;
+				presenceData.Present = playerData.Connected;
+				PlayerEndGamePresence.PresenceData item = presenceData;
 				playerEndGamePresence.Presences.Add(item);
 			}
 			MatchLogWriter.WriteLog(playerEndGamePresence);
@@ -570,19 +671,18 @@ namespace HeavyMetalMachines.BI
 				else
 				{
 					ExperienceDataSet total = playerExperienceData.Total;
-					PlayerTechnicalExperience.Experience item = new PlayerTechnicalExperience.Experience
-					{
-						PlayerId = playerExperienceData.PlayerId,
-						FreezeCount = total.FreezeCount,
-						FreezeTotalTimeMillis = total.FreezeAcc
-					};
+					PlayerTechnicalExperience.Experience experience = default(PlayerTechnicalExperience.Experience);
+					experience.PlayerId = playerExperienceData.PlayerId;
+					experience.FreezeCount = total.FreezeCount;
+					experience.FreezeTotalTimeMillis = total.FreezeAcc;
+					PlayerTechnicalExperience.Experience item = experience;
 					playerTechnicalExperience.Experiences.Add(item);
 				}
 			}
 			MatchLogWriter.WriteLog(playerTechnicalExperience);
 		}
 
-		private static MatchInfoBotDifficulty.TeamBotDifficulty GetTeamBotDifficulty(TeamKind team)
+		private static MatchInfoBotDifficulty.TeamBotDifficulty GetTeamBotDifficulty(TeamKind team, IGetBotDifficulty getBotDifficulty)
 		{
 			bool flag = false;
 			for (int i = 0; i < MatchLogWriter.Hub.Players.Bots.Count; i++)
@@ -605,12 +705,11 @@ namespace HeavyMetalMachines.BI
 					}
 				}
 			}
-			return new MatchInfoBotDifficulty.TeamBotDifficulty
-			{
-				Team = MatchLogWriter.GetTeam(team),
-				BotWasActivated = flag,
-				Difficulty = (int)MatchLogWriter.Hub.Players.GetBotDifficulty(team)
-			};
+			MatchInfoBotDifficulty.TeamBotDifficulty result = default(MatchInfoBotDifficulty.TeamBotDifficulty);
+			result.Team = MatchLogWriter.GetTeam(team);
+			result.BotWasActivated = flag;
+			result.Difficulty = (int)getBotDifficulty.Get(team);
+			return result;
 		}
 
 		public static void WriteBattlepassLevelUp(PlayerData player, int currentBattlepassLevel)
@@ -625,15 +724,15 @@ namespace HeavyMetalMachines.BI
 			MatchLogWriter.WriteLog(battlepassLevelUpBI);
 		}
 
-		public static void WriteBattlepassMissionComplete(PlayerData player, int oldLevel, int currentLevel, Mission missionProgress)
+		public static void WriteBattlepassMissionComplete(PlayerData player, int oldLevel, int currentLevel, Mission missionProgress, int objectiveIndex)
 		{
 			if (!MatchLogWriter._enabled)
 			{
 				return;
 			}
 			BattlepassMissionCompleteBI battlepassMissionCompleteBI = MatchLogWriter.FillBattlepassInfo<BattlepassMissionCompleteBI>(default(BattlepassMissionCompleteBI), player);
-			battlepassMissionCompleteBI.MissionObjective = missionProgress.Objective.ToString();
-			battlepassMissionCompleteBI.MissionTarget = missionProgress.Target;
+			battlepassMissionCompleteBI.MissionObjective = missionProgress.Objectives[objectiveIndex].Objective.ToString();
+			battlepassMissionCompleteBI.MissionTarget = missionProgress.Objectives[objectiveIndex].Target;
 			battlepassMissionCompleteBI.MissionXp = missionProgress.XpReward;
 			battlepassMissionCompleteBI.LevelBeforeZeroBased = oldLevel;
 			battlepassMissionCompleteBI.LevelAfterZeroBased = currentLevel;
@@ -677,7 +776,7 @@ namespace HeavyMetalMachines.BI
 
 		private static ulong _fileHandle;
 
-		private static bool _enabled;
+		private static volatile bool _enabled;
 
 		private static int _lastPauseStateChangeSynchTime = 0;
 
@@ -690,12 +789,21 @@ namespace HeavyMetalMachines.BI
 		private static BaseSpawnManager.PlayerUnspawnListener <>f__mg$cache1;
 
 		[CompilerGenerated]
-		private static CreepSpawnManager.CreepUnspawnListener <>f__mg$cache2;
+		private static PauseController.InGamePauseStateChangedEvent <>f__mg$cache2;
 
 		[CompilerGenerated]
-		private static PauseController.InGamePauseStateChangedEvent <>f__mg$cache3;
+		private static Converter<int, string> <>f__mg$cache3;
 
-		[CompilerGenerated]
-		private static Converter<int, string> <>f__mg$cache4;
+		private enum BiMatchKind
+		{
+			PvP,
+			PvE,
+			Tutorial,
+			Ranked,
+			Custom,
+			Tournament,
+			Training,
+			Novice
+		}
 	}
 }

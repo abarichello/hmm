@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.Combat.GadgetScript;
 
 namespace HeavyMetalMachines.Combat.Gadget
 {
@@ -50,12 +51,22 @@ namespace HeavyMetalMachines.Combat.Gadget
 				this._gadget.CurrentCooldownTime = this._gadget.CurrentTime;
 				return;
 			}
-			if (!this._gadget.Combat.Controller.ConsumeEP((float)this._gadget.ActivationCost))
+			bool flag = this._gadget.Combat.HasGadgetContext((int)this._gadget.Slot);
+			if (!flag && !this._gadget.Combat.Controller.ConsumeEP((float)this._gadget.ActivationCost))
 			{
 				return;
 			}
 			long num = this._gadget.CurrentTime - this._gadget.CurrentCooldownTime;
 			this._gadget.CurrentCooldownTime = (long)(this._gadget.Cooldown * 1000f) + (long)(this._gadget.Info.WarmupSeconds * 1000f) + this._gadget.CurrentTime - num;
+			if (flag)
+			{
+				IHMMGadgetContext gadgetContext = this._gadget.Combat.GetGadgetContext((int)this._gadget.Slot);
+				BaseParameter baseParameter = (BaseParameter)gadgetContext.GetUIParameter<float>("CooldownEndTime");
+				if (baseParameter != null)
+				{
+					this._gadget.CurrentCooldownTime = (long)((int)baseParameter.GetValue<float>(gadgetContext));
+				}
+			}
 			if (this._gadget.Info.WarmupSeconds != 0f)
 			{
 				if (this.FireWarmup() == -1)
@@ -84,7 +95,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			}
 		}
 
-		public void DestroyEffect(DestroyEffect evt)
+		public void DestroyEffect(DestroyEffectMessage evt)
 		{
 			if (evt.RemoveData.TargetEventId == this._gadget.LastWarmupId && evt.RemoveData.DestroyReason == BaseFX.EDestroyReason.Lifetime)
 			{

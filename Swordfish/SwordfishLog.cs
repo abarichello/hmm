@@ -4,28 +4,36 @@ using System.IO;
 using System.Text.RegularExpressions;
 using ClientAPI;
 using ClientAPI.Objects;
+using HeavyMetalMachines.BI;
+using HeavyMetalMachines.Swordfish.API;
+using NativePlugins;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Swordfish
 {
-	public class SwordfishLog : GameHubObject
+	public class SwordfishLog : GameHubObject, ISwordfishLog
 	{
 		public SwordfishLog()
 		{
-			string sessionGUID = NativePlugins.GetSessionGUID();
+			string sessionGUID = RuntimePlugin.GetSessionGUID();
 			Match match = Regex.Match(sessionGUID, "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", RegexOptions.IgnoreCase);
-			this._gameSessionId = ((!match.Success) ? Guid.NewGuid() : new Guid(sessionGUID));
+			bool success = match.Success;
+			this._gameSessionId = ((!success) ? Guid.NewGuid() : new Guid(sessionGUID));
 			this._installationId = this.ReadOrGenerateInstallationGuid();
-			this._sessionMsg = string.Format("GameSessionId={0} InstallationId={1}", this._gameSessionId, this._installationId);
+			this._sessionMsg = string.Format("GameSessionId={0} InstallationId={1}{2}", this._gameSessionId, this._installationId, (!success) ? " GameSessionSwordfishLogCreated=true" : string.Empty);
 			if (GameHubObject.Hub.Config.GetBoolValue(ConfigAccess.SFDisableBI, false) || GameHubObject.Hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish, false))
 			{
 				this._disabled = true;
 				return;
 			}
-			GameHubObject.Hub.ClientApi.UserAccessControlCallback += this.OnUserAccessControlCallback;
+			GameHubObject.Hub.ClientApi.UserAccessControlCallback += new SwordfishClientApi.UserAccessControlDelegate(this.OnUserAccessControlCallback);
 			if (GameHubObject.Hub.Net.IsClient())
 			{
-				this.BILogClient(ClientBITags.SessionStart, true);
+				this.LogInstallationMessage(new UnidentifiedPlayerBiLog
+				{
+					InnerAction = 103
+				});
+				this.BILogClient(0, true);
 			}
 		}
 
@@ -42,6 +50,29 @@ namespace HeavyMetalMachines.Swordfish
 			this._updater = new TimedUpdater(100, true, true);
 		}
 
+		public void LogInstallationMessage(IUnidentifiedPlayerBiLog unidentifiedPlayerBiLog)
+		{
+			unidentifiedPlayerBiLog.GameSessionId = this._gameSessionId;
+			string newMessage = unidentifiedPlayerBiLog.Serialize();
+			GameHubObject.Hub.ClientApi.log.LogInstallation(null, this._installationId, newMessage, delegate(object _)
+			{
+				SwordfishLog.Log.DebugFormat("LogInstallationMessage. installation={0}, msg={1}", new object[]
+				{
+					this._installationId,
+					newMessage
+				});
+			}, delegate(object _, Exception exception)
+			{
+				SwordfishLog.Log.WarnFormat("LogInstallationMessage error. Will try to postpone. installation={0}, msg={1}, ex={2}", new object[]
+				{
+					this._installationId,
+					newMessage,
+					exception
+				});
+				this.BILogClientMsg(102, newMessage, false);
+			});
+		}
+
 		private void ErrorCallback(object state, Exception exception)
 		{
 			SwordfishLog.Log.Error("Callback error", exception);
@@ -55,7 +86,7 @@ namespace HeavyMetalMachines.Swordfish
 			}
 			string text = "[id]";
 			string text2 = "INSTALLATION_ID";
-			string path = ".\\bi";
+			string path = string.Format("{0}/bi", Platform.Current.GetPersistentDataDirectory());
 			if (File.Exists(path))
 			{
 				string[] array = null;
@@ -86,6 +117,7 @@ namespace HeavyMetalMachines.Swordfish
 						}
 					}
 				}
+				SwordfishLog.Log.Debug("Invalid BI data, will delete the current file.");
 				try
 				{
 					File.Delete(path);
@@ -97,6 +129,10 @@ namespace HeavyMetalMachines.Swordfish
 						ex2.ToString()
 					});
 				}
+			}
+			else
+			{
+				SwordfishLog.Log.Debug("BI file not found.");
 			}
 			Guid guid = Guid.NewGuid();
 			try
@@ -132,25 +168,35 @@ namespace HeavyMetalMachines.Swordfish
 			this.LogStatistic(biTag.ToString(), this.BuildMessage(msg), false, forceSendLogs);
 		}
 
-		public void BILogClientCloseCondition(string msg)
+		public void BILogClientCloseCondition(string closeData, bool isFirstLogin, bool joinedMatchmaking)
 		{
 			SwordfishLog.Log.InfoFormat("Type={0} Perm={1} Msg=\"{2}\" ShouldFlush:{3}", new object[]
 			{
-				ClientBITags.ClientClosed,
+				59,
 				false,
-				this.BuildMessage(msg),
+				this.BuildMessage(closeData),
 				true
 			});
-			if (this._disabled || this._swordfishUserId == Guid.Empty || string.IsNullOrEmpty(this._swordfishSessionId))
+			if (this._disabled)
 			{
 				return;
 			}
+			int num = (!isFirstLogin) ? 0 : 1;
+			int num2 = (!joinedMatchmaking) ? 0 : 1;
+			string value = (!string.IsNullOrEmpty(this._swordfishSessionId)) ? this._swordfishSessionId : Guid.Empty.ToString();
 			using (StreamWriter streamWriter = File.CreateText("bicc"))
 			{
 				streamWriter.WriteLine(this._swordfishUserId);
-				streamWriter.WriteLine(this._swordfishSessionId);
-				streamWriter.WriteLine(msg);
+				streamWriter.WriteLine(value);
+				streamWriter.WriteLine(closeData);
+				streamWriter.WriteLine(num.ToString().ToLower());
+				streamWriter.WriteLine(num2.ToString().ToLower());
 			}
+		}
+
+		public void InitializeSwordfishConnected()
+		{
+			this.OnListenToSwordfishConnected();
 		}
 
 		public void OnListenToSwordfishConnected()
@@ -253,29 +299,11 @@ namespace HeavyMetalMachines.Swordfish
 
 		private void OnUserAccessControlCallback(UserAccessControlMessage uacmessage)
 		{
-			this._disabled = true;
-		}
-
-		public void BILogFunnel(FunnelBITags biTag, string publisherUserId = null)
-		{
-			if (this._disabled)
+			SwordfishLog.Log.DebugFormat("Disabling due to UAC: {0}", new object[]
 			{
-				return;
-			}
-			GameHubObject.Hub.ClientApi.log.LogInstallation(biTag, biTag.ToString(), this._sessionMsg, DateTime.Now, new SwordfishClientApi.Callback(this.BILogFunnelSuccess), new SwordfishClientApi.ErrorCallback(this.BILogFunnelError));
-		}
-
-		private void BILogFunnelSuccess(object state)
-		{
-		}
-
-		private void BILogFunnelError(object state, Exception exception)
-		{
-			SwordfishLog.Log.ErrorFormat("Failed to send FunnelTag:{0}. Exception:{1}", new object[]
-			{
-				state,
-				exception
+				uacmessage.Message
 			});
+			this._disabled = true;
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(SwordfishLog));

@@ -3,7 +3,7 @@ using Pocketverse;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkListenToDamageOnThirdParty : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkListenToDamageOnThirdParty : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		public override void PerkInitialized()
 		{
@@ -28,7 +28,7 @@ namespace HeavyMetalMachines.Combat
 			this.AddListener(this.ThirdParty);
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (this.ThirdParty)
 			{

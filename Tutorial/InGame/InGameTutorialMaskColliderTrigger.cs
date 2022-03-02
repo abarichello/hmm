@@ -7,8 +7,8 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Tutorial.InGame
 {
-	[ExecuteInEditMode]
 	[RequireComponent(typeof(Collider), typeof(UITexture))]
+	[ExecuteInEditMode]
 	public class InGameTutorialMaskColliderTrigger : MonoBehaviour
 	{
 		public bool isActive { get; private set; }
@@ -201,6 +201,10 @@ namespace HeavyMetalMachines.Tutorial.InGame
 
 		public IEnumerator Show(float delay = 0f, float duration = 0.5f)
 		{
+			InGameTutorialMaskColliderTrigger.Log.DebugFormat("Show:{0}", new object[]
+			{
+				base.name
+			});
 			HOTween.Kill(this.uiTexture.transform);
 			this.uiTexture.transform.localScale = Vector3.zero;
 			Tweener tTween = HOTween.To(this.uiTexture.transform, duration, new TweenParms().Prop("localScale", new Vector3(1f, 1f, 1f)).Delay(delay));
@@ -213,6 +217,10 @@ namespace HeavyMetalMachines.Tutorial.InGame
 
 		private void StartPingPongScale()
 		{
+			InGameTutorialMaskColliderTrigger.Log.DebugFormat("StartPingPongScale:{0}", new object[]
+			{
+				base.name
+			});
 			TweenScale tweenScale = TweenScale.Begin(this.uiTexture.gameObject, 1f, new Vector3(1.1f, 1.1f, 1.1f));
 			tweenScale.from = Vector3.one;
 			tweenScale.animationCurve = InGameTutorialMaskController.Instance.AnimationCurve;
@@ -227,8 +235,13 @@ namespace HeavyMetalMachines.Tutorial.InGame
 				yield break;
 			}
 			HOTween.Kill(this.uiTexture.transform);
+			InGameTutorialMaskColliderTrigger.Log.DebugFormat("Hide Start: " + base.name, new object[0]);
 			Tweener tTween = HOTween.To(this.uiTexture.transform, duration, new TweenParms().Prop("localScale", new Vector3(0f, 0f, 0f)).OnComplete(delegate()
 			{
+				InGameTutorialMaskColliderTrigger.Log.DebugFormat("Hide End:{0}", new object[]
+				{
+					base.name
+				});
 				this.uiTexture.gameObject.SetActive(false);
 			}));
 			yield return base.StartCoroutine(tTween.WaitForCompletion());

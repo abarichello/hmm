@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Playback.Snapshot;
 using HeavyMetalMachines.UpdateStream;
 using Pocketverse;
 using UnityEngine;
@@ -77,10 +79,12 @@ namespace HeavyMetalMachines.Combat
 			{
 				this.OnGridGamePlayersCreated();
 			}
+			BombGridController.Log.Debug("GridController Initialized");
 		}
 
 		private void ClearAll()
 		{
+			BombGridController.Log.Debug("GridController Cleared");
 			this.CurrentPlayer = null;
 			for (int i = 0; i < this._players.Count; i++)
 			{
@@ -119,11 +123,11 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
-		private void OnPhaseChanged(BombScoreBoard.State phase)
+		private void OnPhaseChanged(BombScoreboardState phase)
 		{
-			if (phase != BombScoreBoard.State.PreBomb)
+			if (phase != BombScoreboardState.PreBomb)
 			{
-				if (phase == BombScoreBoard.State.BombDelivery)
+				if (phase == BombScoreboardState.BombDelivery)
 				{
 					this.StopGridGame();
 				}
@@ -172,6 +176,13 @@ namespace HeavyMetalMachines.Combat
 				if (!combat.IsBot)
 				{
 					num = Mathf.Clamp01(num);
+					BombGridController.Log.DebugFormat("GameGridFinished - PlayerAddress:{0} AverageDiff:{1} Value:{2} yelloValue:{3}", new object[]
+					{
+						gridGamePlayer.Data.PlayerAddress,
+						averageDiff,
+						num,
+						gridYellowZone
+					});
 					byte playerAddress = gridGamePlayer.Data.PlayerAddress;
 					this.OnGridGameFinished(playerAddress, num);
 					this._bombManager.DispatchReliable(new byte[]
@@ -200,7 +211,12 @@ namespace HeavyMetalMachines.Combat
 
 		public BombGridController.GridGamePlayer CurrentPlayer;
 
-		public class GridGamePlayer : IStateContent
+		public interface IGridGamePlayerSerialData : IBaseStreamSerialData<BombGridController.IGridGamePlayerSerialData>
+		{
+			float Value { get; }
+		}
+
+		public class GridGamePlayer : IStateContent, BombGridController.IGridGamePlayerSerialData, IBaseStreamSerialData<BombGridController.IGridGamePlayerSerialData>
 		{
 			~GridGamePlayer()
 			{
@@ -359,6 +375,11 @@ namespace HeavyMetalMachines.Combat
 			public void ApplyStreamData(byte[] data)
 			{
 				this.Value = (float)data[0];
+			}
+
+			public void Apply(BombGridController.IGridGamePlayerSerialData other)
+			{
+				this.Value = other.Value;
 			}
 
 			private int _lastTime;

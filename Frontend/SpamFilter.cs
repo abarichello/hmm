@@ -1,8 +1,9 @@
 ﻿using System;
+using HeavyMetalMachines.Localization;
 
 namespace HeavyMetalMachines.Frontend
 {
-	public class SpamFilter
+	public class SpamFilter : ISpamFilter
 	{
 		public SpamFilter(int spamMessageCountThreshold, int spamBlockedChatDuration)
 		{
@@ -40,7 +41,10 @@ namespace HeavyMetalMachines.Frontend
 		public string GetSpamBlockMessage(float currentUnscaledTime)
 		{
 			int num = (int)Math.Ceiling((double)(this._timeAllowedToSendMessages - currentUnscaledTime));
-			return string.Format(Language.Get("CHAT_MESSAGE_SPAM_BLOCK", TranslationSheets.Chat), num);
+			return Language.GetFormatted("CHAT_MESSAGE_SPAM_BLOCK", TranslationContext.Chat, new object[]
+			{
+				num
+			});
 		}
 
 		private int _repeatedMessageCount;

@@ -1,8 +1,8 @@
 ﻿using System;
-using HeavyMetalMachines.Options;
+using HeavyMetalMachines.Input.ControllerInput;
+using Hoplon.Input;
 using Hoplon.SensorSystem;
 using Pocketverse;
-using UnityEngine;
 using UnityEngine.Serialization;
 
 namespace HeavyMetalMachines.Infra.Counselor
@@ -13,22 +13,17 @@ namespace HeavyMetalMachines.Infra.Counselor
 
 		public float WrongWaySensibility = 200f;
 
-		public FMODVoiceOverAsset IntroCounselorAudioAsset;
+		public AudioEventAsset IntroCounselorAudioAsset;
 
-		public FMODVoiceOverAsset LoadingCounselorAudioAsset;
+		public AudioEventAsset JoystickIntroCounselorAudioAsset;
+
+		public AudioEventAsset LoadingCounselorAudioAsset;
 
 		public int[] AllowedLoadingAdvicesCharactersId;
 
 		public CounselorConfig.ConditionalConfig[] _conditionalValues;
 
 		public CounselorConfig.AdvicesConfig[] Advices;
-
-		[Header("GUI")]
-		public Sprite ShortcutMouse0Sprite;
-
-		public Sprite ShortcutMouse1Sprite;
-
-		public Sprite ShortcutMouse2Sprite;
 
 		[Serializable]
 		public struct ConditionalConfig
@@ -48,13 +43,19 @@ namespace HeavyMetalMachines.Infra.Counselor
 			[FormerlySerializedAs("TranslationKey")]
 			public string TranslationKey;
 
-			public FMODVoiceOverAsset AudioAsset;
+			public AudioEventAsset AudioAsset;
 
-			public FMODVoiceOverAsset AlternativeAudioAsset;
+			public AudioEventAsset AlternativeAudioAsset;
 
-			public string AlternativeKeyTrigger;
+			public KeyboardMouseCode AlternativeKeyCode;
 
-			public ControlAction ControlAction;
+			public AudioEventAsset JoystickAudioAsset;
+
+			public AudioEventAsset JoystickAlternativeAudioAsset;
+
+			public JoystickTemplateCode JoystickAlternativeKeyCode;
+
+			public ControllerInputActions InputAction;
 
 			public string CursorText;
 

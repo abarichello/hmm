@@ -2,8 +2,10 @@
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using ClientAPI;
+using HeavyMetalMachines.BI.Players;
+using HeavyMetalMachines.DataTransferObjects.Result;
 using HeavyMetalMachines.Swordfish;
-using HeavyMetalMachines.Swordfish.Logs;
+using Hoplon.Serialization;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Match
@@ -38,7 +40,7 @@ namespace HeavyMetalMachines.Match
 
 		private static void OnSuccess(object state, string obj)
 		{
-			NetResult netResult = (NetResult)((JsonSerializeable<T>)obj);
+			NetResult netResult = (NetResult)((JsonSerializeable<!0>)obj);
 			if (netResult.Success)
 			{
 				EndMatchPresenceUpdater.Log.InfoFormat("Successfully updated player end match presence counter.", new object[0]);

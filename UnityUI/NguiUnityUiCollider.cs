@@ -8,7 +8,7 @@ namespace HeavyMetalMachines.UnityUI
 	[RequireComponent(typeof(UIWidget))]
 	public class NguiUnityUiCollider : MonoBehaviour
 	{
-		protected void Awake()
+		protected void Start()
 		{
 			UIWidget component = base.GetComponent<UIWidget>();
 			GameObject gameObject = new GameObject("UnityUI Object");
@@ -20,15 +20,33 @@ namespace HeavyMetalMachines.UnityUI
 			RawImage rawImage = gameObject.AddComponent<RawImage>();
 			rawImage.SetAlpha(0f);
 			rawImage.rectTransform.sizeDelta = component.localSize;
-			Canvas canvas = gameObject.AddComponent<Canvas>();
-			canvas.overrideSorting = true;
-			canvas.sortingOrder = this._sortingOrder;
-			canvas.worldCamera = UICamera.mainCamera;
-			canvas.planeDistance = UICamera.mainCamera.farClipPlane - 1f;
+			this._canvas = gameObject.AddComponent<Canvas>();
+			this._canvas.overrideSorting = true;
+			this._parentPanel = base.GetComponentInParent<UIPanel>();
+			this._canvas.sortingOrder = this._parentPanel.sortingOrder;
+			this._canvas.worldCamera = UICamera.mainCamera;
+			this._canvas.planeDistance = UICamera.mainCamera.farClipPlane - 1f;
 			gameObject.AddComponent<GraphicRaycaster>();
 		}
 
+		private void LateUpdate()
+		{
+			if (!this._checkAlphaEveryFrame)
+			{
+				return;
+			}
+			bool flag = this._parentPanel.alpha > 0.001f;
+			if (flag != this._canvas.enabled)
+			{
+				this._canvas.enabled = flag;
+			}
+		}
+
 		[SerializeField]
-		private int _sortingOrder = 1000;
+		private bool _checkAlphaEveryFrame;
+
+		private Canvas _canvas;
+
+		private UIPanel _parentPanel;
 	}
 }

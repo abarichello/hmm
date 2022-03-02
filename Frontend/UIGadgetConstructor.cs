@@ -1,12 +1,17 @@
 ﻿using System;
 using Assets.Standard_Assets.Scripts.HMM.SFX;
-using HeavyMetalMachines.Car;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Combat.Gadget;
-using HeavyMetalMachines.Options;
-using HeavyMetalMachines.Utils;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Input;
+using HeavyMetalMachines.Input.ControllerInput;
+using HeavyMetalMachines.Presenting;
+using HeavyMetalMachines.Presenting.Unity;
+using Hoplon.Input;
+using Hoplon.Input.Business;
 using Pocketverse;
 using Pocketverse.MuralContext;
+using UniRx;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Frontend
@@ -27,21 +32,38 @@ namespace HeavyMetalMachines.Frontend
 
 		private void Start()
 		{
-			GameHubBehaviour.Hub.Options.Controls.OnKeyChangedCallback += this.OnKeyChangedCallback;
-			GameHubBehaviour.Hub.Options.Controls.OnResetDefaultCallback += this.OnKeyDefaultReset;
-			GameHubBehaviour.Hub.Options.Controls.OnResetPrimaryDefaultCallback += this.OnKeyDefaultReset;
-			GameHubBehaviour.Hub.Options.Controls.OnResetSecondaryDefaultCallback += this.OnKeyDefaultReset;
-			GameHubBehaviour.Hub.GuiScripts.Esc.OnControlModeChangedCallback += this.OnControlModeChangedCallback;
+			this._inputBindNotifierDisposable = ObservableExtensions.Subscribe<int>(Observable.Do<int>(this._inputBindNotifier.ObserveBind(), delegate(int actionId)
+			{
+				this.OnKeyChangedCallback(actionId);
+			}));
+			this._inputBindResetDefaultNotifierDisposable = ObservableExtensions.Subscribe<Unit>(Observable.Do<Unit>(this._inputBindNotifier.ObserveResetDefault(), delegate(Unit _)
+			{
+				this.ReloadKeys();
+			}));
+			this._inputActiveDeviceChangeNotifierDisposable = ObservableExtensions.Subscribe<InputDevice>(Observable.Do<InputDevice>(this._inputActiveDeviceChangeNotifier.ObserveActiveDeviceChange(), delegate(InputDevice activeDevice)
+			{
+				this.ReloadKeys();
+			}));
 		}
 
 		public override void OnDestroy()
 		{
 			base.OnDestroy();
-			GameHubBehaviour.Hub.Options.Controls.OnKeyChangedCallback -= this.OnKeyChangedCallback;
-			GameHubBehaviour.Hub.Options.Controls.OnResetDefaultCallback -= this.OnKeyDefaultReset;
-			GameHubBehaviour.Hub.Options.Controls.OnResetPrimaryDefaultCallback -= this.OnKeyDefaultReset;
-			GameHubBehaviour.Hub.Options.Controls.OnResetSecondaryDefaultCallback -= this.OnKeyDefaultReset;
-			GameHubBehaviour.Hub.GuiScripts.Esc.OnControlModeChangedCallback -= this.OnControlModeChangedCallback;
+			if (this._inputBindNotifierDisposable != null)
+			{
+				this._inputBindNotifierDisposable.Dispose();
+				this._inputBindNotifierDisposable = null;
+			}
+			if (this._inputBindResetDefaultNotifierDisposable != null)
+			{
+				this._inputBindResetDefaultNotifierDisposable.Dispose();
+				this._inputBindResetDefaultNotifierDisposable = null;
+			}
+			if (this._inputActiveDeviceChangeNotifierDisposable != null)
+			{
+				this._inputActiveDeviceChangeNotifierDisposable.Dispose();
+				this._inputActiveDeviceChangeNotifierDisposable = null;
+			}
 		}
 
 		public override void ChangeWindowVisibility(bool visible)
@@ -56,7 +78,7 @@ namespace HeavyMetalMachines.Frontend
 
 		public void OnCleanup(CleanupMessage msg)
 		{
-			UnityEngine.Object.DestroyImmediate(base.gameObject);
+			Object.DestroyImmediate(base.gameObject);
 		}
 
 		public void OnPlayerBuildComplete(PlayerBuildComplete evt)
@@ -110,87 +132,71 @@ namespace HeavyMetalMachines.Frontend
 
 		private void ReloadKeys()
 		{
-			this.OnKeyChangedCallback(this.CustomGadget0.ControlAction);
-			this.OnKeyChangedCallback(this.CustomGadget1.ControlAction);
-			this.OnKeyChangedCallback(this.CustomGadget2.ControlAction);
-			this.OnKeyChangedCallback(this.NitroGadget.ControlAction);
+			this.OnKeyChangedCallback(5);
+			this.OnKeyChangedCallback(6);
+			this.OnKeyChangedCallback(15);
+			this.OnKeyChangedCallback(7);
 		}
 
-		private void OnKeyDefaultReset()
+		private void OnKeyChangedCallback(ControllerInputActions controlAction)
 		{
-			this.ReloadKeys();
-		}
-
-		private void OnControlModeChangedCallback(CarInput.DrivingStyleKind drivingStyleKind)
-		{
-			this.ReloadKeys();
-		}
-
-		private void OnKeyChangedCallback(ControlAction controlAction)
-		{
-			KeyCode keyCode;
-			if (ControlOptions.IsMouseInput(controlAction, out keyCode))
+			if (!this.IsValidActionId(controlAction))
 			{
-				Sprite sprite = null;
-				switch (keyCode)
-				{
-				case KeyCode.Mouse0:
-					sprite = this.Mouse0Sprite;
-					break;
-				case KeyCode.Mouse1:
-					sprite = this.Mouse1Sprite;
-					break;
-				case KeyCode.Mouse2:
-					sprite = this.Mouse2Sprite;
-					break;
-				default:
-					HeavyMetalMachines.Utils.Debug.Assert(false, string.Format("UIGadgetContructor.OnKeyChangedCallback - Invalid mouse input [{0}]", keyCode), HeavyMetalMachines.Utils.Debug.TargetTeam.All);
-					break;
-				}
-				this.SetSpriteKey(controlAction, sprite);
+				return;
 			}
-			else if (ControlOptions.IsUsingControllerJoystick(GameHubBehaviour.Hub))
+			ISprite sprite;
+			string keyText;
+			if (this._inputTranslation.TryToGetInputActionActiveDeviceAssetOrFallbackToTranslation(controlAction, ref sprite, ref keyText))
 			{
-				Sprite joystickShortcutIcon = GameHubBehaviour.Hub.GuiScripts.JoystickShortcutIcons.GetJoystickShortcutIcon(ControlOptions.GetText(controlAction, ControlOptions.ControlActionInputType.Secondary));
-				this.SetSpriteKey(controlAction, joystickShortcutIcon);
+				Sprite sprite2 = (sprite as UnitySprite).GetSprite();
+				this.SetSpriteKey(controlAction, sprite2);
 			}
 			else
 			{
-				string textlocalized = ControlOptions.GetTextlocalized(controlAction, ControlOptions.ControlActionInputType.Primary);
-				if (controlAction == this.CustomGadget0.ControlAction)
-				{
-					this.CustomGadget0.UpdateKey(textlocalized);
-				}
-				else if (controlAction == this.CustomGadget1.ControlAction)
-				{
-					this.CustomGadget1.UpdateKey(textlocalized);
-				}
-				else if (controlAction == this.CustomGadget2.ControlAction)
-				{
-					this.CustomGadget2.UpdateKey(textlocalized);
-				}
-				else if (controlAction == this.NitroGadget.ControlAction)
-				{
-					this.NitroGadget.UpdateKey(textlocalized);
-				}
+				this.SetStringKey(controlAction, keyText);
 			}
 		}
 
-		private void SetSpriteKey(ControlAction controlAction, Sprite sprite)
+		private bool IsValidActionId(ControllerInputActions controlAction)
 		{
-			if (controlAction == this.CustomGadget0.ControlAction)
+			return controlAction == 5 || controlAction == 6 || controlAction == 7 || controlAction == 15;
+		}
+
+		private void SetStringKey(ControllerInputActions controlAction, string keyText)
+		{
+			if (controlAction == 5)
+			{
+				this.CustomGadget0.UpdateKey(keyText);
+			}
+			else if (controlAction == 6)
+			{
+				this.CustomGadget1.UpdateKey(keyText);
+			}
+			else if (controlAction == 7)
+			{
+				this.CustomGadget2.UpdateKey(keyText);
+			}
+			else if (controlAction == 15)
+			{
+				this.NitroGadget.UpdateKey(keyText);
+			}
+		}
+
+		private void SetSpriteKey(ControllerInputActions controlAction, Sprite sprite)
+		{
+			if (controlAction == 5)
 			{
 				this.CustomGadget0.UpdateKey(sprite);
 			}
-			else if (controlAction == this.CustomGadget1.ControlAction)
+			else if (controlAction == 6)
 			{
 				this.CustomGadget1.UpdateKey(sprite);
 			}
-			else if (controlAction == this.CustomGadget2.ControlAction)
+			else if (controlAction == 7)
 			{
 				this.CustomGadget2.UpdateKey(sprite);
 			}
-			else if (controlAction == this.NitroGadget.ControlAction)
+			else if (controlAction == 15)
 			{
 				this.NitroGadget.UpdateKey(sprite);
 			}
@@ -259,13 +265,6 @@ namespace HeavyMetalMachines.Frontend
 			return true;
 		}
 
-		public void ResetGadgetState()
-		{
-			this.CustomGadget0.ResetGadgetState();
-			this.CustomGadget1.ResetGadgetState();
-			this.CustomGadget2.ResetGadgetState();
-		}
-
 		private static readonly BitLogger Log = new BitLogger(typeof(UIGadgetConstructor));
 
 		public UIGadgetController CustomGadget0;
@@ -283,12 +282,21 @@ namespace HeavyMetalMachines.Frontend
 		[SerializeField]
 		private GadgetFeedback _sprayGadgetFeedback;
 
-		public Sprite Mouse0Sprite;
-
-		public Sprite Mouse1Sprite;
-
-		public Sprite Mouse2Sprite;
-
 		private CombatData _currentPlayerCombatData;
+
+		[InjectOnClient]
+		private IInputTranslation _inputTranslation;
+
+		[InjectOnClient]
+		private IInputBindNotifier _inputBindNotifier;
+
+		[InjectOnClient]
+		private IInputActiveDeviceChangeNotifier _inputActiveDeviceChangeNotifier;
+
+		private IDisposable _inputBindNotifierDisposable;
+
+		private IDisposable _inputBindResetDefaultNotifierDisposable;
+
+		private IDisposable _inputActiveDeviceChangeNotifierDisposable;
 	}
 }

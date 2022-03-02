@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections;
-using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.VFX;
 using Pocketverse;
 using Pocketverse.MuralContext;
@@ -37,6 +37,7 @@ namespace HeavyMetalMachines.Frontend
 
 		public void Cleanup()
 		{
+			HudDeliveryBombController.Log.Debug("cleanup");
 			this._gameGui = null;
 		}
 
@@ -50,37 +51,52 @@ namespace HeavyMetalMachines.Frontend
 			this.HudDeliveryGuiComponents.WindowGameObject.SetActive(true);
 		}
 
-		private void BombManagerOnPhaseChange(BombScoreBoard.State bombScoreBoardState)
+		private void BombManagerOnPhaseChange(BombScoreboardState bombScoreBoardState)
 		{
+			HudDeliveryBombController.Log.DebugFormat("Entering state {0}", new object[]
+			{
+				bombScoreBoardState
+			});
 			switch (bombScoreBoardState)
 			{
-			case BombScoreBoard.State.Warmup:
-				this.ShowPlayerInfo(false);
-				this.GameGui.ShowGameHud(false);
-				break;
-			case BombScoreBoard.State.PreBomb:
-				this.ShowPlayerInfo(false);
-				this.GameGui.ShowGameHud(true);
-				break;
-			case BombScoreBoard.State.BombDelivery:
-				this.ShowPlayerInfo(false);
-				this.GameGui.ShowGameHud(true);
-				break;
-			case BombScoreBoard.State.PreReplay:
-				this.ShowPlayerInfo(false);
-				this.GameGui.ShowGameHud(false);
-				break;
-			case BombScoreBoard.State.Replay:
-				this.GameGui.ShowGameHud(false);
-				this.ShowPlayerInfo(false);
-				base.StartCoroutine(this.StartReplayAsync());
-				break;
-			case BombScoreBoard.State.Shop:
+			case BombScoreboardState.Warmup:
+				HudDeliveryBombController.Log.Debug("BombManagerOnPhaseChange - Warmup phase.");
 				this.ShowPlayerInfo(false);
 				this.GameGui.ShowGameHud(false);
 				this.HideWindow();
 				break;
-			case BombScoreBoard.State.EndGame:
+			case BombScoreboardState.PreBomb:
+				HudDeliveryBombController.Log.Debug("BombManagerOnPhaseChange - Prebomb phase.");
+				this.ShowPlayerInfo(false);
+				this.GameGui.ShowGameHud(true);
+				this.HideWindow();
+				break;
+			case BombScoreboardState.BombDelivery:
+				HudDeliveryBombController.Log.Debug("BombManagerOnPhaseChange - Delivery phase.");
+				this.ShowPlayerInfo(false);
+				this.GameGui.ShowGameHud(true);
+				this.HideWindow();
+				break;
+			case BombScoreboardState.PreReplay:
+				HudDeliveryBombController.Log.Debug("BombManagerOnPhaseChange - PreReplay phase.");
+				this.ShowPlayerInfo(false);
+				this.GameGui.ShowGameHud(false);
+				this.HideWindow();
+				break;
+			case BombScoreboardState.Replay:
+				HudDeliveryBombController.Log.Debug("BombManagerOnPhaseChange - Replay phase.");
+				this.GameGui.ShowGameHud(false);
+				this.ShowPlayerInfo(false);
+				base.StartCoroutine(this.StartReplayAsync());
+				break;
+			case BombScoreboardState.Shop:
+				HudDeliveryBombController.Log.Debug("BombManagerOnPhaseChange - Shop phase.");
+				this.ShowPlayerInfo(false);
+				this.GameGui.ShowGameHud(false);
+				this.HideWindow();
+				break;
+			case BombScoreboardState.EndGame:
+				HudDeliveryBombController.Log.Debug("BombManagerOnPhaseChange - EndGame phase.");
 				this.ShowPlayerInfo(false);
 				this.GameGui.ShowGameHud(false);
 				this.HideWindow();

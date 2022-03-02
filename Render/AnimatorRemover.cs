@@ -1,6 +1,7 @@
 ﻿using System;
 using Pocketverse;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.SceneManagement;
 
 namespace HeavyMetalMachines.Render
@@ -9,25 +10,25 @@ namespace HeavyMetalMachines.Render
 	{
 		private void Awake()
 		{
-			SceneManager.sceneLoaded += this.OnSceneLoaded;
+			SceneManager.sceneLoaded += new UnityAction<Scene, LoadSceneMode>(this.OnSceneLoaded);
 		}
 
 		private void OnSceneLoaded(Scene arg0, LoadSceneMode arg1)
 		{
-			if (GameHubBehaviour.Hub.Net.IsClient())
+			if (GameHubBehaviour.Hub.Net.IsClient() || GameHubBehaviour.Hub.Net.IsTest())
 			{
 				return;
 			}
-			Animator[] array = UnityEngine.Object.FindObjectsOfType<Animator>();
+			Animator[] array = Object.FindObjectsOfType<Animator>();
 			for (int i = 0; i < array.Length; i++)
 			{
-				UnityEngine.Object.Destroy(array[i]);
+				Object.Destroy(array[i]);
 			}
 		}
 
 		private void OnDestroy()
 		{
-			SceneManager.sceneLoaded -= this.OnSceneLoaded;
+			SceneManager.sceneLoaded -= new UnityAction<Scene, LoadSceneMode>(this.OnSceneLoaded);
 		}
 	}
 }

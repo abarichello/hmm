@@ -1,8 +1,10 @@
 ﻿using System;
-using HeavyMetalMachines.Tutorial;
+using ClientAPI.Service;
+using HeavyMetalMachines.Localization;
+using HeavyMetalMachines.Swordfish;
+using HeavyMetalMachines.Welcome;
 using Pocketverse;
 using Pocketverse.MuralContext;
-using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace HeavyMetalMachines.Frontend
@@ -11,62 +13,77 @@ namespace HeavyMetalMachines.Frontend
 	{
 		protected override void OnStateEnabled()
 		{
+			this._swordfishLog = GameHubBehaviour.Hub.Swordfish.Log;
+			this._swordfishMessage = GameHubBehaviour.Hub.Swordfish.Msg;
 			this.Cleanup();
-			if (!string.IsNullOrEmpty(this.RequiredTutorialForMatchWithBots) && GameHubBehaviour.Hub.TutorialHub.TutorialControllerInstance.HasDoneStep(this.RequiredTutorialForMatchWithBots))
-			{
-				this.StartCustomWithBotsMatch();
-				return;
-			}
+			GameHubBehaviour.Hub.ClientApi.WebServiceRequestTimeout += this.ClientApiOnWebServiceRequestTimeout;
 			this.StartLoadingAndGoToTutorialArena();
 		}
 
-		public void StartLoadingAndGoToTutorialArena()
+		protected override void OnStateDisabled()
 		{
-			GameHubBehaviour.Hub.Swordfish.Log.BILogClient(ClientBITags.TutorialWaitingMatchmaking, true);
-			GameHubBehaviour.Hub.Swordfish.Msg.Matchmaking.OnMatchStartedEvent += this.OnTutorialMatchStarted;
-			string config = string.Format("Level={0}:TutorialPlayer={1}", GameHubBehaviour.Hub.SharedConfigs.TutorialConfig.TutorialSceneName, GameHubBehaviour.Hub.User.UserSF.UniversalID);
-			GameHubBehaviour.Hub.Swordfish.Msg.Matchmaking.StartMatch(new string[]
+			GameHubBehaviour.Hub.ClientApi.WebServiceRequestTimeout -= this.ClientApiOnWebServiceRequestTimeout;
+		}
+
+		private void ClientApiOnWebServiceRequestTimeout(object sender, WebServiceRequestTimeoutArgs e)
+		{
+			MatchmakingTutorial.Log.WarnFormat("ClientApiOnWebServiceRequestTimeout. Api={0} Service={1}", new object[]
+			{
+				e.ApiName,
+				e.ServiceName
+			});
+			this._swordfishMessage.Matchmaking.OnMatchStartedEvent -= this.OnTutorialMatchStarted;
+			this.TryToShowTimeoutMessage();
+		}
+
+		private void StartLoadingAndGoToTutorialArena()
+		{
+			this._swordfishLog.BILogClient(48, true);
+			this._swordfishMessage.Matchmaking.OnMatchStartedEvent += this.OnTutorialMatchStarted;
+			string config = "MatchKind:Tutorial:ArenaIndex:0";
+			this._swordfishMessage.Matchmaking.StartMatch(new string[]
 			{
 				GameHubBehaviour.Hub.User.UserSF.UniversalID
 			}, config, new Action(this.OnMatchError));
 		}
 
-		public void OnMatchError()
+		private void OnMatchError()
 		{
-			GameHubBehaviour.Hub.Swordfish.Msg.Matchmaking.OnMatchStartedEvent -= this.OnTutorialMatchStarted;
-			Guid confirmWindowGuid = Guid.NewGuid();
+			this._swordfishLog.BILogClient(72, true);
+			this._swordfishMessage.Matchmaking.OnMatchStartedEvent -= this.OnTutorialMatchStarted;
+			this.TryToShowTimeoutMessage();
+		}
+
+		private void TryToShowTimeoutMessage()
+		{
+			if (this._errorMessageId != Guid.Empty)
+			{
+				return;
+			}
+			this._errorMessageId = Guid.NewGuid();
 			ConfirmWindowProperties properties = new ConfirmWindowProperties
 			{
-				Guid = confirmWindowGuid,
-				QuestionText = string.Format(Language.Get(this.MatchMakingTutorialErrorDraftFeedback, TranslationSheets.Tutorial), new object[0]),
-				OkButtonText = Language.Get("Ok", "GUI"),
+				IsStackable = false,
+				Guid = this._errorMessageId,
+				QuestionText = Language.Get("LostMessageHubConnection", TranslationContext.GUI),
+				OkButtonText = Language.Get("Ok", TranslationContext.GUI),
 				OnOk = delegate()
 				{
-					GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.HideConfirmWindow(confirmWindowGuid);
-					GameHubBehaviour.Hub.Quit();
+					GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.HideConfirmWindow(this._errorMessageId);
+					GameHubBehaviour.Hub.EndSession("MatchmakingTutorial: WebServiceRequestTimeout");
 				}
 			};
 			GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.OpenConfirmWindow(properties);
 		}
 
-		public void StartCustomWithBotsMatch()
-		{
-			GameHubBehaviour.Hub.Swordfish.Msg.Matchmaking.OnMatchStartedEvent += this.OnTutorialMatchStarted;
-			GameHubBehaviour.Hub.Swordfish.Msg.Matchmaking.StartMatch(new string[]
-			{
-				GameHubBehaviour.Hub.User.UserSF.UniversalID
-			}, "CustomWithBotsPlayerID=" + GameHubBehaviour.Hub.User.UserSF.Id, new Action(this.OnMatchError));
-		}
-
 		private void OnTutorialMatchStarted()
 		{
-			GameHubBehaviour.Hub.Swordfish.Log.BILogClient(ClientBITags.TutorialConnectingToMatch, true);
-			GameHubBehaviour.Hub.Swordfish.Msg.ConnectToMatch(this.MainState, null);
-			TutorialController.SavePlayerDoneFirstTutorial();
-			GameHubBehaviour.Hub.Swordfish.Msg.Matchmaking.OnMatchStartedEvent -= this.OnTutorialMatchStarted;
+			this._swordfishLog.BILogClient(49, true);
+			this._swordfishMessage.ConnectToMatch();
+			this._swordfishMessage.Matchmaking.OnMatchStartedEvent -= this.OnTutorialMatchStarted;
 		}
 
-		public void Cleanup()
+		private void Cleanup()
 		{
 			GameHubBehaviour.Hub.User.Bag.CurrentServerIp = null;
 			GameHubBehaviour.Hub.User.Bag.CurrentMatchId = null;
@@ -78,14 +95,12 @@ namespace HeavyMetalMachines.Frontend
 
 		public static readonly BitLogger Log = new BitLogger(typeof(MatchmakingTutorial));
 
-		public MainMenu MainState;
+		public WelcomeGameStateBehaviour WelcomeGameState;
 
-		public GameState GameState;
+		private SwordfishLog _swordfishLog;
 
-		public string MatchMakingTutorialErrorDraftFeedback = "MatchMakingTutorialErrorDraftFeedback";
+		private SwordfishMessage _swordfishMessage;
 
-		[TutorialDataReference(true)]
-		[Tooltip("If selected none, won't try to start custom with bots")]
-		public string RequiredTutorialForMatchWithBots;
+		private Guid _errorMessageId;
 	}
 }

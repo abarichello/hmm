@@ -85,6 +85,9 @@ namespace HeavyMetalMachines.UnityUI
 			yield break;
 		}
 
+		[SerializeField]
+		private BattlepassComponent _battlepassComponent;
+
 		[Header("[Components]")]
 		[SerializeField]
 		private Text _currentLevelText;
@@ -110,16 +113,19 @@ namespace HeavyMetalMachines.UnityUI
 		[SerializeField]
 		private GameObject _boosterGameObject;
 
+		[SerializeField]
+		private Selectable _xpTooltipSelectable;
+
 		[Header("[Configs]")]
 		[SerializeField]
 		private Color _xpTextColor;
 
-		[Range(0f, 1f)]
 		[SerializeField]
+		[Range(0f, 1f)]
 		private float _minProgressBarValue;
 
-		[Range(0f, 1f)]
 		[SerializeField]
+		[Range(0f, 1f)]
 		private float _maxProgressBarValue = 1f;
 
 		private int[] _maxXpPerLevel;

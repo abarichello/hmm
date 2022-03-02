@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids;
 using HeavyMetalMachines.Car;
 using HeavyMetalMachines.Frontend;
+using HeavyMetalMachines.Infra.Context;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Input.ControllerInput;
 using HeavyMetalMachines.Match;
-using HeavyMetalMachines.Options;
 using Pocketverse;
 using UnityEngine;
 
@@ -37,7 +39,7 @@ namespace HeavyMetalMachines.Combat
 
 		private void Update()
 		{
-			if (GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreBoard.State.BombDelivery || SpectatorController.IsSpectating || GameHubBehaviour.Hub.GuiScripts.Esc.IsWindowVisible() || GameHubBehaviour.Hub.GuiScripts.AfkControllerGui.IsWindowVisible() || !this.IsPlayerAlive())
+			if (GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreboardState.BombDelivery || SpectatorController.IsSpectating || GameHubBehaviour.Hub.GuiScripts.Esc.IsWindowVisible() || GameHubBehaviour.Hub.GuiScripts.AfkControllerGui.IsWindowVisible() || !this.IsPlayerAlive())
 			{
 				if (this._active)
 				{
@@ -46,7 +48,7 @@ namespace HeavyMetalMachines.Combat
 				}
 				return;
 			}
-			bool button = ControlOptions.GetButton(ControlAction.Ping);
+			bool button = this._inputActionPoller.GetButton(23);
 			if (button && !this._active)
 			{
 				this._active = true;
@@ -262,6 +264,9 @@ namespace HeavyMetalMachines.Combat
 		private int _lastObjectIndex = -1;
 
 		private CombatObject _combatObject;
+
+		[InjectOnClient]
+		private IControllerInputActionPoller _inputActionPoller;
 
 		public enum BombCarrierState
 		{

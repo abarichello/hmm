@@ -1,20 +1,47 @@
 ﻿using System;
 using System.Collections;
 using System.Diagnostics;
+using System.Linq;
 using FMod;
+using HeavyMetalMachines.Achievements;
+using HeavyMetalMachines.Arena;
 using HeavyMetalMachines.Audio;
+using HeavyMetalMachines.BackendCommunication;
+using HeavyMetalMachines.GameCamera;
+using HeavyMetalMachines.GameCamera.Behaviour;
+using HeavyMetalMachines.Infra.Context;
+using HeavyMetalMachines.Localization;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Matches;
+using HeavyMetalMachines.Memory;
 using HeavyMetalMachines.Options;
+using HeavyMetalMachines.Playback;
+using HeavyMetalMachines.PlayerTooltip.Presenting;
+using HeavyMetalMachines.Presenting.ContextMenu;
+using HeavyMetalMachines.Social.FriendDataUpdater.Business;
+using HeavyMetalMachines.Social.Profile.Business;
+using HeavyMetalMachines.Swordfish;
 using HeavyMetalMachines.VFX;
+using Hoplon.ToggleableFeatures;
+using Hoplon.Unity.Loading;
+using JetBrains.Annotations;
 using Pocketverse;
 using Pocketverse.MuralContext;
-using SharedUtils.Loading;
+using UniRx;
 using UnityEngine;
+using UnityEngine.SceneManagement;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
-	public class Game : GameState
+	public class Game : GameState, IStateGame
 	{
+		[Inject]
+		private void InstallContainer(DiContainer container)
+		{
+			this._container = container.ParentContainers.First<DiContainer>();
+		}
+
 		public bool IsTutorial
 		{
 			get
@@ -33,37 +60,42 @@ namespace HeavyMetalMachines.Frontend
 		{
 			if (!this._gameEnded)
 			{
+				GarbageCollector.Enable();
+				this._toggleBackendCalling.Enable();
+				ObservableExtensions.Subscribe<Unit>(this._diContainer.Resolve<IUploadPendingAchievements>().Upload());
 				if (this.OnGameOver != null)
 				{
 					this.OnGameOver(this._hub.Match.State);
 				}
 				this._gameGui.Hud.SetActive(false);
+				this._gameGui.KillFeedController.gameObject.SetActive(false);
 				this._gameEnded = true;
-				if (this._hub.Match.State == MatchData.MatchState.MatchOverBluWins || this._hub.Match.State == MatchData.MatchState.MatchOverRedWins)
-				{
-					if (this._hub.Match.LevelIsTutorial())
-					{
-						return;
-					}
-					int num = (this._hub.Match.State != MatchData.MatchState.MatchOverBluWins) ? 1 : 2;
-					this._hub.GuiScripts.TooltipController.HideWindow();
-					this._gameGui.EndGame = null;
-					this._gameGui.HudWinnerController = null;
-					this._gameGui.HudTabController.DontShowWindowOnGameOver();
-					this.PreloadHudWinnerWindowAsync();
-					this._gameGui.ShowEndGameBackground(new Action(this.ShowHudWinnerWindow));
-				}
-				else if (this._hub.Match.LevelIsTutorial())
+				this._gameGui.HudLifebarController.gameObject.SetActive(false);
+				if (this._hub.Match.LevelIsTutorial())
 				{
 					ControlOptions.UnlockAllControlActions();
 					ControlOptions.LockAllInputs(false);
 				}
+				else if (this._hub.Match.State == MatchData.MatchState.MatchOverBluWins || this._hub.Match.State == MatchData.MatchState.MatchOverRedWins)
+				{
+					this._hub.GuiScripts.TooltipController.HideWindow();
+					this._gameGui.EndGame = null;
+					this._gameGui.HudWinnerController = null;
+					this._gameGui.HudTabController.DontShowWindowOnGameOver();
+					this._playerTooltipPresenter = this._container.Resolve<IPlayerTooltipPresenter>();
+					this._disposables.Add(ObservableExtensions.Subscribe<Unit>(this._playerTooltipPresenter.Initialize()));
+					this._disposables.Add(ObservableExtensions.Subscribe<Unit>(this._contextMenuPresenter.Initialize()));
+					this._contextMenuInitialized = true;
+					this.PreloadHudWinnerWindowAsync();
+					this._gameGui.ShowEndGameBackground(new Action(this.ShowHudWinnerWindow));
+				}
+				this._gameGui.OnEndGame();
 			}
 		}
 
 		private void PreloadEndMatchScreenAsync()
 		{
-			UIWindow.LoadWindow("End_Match_Screen", this._gameGui.transform, new UIWindow.OnLoadDelegate(this.OnLoadEndMatchScreenAsync));
+			this._windowFactory.LoadWindow("End_Match_Screen", this._gameGui.transform, new Action<UIWindow>(this.OnLoadEndMatchScreenAsync));
 		}
 
 		private void OnLoadEndMatchScreenAsync(UIWindow window)
@@ -79,7 +111,7 @@ namespace HeavyMetalMachines.Frontend
 
 		private void PreloadHudWinnerWindowAsync()
 		{
-			UIBundleWindow.OpenWindow(SingletonMonoBehaviour<PanelController>.Instance.MainDynamicParentTransform, "HUDWinner", ref this._hudWinnerUiBundleWindow, new UIBundleWindow.OnLoadDelegate(this.OnLoadHudWinnerWindow), delegate
+			UIBundleWindow.OpenWindow(this._container, SingletonMonoBehaviour<PanelController>.Instance.MainDynamicParentTransform, "HUDWinner", ref this._hudWinnerUiBundleWindow, new UIBundleWindow.OnLoadDelegate(this.OnLoadHudWinnerWindow), delegate
 			{
 				Game.Log.Error("Window was not Load");
 			});
@@ -126,8 +158,8 @@ namespace HeavyMetalMachines.Frontend
 			if (!this._recapStarted && (this._hub.Match.State == MatchData.MatchState.MatchOverBluWins || this._hub.Match.State == MatchData.MatchState.MatchOverRedWins))
 			{
 				this._recapStarted = true;
-				this._hub.Swordfish.Log.BILogClientMatch(ClientBITags.GameEnd, false);
-				this._hub.Swordfish.Log.BILogClientMatch(ClientBITags.RecapStart, false);
+				this._hub.Swordfish.Log.BILogClientMatch(17, false);
+				this._hub.Swordfish.Log.BILogClientMatch(18, false);
 			}
 			this._hudWinnerUiBundleWindow.UnloadWindow();
 			this._hudWinnerUiBundleWindow = null;
@@ -151,14 +183,32 @@ namespace HeavyMetalMachines.Frontend
 			this._hub.User.Bag.CurrentMatchId = null;
 			this._hub.User.Bag.CurrentGroupId = null;
 			this._hub.User.Bag.CurrentPort = 0;
+			Game.Log.DebugFormat("Client Cleared Current server from PlayerBag", new object[0]);
 			this.BackToMain();
 			this._clearCall = false;
 		}
 
 		public void BackToMain()
 		{
-			Application.LoadLevel("Void");
+			if (this._contextMenuInitialized)
+			{
+				ObservableExtensions.Subscribe<Unit>(this._contextMenuPresenter.Dispose());
+				ObservableExtensions.Subscribe<Unit>(this._playerTooltipPresenter.Dispose());
+				this._contextMenuInitialized = false;
+			}
+			GameHubBehaviour.Hub.Match.State = MatchData.MatchState.Nothing;
 			Mural.PostAll(default(CleanupMessage), typeof(ICleanupListener));
+			ScreenResolutionController.SetQualityLevel(ScreenResolutionController.QualityLevels.PreviewItem, false);
+			this.GoToNextState();
+		}
+
+		private void GoToNextState()
+		{
+			if (this._shouldCreateProfile.Get())
+			{
+				base.GoToState(this._profile, false);
+				return;
+			}
 			base.GoToState(this.Menu, false);
 		}
 
@@ -172,7 +222,51 @@ namespace HeavyMetalMachines.Frontend
 			this._isTutorial = this._hub.Match.LevelIsTutorial();
 			this._gameEnded = false;
 			this._recapStarted = false;
+			this._toggleBackendCalling.Disable();
+			UIRoot.SetUiState(UIRoot.UiState.GamePlay);
 			this._hub.UpdateManager.SetRunning(true);
+			GameHubBehaviour.Hub.BombManager.ListenToPhaseChange += this.BombManagerOnListenToPhaseChange;
+			GarbageCollector.Disable();
+			this.InitializeFriendDataUpdater();
+			this._listenerPositionUpdater.Start();
+		}
+
+		private void BombManagerOnListenToPhaseChange(BombScoreboardState scoreState)
+		{
+			if (scoreState == BombScoreboardState.PreBomb || scoreState == BombScoreboardState.Replay)
+			{
+				base.StartCoroutine(this.CollectGC("Game replay started."));
+			}
+		}
+
+		[UsedImplicitly]
+		private IEnumerator CollectGC(string reason)
+		{
+			for (int i = 0; i < 10; i++)
+			{
+				yield return null;
+			}
+			GarbageCollector.Collect(reason);
+			for (int j = 0; j < 10; j++)
+			{
+				yield return null;
+			}
+			yield break;
+		}
+
+		private void InitializeFriendDataUpdater()
+		{
+			this._localFriendDataUpdater = this._container.ResolveId<ILocalFriendDataUpdater>(1);
+			this._friendDataUpdaterDisposable = ObservableExtensions.Subscribe<Unit>(this._localFriendDataUpdater.ExecuteIndefinitely(), delegate(Unit onNext)
+			{
+				Game.Log.Debug("SwordfishLocalFriendDataService onNext");
+			}, delegate(Exception onError)
+			{
+				Game.Log.ErrorFormat("SwordfishLocalFriendDataService Error={0}", new object[]
+				{
+					onError
+				});
+			});
 		}
 
 		protected override void OnMyLevelLoaded()
@@ -182,16 +276,16 @@ namespace HeavyMetalMachines.Frontend
 			{
 				this.ApplyArenaConfig();
 				this._gameGui.Hud.SetActive(true);
-				CarCamera.Singleton.SetMode(CarCamera.CarCameraMode.SkyView);
 			}
-			this._hub.Server.LoadLevel(new Action(this.OnGameLevelLoaded));
+			base.StartCoroutine(this.LoadMatchSceneCoroutine());
+			this._hub.Server.ServerSetNotReadyLocal();
 			this._hub.MatchHistory.WriteMatchStartInfo();
 		}
 
 		private void ApplyArenaConfig()
 		{
-			GameArenaInfo gameArenaInfo = this._hub.ArenaConfig.Arenas[this._hub.Match.ArenaIndex];
-			if (gameArenaInfo == null)
+			IGameArenaInfo currentArena = this._hub.ArenaConfig.GetCurrentArena();
+			if (currentArena == null)
 			{
 				Game.Log.ErrorFormat("Failed to get ArenaInfo for arena {0}", new object[]
 				{
@@ -199,14 +293,13 @@ namespace HeavyMetalMachines.Frontend
 				});
 				return;
 			}
-			CarCamera singleton = CarCamera.Singleton;
-			singleton.CameraInversionTeamAAngleY = (float)gameArenaInfo.CameraInversionTeamAAngleY;
-			singleton.CameraInversionTeamBAngleY = (float)gameArenaInfo.CameraInversionTeamBAngleY;
+			this._gameCameraInversion.SetupArena(currentArena);
+			this._deadBehaviour.SetupArena(currentArena);
 		}
 
 		private void DestroySceneColliders()
 		{
-			Collider[] array = UnityEngine.Object.FindObjectsOfType<Collider>();
+			Collider[] array = Object.FindObjectsOfType<Collider>();
 			for (long num = 0L; num < array.LongLength; num += 1L)
 			{
 				bool flag = true;
@@ -219,15 +312,40 @@ namespace HeavyMetalMachines.Frontend
 					flag &= (layer != 31);
 					if (flag)
 					{
-						UnityEngine.Object.Destroy(array[(int)((IntPtr)num)]);
+						Object.Destroy(array[(int)((IntPtr)num)]);
 					}
 				}
 			}
 		}
 
-		private void OnGameLevelLoaded()
+		private IEnumerator LoadMatchSceneCoroutine()
 		{
+			GameArenaConfig arenaConfig = GameHubBehaviour.Hub.ArenaConfig;
+			string arenaSceneName = arenaConfig.GetSceneName(GameHubBehaviour.Hub.Match.ArenaIndex);
+			Game.Log.DebugFormat("LOADING: client LoadLevel {0}", new object[]
+			{
+				arenaSceneName
+			});
+			this._arenaToken = new LoadingToken(base.GetType());
+			this._arenaToken.AddLoadable(new SceneLoadable(arenaSceneName, true));
+			AsyncRequest<LoadingResult> request = Loading.Engine.LoadToken(this._arenaToken);
+			yield return request;
+			if (LoadStatusExtensions.IsError(request.Result.Status))
+			{
+				Game.Log.ErrorFormat("Loading failed with status: {0}", new object[]
+				{
+					request.Result.Status
+				});
+				yield return LoadingFailedHandler.HandleFailure(request.Result);
+				yield break;
+			}
+			GameHubBehaviour.Hub.Server.ClientSendPlayerLoadingInfo(1f);
+			base.LoadingToken.InheritData(this._arenaToken);
+			this._arenaToken = null;
+			Scene scn = SceneManager.GetSceneByName(arenaSceneName);
+			SceneManager.SetActiveScene(scn);
 			base.StartCoroutine(this.LoadEvents());
+			yield break;
 		}
 
 		private IEnumerator LoadEvents()
@@ -243,7 +361,7 @@ namespace HeavyMetalMachines.Frontend
 					yield return null;
 				}
 			}
-			PlaybackSystem.PlayAndRecordPlayback();
+			this._playback.Play();
 			if (GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.HORTA))
 			{
 				this._levelLoaded = true;
@@ -251,25 +369,21 @@ namespace HeavyMetalMachines.Frontend
 				this.OnEventsLoaded();
 				GameHubBehaviour.Hub.GameTime.SetTimeZero();
 				GameHubBehaviour.Hub.Server.ServerSet();
-				this.Horta.StatePlayback.Running = true;
-				this.Horta.Behaviour.Running = true;
+				this._horta.StatePlayback.Running = true;
+				this._horta.Behaviour.Running = true;
 				this.OnEventsExecuted();
 				yield break;
 			}
 			this._hub.Server.GetEvents(new Action(this.OnEventsLoaded), new Action(this.OnEventsExecuted));
 			if (!this._isTutorial)
 			{
-				this._hub.Swordfish.Log.BILogClientMatchMsg(ClientBITags.GameStart, string.Format("IsReconnect={0}", this._hub.User.IsReconnecting), false);
+				this._hub.Swordfish.Log.BILogClientMatchMsg(16, string.Format("IsReconnect={0}", this._hub.User.IsReconnecting), false);
 				this._hub.Swordfish.MatchBI.ClientAnnouncerConfigured(0);
+				this._clientAudioBiLogger.LogAudioOptions(this._hub.Options.Audio);
 			}
 			this.DestroySceneColliders();
 			this._levelLoaded = true;
-			base.StartCoroutine(this.CheckEventsExecutionTimeout());
-			yield break;
-		}
-
-		private IEnumerator CheckEventsExecutionTimeout()
-		{
+			yield return null;
 			yield return base.StartCoroutine(UnityUtils.WaitForSecondsRealTime(120f));
 			if (this._eventsLoaded && this._eventsExecuted)
 			{
@@ -284,52 +398,64 @@ namespace HeavyMetalMachines.Frontend
 		private void OnEventsLoaded()
 		{
 			this._eventsLoaded = true;
+			Game.Log.Debug("LOADING: Events loaded");
 			if (!this._hub.Match.LevelIsTutorial())
 			{
-				this._hub.GuiScripts.Loading.ChangeText(Language.Get("LOADING_WAITING_PLAYERS", TranslationSheets.GUI));
+				this._hub.GuiScripts.Loading.ChangeText(Language.Get("LOADING_WAITING_PLAYERS", TranslationContext.GUI));
 			}
-			base.StartCoroutine(this.WaitEventExecution());
-		}
-
-		private IEnumerator WaitEventExecution()
-		{
-			yield return base.StartCoroutine(UnityUtils.WaitForSecondsRealTime(1f));
-			AsyncOperation asyncOperation = Resources.UnloadUnusedAssets();
-			yield return asyncOperation;
-			yield return base.StartCoroutine(UnityUtils.WaitForSecondsRealTime(1f));
-			GC.Collect();
-			yield break;
 		}
 
 		private void OnEventsExecuted()
 		{
 			this._eventsExecuted = true;
-			CarCamera.Singleton.ForceSnappingToTarget();
+			this._gameCamera.SnapToTarget();
+			Game.Log.Debug("LOADING: Events executed");
+			ObservableExtensions.Subscribe<bool>(this._restoreCurrentMatch.TryRestore());
 			this._hub.Server.DispatchReliable(new byte[0]).OnServerPlayerReady();
 		}
 
 		protected override void OnStateDisabled()
 		{
-			this._hub.UpdateManager.SetRunning(false);
+			GameHubBehaviour.Hub.BombManager.ListenToPhaseChange -= this.BombManagerOnListenToPhaseChange;
+			GarbageCollector.Enable();
+			if (GameHubBehaviour.Hub.GameTime is NetworkTime)
+			{
+				((NetworkTime)GameHubBehaviour.Hub.GameTime).UpdateTimeScale(0L, 0, 0, 1f);
+			}
+			GameHubBehaviour.Hub.UpdateManager.SetRunning(false);
 			FMODAudioManager.UnloadAllPreloaded();
 			if (this._gameEnded && !this._isTutorial)
 			{
 				if (this._recapStarted)
 				{
-					this._hub.Swordfish.Log.BILogClientMatch(ClientBITags.RecapEnd, false);
+					this._hub.Swordfish.Log.BILogClientMatch(19, false);
 				}
 				else
 				{
-					this._hub.Swordfish.Log.BILogClientMatch(ClientBITags.GameEnd, false);
+					this._hub.Swordfish.Log.BILogClientMatch(17, false);
 				}
 			}
+			if (this._friendDataUpdaterDisposable != null)
+			{
+				this._friendDataUpdaterDisposable.Dispose();
+				this._friendDataUpdaterDisposable = null;
+			}
+			this._disposables.Dispose();
+			if (this._playerTooltipPresenter != null)
+			{
+				this._playerTooltipPresenter.Dispose();
+				this._playerTooltipPresenter = null;
+			}
+			this._hudWinnerUiBundleWindow = null;
+			this._gameGui.HudWinnerController = null;
 			this._gameGui = null;
 			this.FinishedLoading = null;
+			this._listenerPositionUpdater.Stop();
 		}
 
 		public bool IsLoading()
 		{
-			return !this._levelLoaded || !this._eventsLoaded || !this._eventsExecuted || LoadingManager.IsLoading || !this._hub.Server.Ready;
+			return !this._levelLoaded || !this._eventsLoaded || !this._eventsExecuted || !Loading.Engine.IsIdle || !this._hub.Server.Ready;
 		}
 
 		private void Update()
@@ -346,7 +472,7 @@ namespace HeavyMetalMachines.Frontend
 				}
 				Game.Log.Info("LOADING: Finished loading game");
 				this._isLoading = false;
-				CarCamera.Singleton.enabled = true;
+				this._gameCameraEngine.Enable();
 				if (!this._hub.Match.LevelIsTutorial())
 				{
 					if (this._hub.GuiScripts.Loading.IsLoading)
@@ -368,11 +494,11 @@ namespace HeavyMetalMachines.Frontend
 					this._hub.GuiScripts.LoadingVersus.HideWindow();
 					ControlOptions.UnlockAllControlActions();
 					ControlOptions.LockAllInputs(false);
-					HudWindowManager.Instance.State = HudWindowManager.GuiGameState.Game;
+					HudWindowManager.Instance.State = GuiGameState.Game;
 				}
 				else
 				{
-					HudWindowManager.Instance.State = HudWindowManager.GuiGameState.Game;
+					HudWindowManager.Instance.State = GuiGameState.Game;
 				}
 			}
 			MatchData.MatchState state = this._hub.Match.State;
@@ -397,7 +523,60 @@ namespace HeavyMetalMachines.Frontend
 
 		public MainMenu Menu;
 
-		public HORTAComponent Horta;
+		[SerializeField]
+		private Profile _profile;
+
+		[Inject]
+		private HORTAComponent _horta;
+
+		[Inject]
+		private IPlayback _playback;
+
+		[Inject]
+		private IRestoreCurrentMatch _restoreCurrentMatch;
+
+		[Inject]
+		private IGameCamera _gameCamera;
+
+		[Inject]
+		private IGameCameraEngine _gameCameraEngine;
+
+		[Inject]
+		private IGameCameraInversion _gameCameraInversion;
+
+		[Inject]
+		private IPlayerDeadBehaviour _deadBehaviour;
+
+		[Inject]
+		private IShouldCreateProfile _shouldCreateProfile;
+
+		[Inject]
+		private IClientAudioBiLogger _clientAudioBiLogger;
+
+		[Inject]
+		private IContextMenuPresenter _contextMenuPresenter;
+
+		[Inject]
+		private IListenerPositionUpdater _listenerPositionUpdater;
+
+		[Inject]
+		private IIsFeatureToggled _isFeatureToggled;
+
+		[Inject]
+		private IToggleBackendCalling _toggleBackendCalling;
+
+		[Inject]
+		private DiContainer _diContainer;
+
+		private DiContainer _container;
+
+		private IPlayerTooltipPresenter _playerTooltipPresenter;
+
+		private ILocalFriendDataUpdater _localFriendDataUpdater;
+
+		private IDisposable _friendDataUpdaterDisposable;
+
+		private CompositeDisposable _disposables = new CompositeDisposable();
 
 		private HMMHub _hub;
 
@@ -415,13 +594,18 @@ namespace HeavyMetalMachines.Frontend
 
 		private bool _eventsExecuted;
 
+		private bool _contextMenuInitialized;
+
+		private LoadingToken _arenaToken;
+
 		private GameGui _gameGui;
+
+		[Inject]
+		private IUIWindowFactory _windowFactory;
 
 		private UIBundleWindow _hudWinnerUiBundleWindow;
 
 		private bool _clearCall;
-
-		private MatchController match;
 
 		public delegate void FinishedLoadingListener();
 

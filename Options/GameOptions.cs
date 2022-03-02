@@ -1,20 +1,26 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Linq;
 using Assets.Standard_Assets.Scripts.HMM.BI;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids;
+using HeavyMetalMachines.Crossplay;
+using HeavyMetalMachines.Infra.ScriptableObjects;
+using HeavyMetalMachines.Localization;
+using HeavyMetalMachines.Localization.Business;
+using Hoplon.Localization.TranslationTable;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Options
 {
 	public class GameOptions : GameHubBehaviour
 	{
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		public event Action<int> ListenToMovementModeChanged;
-
 		private void Start()
 		{
-			this._playerIndicatorLogBi = new PlayerIndicatorLogBI(GameHubBehaviour.Hub);
+			this._playerIndicatorLogBi = new PlayerIndicatorLogBI(GameHubBehaviour.Hub, this._optionsScriptableObject);
+			this._objectiveIndicatorLogBi = new ObjectiveIndicatorConfigurationsLogBI(GameHubBehaviour.Hub, this._optionsScriptableObject);
 		}
 
 		public bool TutorialEnabledHud
@@ -111,9 +117,9 @@ namespace HeavyMetalMachines.Options
 			{
 				return new string[]
 				{
-					Language.Get("GAME_MOVEMENT_SIMULATOR", TranslationSheets.Options),
-					Language.Get("GAME_MOVEMENT_CONTROLLER", TranslationSheets.Options),
-					Language.Get("GAME_MOVEMENT_FOLLOWMOUSE", TranslationSheets.Options)
+					Language.Get("GAME_MOVEMENT_SIMULATOR", TranslationContext.Options),
+					Language.Get("GAME_MOVEMENT_CONTROLLER", TranslationContext.Options),
+					Language.Get("GAME_MOVEMENT_FOLLOWMOUSE", TranslationContext.Options)
 				};
 			}
 		}
@@ -126,22 +132,12 @@ namespace HeavyMetalMachines.Options
 			}
 			set
 			{
-				int num = 2;
-				if (value != num)
-				{
-					value = num;
-					this.WasUsingControllerJoystick = true;
-				}
 				if (this._movementModeIndex == value && !this.ForceValues)
 				{
 					return;
 				}
 				this._movementModeIndex = value;
 				this.HasPendingChanges = true;
-				if (this.ListenToMovementModeChanged != null)
-				{
-					this.ListenToMovementModeChanged(value);
-				}
 				if (this.WasUsingControllerJoystick)
 				{
 					this.Apply();
@@ -204,7 +200,7 @@ namespace HeavyMetalMachines.Options
 		{
 			get
 			{
-				return this.SystemLanguageToIndex(Application.systemLanguage);
+				return LanguageLocalizationOptions.SystemLanguageToIndex(Application.systemLanguage);
 			}
 		}
 
@@ -212,17 +208,8 @@ namespace HeavyMetalMachines.Options
 		{
 			get
 			{
-				return new string[]
-				{
-					Language.Get("GAME_LANGUAGE_VALUES_EN", TranslationSheets.Options),
-					Language.Get("GAME_LANGUAGE_VALUES_BR", TranslationSheets.Options),
-					Language.Get("GAME_LANGUAGE_VALUES_RU", TranslationSheets.Options),
-					Language.Get("GAME_LANGUAGE_VALUES_DE", TranslationSheets.Options),
-					Language.Get("GAME_LANGUAGE_VALUES_FR", TranslationSheets.Options),
-					Language.Get("GAME_LANGUAGE_VALUES_ES", TranslationSheets.Options),
-					Language.Get("GAME_LANGUAGE_VALUES_TR", TranslationSheets.Options),
-					Language.Get("GAME_LANGUAGE_VALUES_PL", TranslationSheets.Options)
-				};
+				return (from locale in this._getSupportedLanguages.GetAllLocale()
+				select this._getLanguageLocale.GetLocalized(locale)).ToArray<string>();
 			}
 		}
 
@@ -264,6 +251,23 @@ namespace HeavyMetalMachines.Options
 				{
 					this.ListenToShowGadgetsLifebarChanged(this._showGadgetsLifebar);
 				}
+			}
+		}
+
+		public bool CrossplayEnable
+		{
+			get
+			{
+				return this._crossplayEnable;
+			}
+			set
+			{
+				if (value == this._crossplayEnable && !this.ForceValues)
+				{
+					return;
+				}
+				this._crossplayEnable = value;
+				this.HasPendingChanges = true;
 			}
 		}
 
@@ -443,27 +447,175 @@ namespace HeavyMetalMachines.Options
 
 		public float GetConverterPlayerIndicatorAlpha()
 		{
-			float num = 0.804f;
-			return this._playerIndicatorAlpha * num + 0.196f;
+			float num = this._optionsScriptableObject.PlayerIndicatorMaxAlpha - this._optionsScriptableObject.PlayerIndicatorMinAlpha;
+			return this._playerIndicatorAlpha * num + this._optionsScriptableObject.PlayerIndicatorMinAlpha;
+		}
+
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
+		public event Action<bool> ShowObjectiveIndicatorChanged;
+
+		public bool ShowObjectiveIndicator
+		{
+			get
+			{
+				return this._showObjectiveIndicator;
+			}
+			set
+			{
+				if (value == this._showObjectiveIndicator && !this.ForceValues)
+				{
+					return;
+				}
+				this._showObjectiveIndicator = value;
+				if (this.ShowObjectiveIndicatorChanged != null)
+				{
+					this.ShowObjectiveIndicatorChanged(this._showObjectiveIndicator);
+				}
+				this.HasPendingChanges = true;
+			}
+		}
+
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
+		public event Action<float> ObjectiveIndicatorAlphaChanged;
+
+		public float ObjectiveIndicatorAlpha
+		{
+			get
+			{
+				return this._objectiveIndicatorAlpha;
+			}
+			set
+			{
+				if (Math.Abs(value - this._objectiveIndicatorAlpha) < 0.001f && !this.ForceValues)
+				{
+					return;
+				}
+				this._objectiveIndicatorAlpha = value;
+				if (this.ObjectiveIndicatorAlphaChanged != null)
+				{
+					this.ObjectiveIndicatorAlphaChanged(this.GetConverterObjectiveIndicatorAlpha());
+				}
+				this.HasPendingChanges = true;
+			}
+		}
+
+		public float GetConverterObjectiveIndicatorAlpha()
+		{
+			float num = this._optionsScriptableObject.ObjectiveIndicatorMaxAlpha - this._optionsScriptableObject.ObjectiveIndicatorMinAlpha;
+			return this._objectiveIndicatorAlpha * num + this._optionsScriptableObject.ObjectiveIndicatorMinAlpha;
+		}
+
+		public string[] ObjectiveIndicatorTypeNames
+		{
+			get
+			{
+				return new string[]
+				{
+					Language.Get("GAME_OBJECTIVE_INDICATOR_TYPE_GPS", TranslationContext.Options),
+					Language.Get("GAME_OBJECTIVE_INDICATOR_TYPE_GPS_RADAR", TranslationContext.Options),
+					Language.Get("GAME_OBJECTIVE_INDICATOR_TYPE_NONE", TranslationContext.Options)
+				};
+			}
+		}
+
+		public int ObjectiveIndicatorTypeIndex
+		{
+			get
+			{
+				return this._objectiveIndicatorTypeIndex;
+			}
+			set
+			{
+				if (this._objectiveIndicatorTypeIndex == value && !this.ForceValues)
+				{
+					return;
+				}
+				this._objectiveIndicatorTypeIndex = value;
+				this.HasPendingChanges = true;
+			}
+		}
+
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
+		public event Action<float> ObjectiveIndicatorSizeChanged;
+
+		public float ObjectiveIndicatorSize
+		{
+			get
+			{
+				return this._objectiveIndicatorSize;
+			}
+			set
+			{
+				if (Math.Abs(value - this._objectiveIndicatorSize) < 0.001f && !this.ForceValues)
+				{
+					return;
+				}
+				this._objectiveIndicatorSize = value;
+				if (this.ObjectiveIndicatorSizeChanged != null)
+				{
+					this.ObjectiveIndicatorSizeChanged(this.GetConverterObjectiveIndicatorSize());
+				}
+				this.HasPendingChanges = true;
+			}
+		}
+
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
+		public event Action<float> ObjectiveIndicatorQuantityChanged;
+
+		public float ObjectiveIndicatorQuantity
+		{
+			get
+			{
+				return this._objectiveIndicatorQuantity;
+			}
+			set
+			{
+				if (Math.Abs(value - this._objectiveIndicatorQuantity) < 0.001f && !this.ForceValues)
+				{
+					return;
+				}
+				this._objectiveIndicatorQuantity = value;
+				if (this.ObjectiveIndicatorQuantityChanged != null)
+				{
+					this.ObjectiveIndicatorQuantityChanged(this.GetConverterObjectiveIndicatorQuantity());
+				}
+				this.HasPendingChanges = true;
+			}
+		}
+
+		private float ConvertSliderValueToRealValue(float min, float max, float current)
+		{
+			float num = max - min;
+			return current * num + min;
+		}
+
+		public float GetConverterObjectiveIndicatorSize()
+		{
+			return this.ConvertSliderValueToRealValue(this._optionsScriptableObject.ObjectiveIndicatorMinSize, this._optionsScriptableObject.ObjectiveIndicatorMaxSize, this._objectiveIndicatorSize);
+		}
+
+		public float GetConverterObjectiveIndicatorQuantity()
+		{
+			return this.ConvertSliderValueToRealValue((float)this._optionsScriptableObject.ObjectiveIndicatorMinArrowQuantity, (float)this._optionsScriptableObject.ObjectiveIndicatorMaxArrowQuantity, this._objectiveIndicatorQuantity);
 		}
 
 		public LanguageCode CounselorLanguage
 		{
 			get
 			{
-				LanguageCode currentLanguageCode = Language.CurrentLanguageCode;
-				if (currentLanguageCode != LanguageCode.DE && currentLanguageCode != LanguageCode.ES && currentLanguageCode != LanguageCode.FR && currentLanguageCode != LanguageCode.PT && currentLanguageCode != LanguageCode.RU)
+				LanguageCode currentLanguage = Language.CurrentLanguage;
+				if (currentLanguage != LanguageCode.DE && currentLanguage != LanguageCode.ES && currentLanguage != LanguageCode.FR && currentLanguage != LanguageCode.PT && currentLanguage != LanguageCode.RU)
 				{
 					return LanguageCode.EN;
 				}
-				return currentLanguageCode;
+				return currentLanguage;
 			}
 		}
 
 		private LanguageCode GetDefaultCounselorLanguage()
 		{
-			LanguageCode languageCode = Language.CurrentLanguage();
-			if (languageCode != LanguageCode.PT && languageCode != LanguageCode.PT_BR)
+			LanguageCode currentLanguage = Language.CurrentLanguage;
+			if (currentLanguage != LanguageCode.PT && currentLanguage != LanguageCode.PT_BR)
 			{
 				return LanguageCode.EN;
 			}
@@ -472,7 +624,7 @@ namespace HeavyMetalMachines.Options
 
 		private int GetDefaultCounselorLanguageIndex()
 		{
-			return this.LanguageCodeToIndex(this.GetDefaultCounselorLanguage());
+			return LanguageLocalizationOptions.LanguageCodeToIndex(this.GetDefaultCounselorLanguage());
 		}
 
 		private int GetDefaultCounselorActive()
@@ -506,16 +658,20 @@ namespace HeavyMetalMachines.Options
 			this.ShowGadgetsLifebar = (GameHubBehaviour.Hub.PlayerPrefs.GetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_SHOWGADGETSLIFEBAR.ToString(), (!this.ShowGadgetsLifebarDefault) ? 0 : 1) == 1);
 			this.ShowGadgetsCursor = (GameHubBehaviour.Hub.PlayerPrefs.GetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_SHOWGADGETSCURSOR.ToString(), (!this.ShowGadgetsCursorDefault) ? 0 : 1) == 1);
 			this.ShowPing = (GameHubBehaviour.Hub.PlayerPrefs.GetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_SHOWPING.ToString(), (!this.ShowPingDefault) ? 0 : 1) == 1);
-			this.LanguageIndex = GameHubBehaviour.Hub.Config.GetIntSetting(GameOptions.GameOptionPrefs.OPTIONS_GAME_LANGUAGE.ToString(), this.LanguageIndexDefault);
+			this.LanguageIndex = this._config.GetIntSetting(GameOptions.GameOptionPrefs.OPTIONS_GAME_LANGUAGE.ToString(), this.LanguageIndexDefault);
 			this.CounselorActive = (GameHubBehaviour.Hub.PlayerPrefs.GetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_COUNSELORACTIVE.ToString(), this.GetDefaultCounselorActive()) == 1);
 			this.CounselorHudHint = (GameHubBehaviour.Hub.PlayerPrefs.GetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_COUNSELORHUDHINT.ToString(), (!this.CounselorHudHintDefault) ? 0 : 1) == 1);
 			this.MovementModeIndex = GameHubBehaviour.Hub.PlayerPrefs.GetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_MOVEMENTMODE.ToString(), (int)ControlOptions.DefaultMovementMode);
 			this.ShowLifebarText = (GameHubBehaviour.Hub.PlayerPrefs.GetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_SHOWLIFEBARTEXT.ToString(), (!this.ShowLifebarTextDefault) ? 0 : 1) == 1);
 			this.ShowPlayerIndicator = (GameHubBehaviour.Hub.PlayerPrefs.GetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_SHOWPLAYERINDICATOR.ToString(), this.GetDefaultPlayerIndicatorActive()) == 1);
-			this.PlayerIndicatorAlpha = GameHubBehaviour.Hub.PlayerPrefs.GetFloat(GameOptions.GameOptionPrefs.OPTIONS_GAME_PLAYERINDICATORALPHA.ToString(), this.PlayerIndicatorAlphaDefault);
+			this.PlayerIndicatorAlpha = GameHubBehaviour.Hub.PlayerPrefs.GetFloat(GameOptions.GameOptionPrefs.OPTIONS_GAME_PLAYERINDICATORALPHA.ToString(), this._optionsScriptableObject.PlayerIndicatorDefaultAlpha);
+			this.ShowObjectiveIndicator = this.GetInitialDefaultObjectiveIndicator();
+			this.ObjectiveIndicatorAlpha = GameHubBehaviour.Hub.PlayerPrefs.GetFloat(GameOptions.GameOptionPrefs.OPTIONS_GAME_OBJECTIVEINDICATORALPHA.ToString(), this._optionsScriptableObject.ObjectiveIndicatorDefaultAlpha);
+			this.ObjectiveIndicatorTypeIndex = GameHubBehaviour.Hub.PlayerPrefs.GetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_OBJECTIVEINDICATORTYPEINDEX.ToString(), this.ObjectiveIndicatorTypeIndexDefault);
+			this.ObjectiveIndicatorSize = GameHubBehaviour.Hub.PlayerPrefs.GetFloat(GameOptions.GameOptionPrefs.OPTIONS_GAME_OBJECTIVEINDICATORSIZE.ToString(), this._optionsScriptableObject.ObjectiveIndicatorDefaultSize);
+			this.ObjectiveIndicatorQuantity = GameHubBehaviour.Hub.PlayerPrefs.GetFloat(GameOptions.GameOptionPrefs.OPTIONS_GAME_OBJECTIVEINDICATORQUANTITY.ToString(), this._optionsScriptableObject.ObjectiveIndicatorDefaultArrowQuantity);
 			this.UseTeamColor = true;
 			this.ForceValues = false;
-			this.CheckInitialConfigForPlayerIndicator();
 		}
 
 		private void Refresh()
@@ -530,13 +686,18 @@ namespace HeavyMetalMachines.Options
 			this.ShowGadgetsLifebar = (GameHubBehaviour.Hub.PlayerPrefs.GetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_SHOWGADGETSLIFEBAR.ToString(), (!this.ShowGadgetsLifebarDefault) ? 0 : 1) == 1);
 			this.ShowGadgetsCursor = (GameHubBehaviour.Hub.PlayerPrefs.GetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_SHOWGADGETSCURSOR.ToString(), (!this.ShowGadgetsCursorDefault) ? 0 : 1) == 1);
 			this.ShowPing = (GameHubBehaviour.Hub.PlayerPrefs.GetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_SHOWPING.ToString(), (!this.ShowPingDefault) ? 0 : 1) == 1);
-			this.LanguageIndex = GameHubBehaviour.Hub.Config.GetIntSetting(GameOptions.GameOptionPrefs.OPTIONS_GAME_LANGUAGE.ToString(), this.LanguageIndexDefault);
+			this.LanguageIndex = this._config.GetIntSetting(GameOptions.GameOptionPrefs.OPTIONS_GAME_LANGUAGE.ToString(), this.LanguageIndexDefault);
 			this.CounselorActive = (GameHubBehaviour.Hub.PlayerPrefs.GetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_COUNSELORACTIVE.ToString(), this.GetDefaultCounselorActive()) == 1);
 			this.CounselorHudHint = (GameHubBehaviour.Hub.PlayerPrefs.GetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_COUNSELORHUDHINT.ToString(), (!this.CounselorHudHintDefault) ? 0 : 1) == 1);
 			this.MovementModeIndex = GameHubBehaviour.Hub.PlayerPrefs.GetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_MOVEMENTMODE.ToString(), (int)ControlOptions.DefaultMovementMode);
 			this.ShowLifebarText = (GameHubBehaviour.Hub.PlayerPrefs.GetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_SHOWLIFEBARTEXT.ToString(), (!this.ShowLifebarTextDefault) ? 0 : 1) == 1);
 			this.ShowPlayerIndicator = (GameHubBehaviour.Hub.PlayerPrefs.GetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_SHOWPLAYERINDICATOR.ToString(), this.GetDefaultPlayerIndicatorActive()) == 1);
-			this.PlayerIndicatorAlpha = GameHubBehaviour.Hub.PlayerPrefs.GetFloat(GameOptions.GameOptionPrefs.OPTIONS_GAME_PLAYERINDICATORALPHA.ToString(), this.PlayerIndicatorAlphaDefault);
+			this.PlayerIndicatorAlpha = GameHubBehaviour.Hub.PlayerPrefs.GetFloat(GameOptions.GameOptionPrefs.OPTIONS_GAME_PLAYERINDICATORALPHA.ToString(), this._optionsScriptableObject.PlayerIndicatorDefaultAlpha);
+			this.ShowObjectiveIndicator = this.GetInitialDefaultObjectiveIndicator();
+			this.ObjectiveIndicatorAlpha = GameHubBehaviour.Hub.PlayerPrefs.GetFloat(GameOptions.GameOptionPrefs.OPTIONS_GAME_OBJECTIVEINDICATORALPHA.ToString(), this._optionsScriptableObject.ObjectiveIndicatorDefaultAlpha);
+			this.ObjectiveIndicatorTypeIndex = GameHubBehaviour.Hub.PlayerPrefs.GetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_OBJECTIVEINDICATORTYPEINDEX.ToString(), this.ObjectiveIndicatorTypeIndexDefault);
+			this.ObjectiveIndicatorSize = GameHubBehaviour.Hub.PlayerPrefs.GetFloat(GameOptions.GameOptionPrefs.OPTIONS_GAME_OBJECTIVEINDICATORSIZE.ToString(), this._optionsScriptableObject.ObjectiveIndicatorDefaultSize);
+			this.ObjectiveIndicatorQuantity = GameHubBehaviour.Hub.PlayerPrefs.GetFloat(GameOptions.GameOptionPrefs.OPTIONS_GAME_OBJECTIVEINDICATORQUANTITY.ToString(), this._optionsScriptableObject.ObjectiveIndicatorDefaultArrowQuantity);
 			this.HasPendingChanges = false;
 		}
 
@@ -557,15 +718,26 @@ namespace HeavyMetalMachines.Options
 			GameHubBehaviour.Hub.PlayerPrefs.SetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_SHOWGADGETSLIFEBAR.ToString(), (!this.ShowGadgetsLifebar) ? 0 : 1);
 			GameHubBehaviour.Hub.PlayerPrefs.SetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_SHOWGADGETSCURSOR.ToString(), (!this.ShowGadgetsCursor) ? 0 : 1);
 			GameHubBehaviour.Hub.PlayerPrefs.SetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_SHOWPING.ToString(), (!this.ShowPing) ? 0 : 1);
-			GameHubBehaviour.Hub.Config.SetSetting(GameOptions.GameOptionPrefs.OPTIONS_GAME_LANGUAGE.ToString(), this.LanguageIndex.ToString());
+			this._config.SetSetting(GameOptions.GameOptionPrefs.OPTIONS_GAME_LANGUAGE.ToString(), this.LanguageIndex.ToString());
 			GameHubBehaviour.Hub.PlayerPrefs.SetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_COUNSELORACTIVE.ToString(), (!this.CounselorActive) ? 0 : 1);
 			GameHubBehaviour.Hub.PlayerPrefs.SetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_COUNSELORHUDHINT.ToString(), (!this.CounselorHudHint) ? 0 : 1);
 			GameHubBehaviour.Hub.PlayerPrefs.SetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_SHOWLIFEBARTEXT.ToString(), (!this.ShowLifebarText) ? 0 : 1);
 			GameHubBehaviour.Hub.PlayerPrefs.SetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_SHOWPLAYERINDICATOR.ToString(), (!this.ShowPlayerIndicator) ? 0 : 1);
 			GameHubBehaviour.Hub.PlayerPrefs.SetFloat(GameOptions.GameOptionPrefs.OPTIONS_GAME_PLAYERINDICATORALPHA.ToString(), this.PlayerIndicatorAlpha);
+			GameHubBehaviour.Hub.PlayerPrefs.SetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_SHOWOBJECTIVEINDICATOR.ToString(), (!this.ShowObjectiveIndicator) ? 0 : 1);
+			GameHubBehaviour.Hub.PlayerPrefs.SetFloat(GameOptions.GameOptionPrefs.OPTIONS_GAME_OBJECTIVEINDICATORALPHA.ToString(), this.ObjectiveIndicatorAlpha);
+			GameHubBehaviour.Hub.PlayerPrefs.SetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_OBJECTIVEINDICATORTYPEINDEX.ToString(), this.ObjectiveIndicatorTypeIndex);
+			GameHubBehaviour.Hub.PlayerPrefs.SetFloat(GameOptions.GameOptionPrefs.OPTIONS_GAME_OBJECTIVEINDICATORSIZE.ToString(), this.ObjectiveIndicatorSize);
+			GameHubBehaviour.Hub.PlayerPrefs.SetFloat(GameOptions.GameOptionPrefs.OPTIONS_GAME_OBJECTIVEINDICATORQUANTITY.ToString(), this.ObjectiveIndicatorQuantity);
 			this.HasPendingChanges = false;
 			GameHubBehaviour.Hub.PlayerPrefs.SaveNow();
-			GameHubBehaviour.Hub.Config.SaveSettings();
+			this._config.SaveSettings();
+		}
+
+		public void CheckInitialConfig()
+		{
+			this.CheckInitialConfigForPlayerIndicator();
+			this.CheckInitialConfigForObjectiveIndicator();
 		}
 
 		private void CheckInitialConfigForPlayerIndicator()
@@ -579,68 +751,55 @@ namespace HeavyMetalMachines.Options
 			}
 		}
 
+		private void CheckInitialConfigForObjectiveIndicator()
+		{
+			if (!GameHubBehaviour.Hub.PlayerPrefs.HasKey(GameOptions.GameOptionPrefs.OPTIONS_GAME_SHOWOBJECTIVEINDICATOR.ToString()))
+			{
+				this.ShowObjectiveIndicator = this.GetInitialDefaultObjectiveIndicator();
+				this._objectiveIndicatorLogBi.LogBIForInitialPlayer();
+				GameHubBehaviour.Hub.PlayerPrefs.SetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_SHOWOBJECTIVEINDICATOR.ToString(), (!this.ShowObjectiveIndicator) ? 0 : 1);
+				GameHubBehaviour.Hub.PlayerPrefs.SetFloat(GameOptions.GameOptionPrefs.OPTIONS_GAME_OBJECTIVEINDICATORALPHA.ToString(), this.ObjectiveIndicatorAlpha);
+				GameHubBehaviour.Hub.PlayerPrefs.SetFloat(GameOptions.GameOptionPrefs.OPTIONS_GAME_OBJECTIVEINDICATORSIZE.ToString(), this.ObjectiveIndicatorSize);
+				GameHubBehaviour.Hub.PlayerPrefs.SetFloat(GameOptions.GameOptionPrefs.OPTIONS_GAME_OBJECTIVEINDICATORQUANTITY.ToString(), this.ObjectiveIndicatorQuantity);
+				GameHubBehaviour.Hub.PlayerPrefs.Save();
+			}
+		}
+
+		private bool GetInitialDefaultObjectiveIndicator()
+		{
+			if (!GameHubBehaviour.Hub.PlayerPrefs.HasKey(GameOptions.GameOptionPrefs.OPTIONS_GAME_SHOWOBJECTIVEINDICATOR.ToString()))
+			{
+				int totalPlayerLevel = GameHubBehaviour.Hub.User.GetTotalPlayerLevel();
+				return totalPlayerLevel < 5;
+			}
+			return GameHubBehaviour.Hub.PlayerPrefs.GetInt(GameOptions.GameOptionPrefs.OPTIONS_GAME_SHOWOBJECTIVEINDICATOR.ToString(), (!this.ShowObjectiveIndicatorDefault) ? 0 : 1) == 1;
+		}
+
 		public void GetterInfoForBILog()
 		{
-			int intWithoutDefault = GameHubBehaviour.Hub.PlayerPrefs.GetIntWithoutDefault(GameOptions.GameOptionPrefs.OPTIONS_GAME_SHOWPLAYERINDICATOR.ToString());
-			float floatWithoutDefault = GameHubBehaviour.Hub.PlayerPrefs.GetFloatWithoutDefault(GameOptions.GameOptionPrefs.OPTIONS_GAME_PLAYERINDICATORALPHA.ToString());
-			this._playerIndicatorLogBi.SaveInitialConfig(intWithoutDefault, floatWithoutDefault);
+			this._playerIndicatorLogBi.SaveInitialConfig();
+			this._objectiveIndicatorLogBi.SaveInitialConfig();
 		}
 
 		public void WriteBILogs()
 		{
 			this._playerIndicatorLogBi.LogBIPlayerIndicator();
-		}
-
-		public int LanguageCodeToIndex(LanguageCode code)
-		{
-			for (int i = 0; i < this.LanguageLocalizationValues.Length; i++)
-			{
-				if (this.LanguageLocalizationValues[i] == code)
-				{
-					return i;
-				}
-			}
-			GameOptions.Log.ErrorFormat("unsupported LanguageCode {0}", new object[]
-			{
-				code
-			});
-			return -1;
-		}
-
-		public LanguageCode LanguageIndexToCode(int index)
-		{
-			if (index >= 0 && index < this.LanguageLocalizationValues.Length)
-			{
-				return this.LanguageLocalizationValues[index];
-			}
-			return LanguageCode.N;
-		}
-
-		public int SystemLanguageToIndex(SystemLanguage systemLanguage)
-		{
-			LanguageCode languageCode = Language.LanguageNameToCode(systemLanguage);
-			for (int i = 0; i < this.LanguageLocalizationValues.Length; i++)
-			{
-				if (this.LanguageLocalizationValues[i] == languageCode)
-				{
-					return i;
-				}
-			}
-			return 0;
+			this._objectiveIndicatorLogBi.LogBIPlayerIndicator();
 		}
 
 		public void ApplyOnlyOnStart()
 		{
-			this.LanguageIndex = GameHubBehaviour.Hub.Config.GetIntSetting(GameOptions.GameOptionPrefs.OPTIONS_GAME_LANGUAGE.ToString(), this.LanguageIndexDefault);
-			if (this.LanguageIndex >= this.LanguageLocalizationValues.Length || this.LanguageIndex < 0)
+			this.LanguageIndex = this._config.GetIntSetting(GameOptions.GameOptionPrefs.OPTIONS_GAME_LANGUAGE.ToString(), this.LanguageIndexDefault);
+			if (LanguageLocalizationOptions.IsLanguageLocalizationIndexValid(this.LanguageIndex))
 			{
-				GameOptions.Log.ErrorFormat("Invalid LanguageIndex: {0}", new object[]
-				{
-					this.LanguageIndex
-				});
-				this.LanguageIndex = this.LanguageIndexDefault;
-				this.Apply();
+				return;
 			}
+			GameOptions.Log.ErrorFormat("Invalid LanguageIndex: {0}", new object[]
+			{
+				this.LanguageIndex
+			});
+			this.LanguageIndex = this.LanguageIndexDefault;
+			this.Apply();
 		}
 
 		public void ResetDefault()
@@ -656,7 +815,12 @@ namespace HeavyMetalMachines.Options
 			this.CounselorHudHint = this.CounselorHudHintDefault;
 			this.ShowLifebarText = this.ShowLifebarTextDefault;
 			this.ShowPlayerIndicator = (this.GetDefaultPlayerIndicatorActive() == 1);
-			this.PlayerIndicatorAlpha = this.PlayerIndicatorAlphaDefault;
+			this.PlayerIndicatorAlpha = this._optionsScriptableObject.PlayerIndicatorDefaultAlpha;
+			this.ShowObjectiveIndicator = this.ShowObjectiveIndicatorDefault;
+			this.ObjectiveIndicatorAlpha = this._optionsScriptableObject.ObjectiveIndicatorDefaultAlpha;
+			this.ObjectiveIndicatorTypeIndex = this.ObjectiveIndicatorTypeIndexDefault;
+			this.ObjectiveIndicatorSize = this._optionsScriptableObject.ObjectiveIndicatorDefaultSize;
+			this.ObjectiveIndicatorQuantity = this._optionsScriptableObject.ObjectiveIndicatorDefaultArrowQuantity;
 		}
 
 		public void ResetMovementModeDefault()
@@ -677,7 +841,13 @@ namespace HeavyMetalMachines.Options
 		public void Init()
 		{
 			this.ApplyOnlyOnStart();
-			GameHubBehaviour.Hub.PlayerPrefs.ExecOnPrefsLoaded(new Action(this.OnPrefsLoaded));
+			GameHubBehaviour.Hub.PlayerPrefs.ExecOnceOnPrefsLoaded(new Action(this.OnPrefsLoaded));
+			ObservableExtensions.Subscribe<bool>(Observable.Do<bool>(this._observeCrossplayChange.GetAndObserve(), new Action<bool>(this.UpdateCrossplayToggle)));
+		}
+
+		private void UpdateCrossplayToggle(bool crossplayEnable)
+		{
+			this.CrossplayEnable = crossplayEnable;
 		}
 
 		private void OnPrefsLoaded()
@@ -703,11 +873,28 @@ namespace HeavyMetalMachines.Options
 
 		private bool _tutorialEnabledMainMenu;
 
-		private const float MIN_PLAYERINDICATOR_ALPHA = 0.196f;
+		[Header("[Configs]")]
+		[SerializeField]
+		private OptionsScriptableObject _optionsScriptableObject;
 
-		private const float MAX_PLAYERINDICATOR_ALPHA = 1f;
+		[Inject]
+		private IConfigLoader _config;
 
-		public PlayerIndicatorLogBI _playerIndicatorLogBi;
+		[Inject]
+		private IObserveCrossplayChange _observeCrossplayChange;
+
+		[Inject]
+		private ILocalizeKey _localizeKey;
+
+		[Inject]
+		private IGetSupportedLanguages _getSupportedLanguages;
+
+		[Inject]
+		private IGetLanguageLocale _getLanguageLocale;
+
+		private PlayerIndicatorLogBI _playerIndicatorLogBi;
+
+		private ObjectiveIndicatorConfigurationsLogBI _objectiveIndicatorLogBi;
 
 		public bool UseTeamColor;
 
@@ -725,23 +912,15 @@ namespace HeavyMetalMachines.Options
 
 		private bool _memoryWarning;
 
-		private readonly LanguageCode[] LanguageLocalizationValues = new LanguageCode[]
-		{
-			LanguageCode.EN,
-			LanguageCode.PT,
-			LanguageCode.RU,
-			LanguageCode.DE,
-			LanguageCode.FR,
-			LanguageCode.ES,
-			LanguageCode.TR,
-			LanguageCode.PL
-		};
-
 		private int _languageIndex;
 
 		private readonly bool ShowGadgetsLifebarDefault;
 
 		private bool _showGadgetsLifebar;
+
+		private readonly bool CrossplayEnableDefault = true;
+
+		private bool _crossplayEnable;
 
 		private readonly bool ShowGadgetsCursorDefault;
 
@@ -757,15 +936,27 @@ namespace HeavyMetalMachines.Options
 
 		private readonly bool CounselorHudHintDefault = true;
 
-		private bool _showLifebarText = true;
+		private bool _showLifebarText;
 
-		private readonly bool ShowLifebarTextDefault;
+		private readonly bool ShowLifebarTextDefault = true;
 
 		private bool _showPlayerIndicator = true;
 
 		private float _playerIndicatorAlpha;
 
-		private readonly float PlayerIndicatorAlphaDefault = 0.555f;
+		private bool _showObjectiveIndicator = true;
+
+		private readonly bool ShowObjectiveIndicatorDefault = true;
+
+		private float _objectiveIndicatorAlpha;
+
+		private int _objectiveIndicatorTypeIndex;
+
+		private readonly int ObjectiveIndicatorTypeIndexDefault;
+
+		private float _objectiveIndicatorSize;
+
+		private float _objectiveIndicatorQuantity;
 
 		public enum GameOptionPrefs
 		{
@@ -786,7 +977,12 @@ namespace HeavyMetalMachines.Options
 			OPTIONS_GAME_COUNSELORHUDHINT,
 			OPTIONS_GAME_SHOWLIFEBARTEXT,
 			OPTIONS_GAME_SHOWPLAYERINDICATOR,
-			OPTIONS_GAME_PLAYERINDICATORALPHA
+			OPTIONS_GAME_PLAYERINDICATORALPHA,
+			OPTIONS_GAME_SHOWOBJECTIVEINDICATOR,
+			OPTIONS_GAME_OBJECTIVEINDICATORALPHA,
+			OPTIONS_GAME_OBJECTIVEINDICATORTYPEINDEX,
+			OPTIONS_GAME_OBJECTIVEINDICATORSIZE,
+			OPTIONS_GAME_OBJECTIVEINDICATORQUANTITY
 		}
 	}
 }

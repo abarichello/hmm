@@ -36,7 +36,7 @@ namespace HeavyMetalMachines.VFX
 				if (this.WarningPrefab && this._warningPrefabInst == null && this._lifeTime - this._time < this.WarningTime)
 				{
 					this._warningPrefabInst = (MasterVFX)GameHubBehaviour.Hub.Resources.PrefabCacheInstantiate(this.WarningPrefab, base.transform.position, base.transform.rotation);
-					this._warningPrefabInst.transform.parent = GameHubBehaviour.Hub.Drawer.Effects;
+					GameHubBehaviour.Hub.Drawer.AddEffect(this._warningPrefabInst.transform);
 					this._warningPrefabInst.baseMasterVFX = this.WarningPrefab;
 					this._warningPrefabInst.Activate(this._targetFXInfo.Owner, this._targetFXInfo.Owner, this._targetFXInfo.EffectTransform);
 				}
@@ -73,13 +73,13 @@ namespace HeavyMetalMachines.VFX
 						this._target = this._targetFXInfo.Target.transform;
 						this._lifeTime = dirtDevilStayingHookInfo.HookStayLifeTime;
 						Bounds bounds = playerData.CharacterInstance.GetComponent<Collider>().bounds;
-						float d = Mathf.Max(bounds.size.x, bounds.size.z) * 0.5f;
+						float num = Mathf.Max(bounds.size.x, bounds.size.z) * 0.5f;
 						Vector3 position = this._targetFXInfo.Owner.transform.position;
 						Vector3 vector = this._target.position;
 						Vector3 vector2 = vector - position;
 						vector2.y = 0f;
 						vector2.Normalize();
-						vector -= vector2 * d;
+						vector -= vector2 * num;
 						vector.y = bounds.center.y;
 						this.HookObject.localPosition = this._target.InverseTransformPoint(vector);
 						this.HookObject.localRotation = Quaternion.LookRotation(this._target.InverseTransformDirection(vector2));

@@ -4,8 +4,8 @@ using System.Diagnostics;
 using HeavyMetalMachines.Combat.Gadget;
 using HeavyMetalMachines.UpdateStream;
 using HeavyMetalMachines.VFX;
+using Hoplon.Unity.Loading;
 using Pocketverse;
-using SharedUtils.Loading;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
@@ -67,7 +67,7 @@ namespace HeavyMetalMachines.Combat
 
 		public override int GetStreamData(ref byte[] data, bool boForceSerialization)
 		{
-			Pocketverse.BitStream stream = base.GetStream();
+			BitStream stream = base.GetStream();
 			stream.WriteCompressedInt(this._feedbacks.Count);
 			for (int i = 0; i < this._feedbacks.Count; i++)
 			{
@@ -79,7 +79,7 @@ namespace HeavyMetalMachines.Combat
 
 		public override void ApplyStreamData(byte[] data)
 		{
-			Pocketverse.BitStream streamFor = base.GetStreamFor(data);
+			BitStream streamFor = base.GetStreamFor(data);
 			int num = streamFor.ReadCompressedInt();
 			this.NewFeedbacks.Clear();
 			for (int i = 0; i < num; i++)
@@ -182,7 +182,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				return;
 			}
-			ResourcesContent.Content asset = LoadingManager.ResourceContent.GetAsset(feedbackInfo.Name);
+			Content asset = Loading.Content.GetAsset(feedbackInfo.Name);
 			if (asset == null)
 			{
 				CombatFeedback.Log.ErrorFormat("Invalid asset for content {0}: Asset {1}", new object[]
@@ -218,7 +218,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				return false;
 			}
-			mod.FeedbackEffect.DestroyFeedbackEffect(default(DestroyFeedbackEffect));
+			mod.FeedbackEffect.DestroyFeedbackEffect(default(DestroyFeedbackEffectMessage));
 			this._feedbacks.Remove(mod);
 			return true;
 		}

@@ -1,14 +1,143 @@
 ﻿using System;
 using System.Diagnostics;
 using HeavyMetalMachines.Combat.Gadget;
+using HeavyMetalMachines.Playback.Snapshot;
 using HeavyMetalMachines.UpdateStream;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Combat
 {
 	[Serializable]
-	public class GadgetData : StreamContent
+	public class GadgetData : StreamContent, IGadgetDataSerialData, IBaseStreamSerialData<IGadgetDataSerialData>
 	{
+		public IGadgetStateObjectSerialData BombExplosionStateObjectData
+		{
+			get
+			{
+				return this.BombExplosionStateObject;
+			}
+		}
+
+		public IGadgetStateObjectSerialData KillStateObjectData
+		{
+			get
+			{
+				return this.KillStateObjectData;
+			}
+		}
+
+		public IGadgetStateObjectSerialData TakeoffStateObjectData
+		{
+			get
+			{
+				return this.TakeoffStateObject;
+			}
+		}
+
+		public IGadgetStateObjectSerialData RespawnStateObjectData
+		{
+			get
+			{
+				return this.RespawnStateObject;
+			}
+		}
+
+		public IGadgetStateObjectSerialData BombStateObjectData
+		{
+			get
+			{
+				return this.BombStateObject;
+			}
+		}
+
+		public IGadgetStateObjectSerialData GBoostStateObjectData
+		{
+			get
+			{
+				return this.BombStateObject;
+			}
+		}
+
+		public IGadgetStateObjectSerialData G0StateObjectData
+		{
+			get
+			{
+				return this.G0StateObject;
+			}
+		}
+
+		public IGadgetStateObjectSerialData G1StateObjectData
+		{
+			get
+			{
+				return this.G1StateObjectData;
+			}
+		}
+
+		public IGadgetStateObjectSerialData G2StateObjectData
+		{
+			get
+			{
+				return this.G2StateObject;
+			}
+		}
+
+		public IGadgetStateObjectSerialData GPStateObjectData
+		{
+			get
+			{
+				return this.GPStateObject;
+			}
+		}
+
+		public IGadgetStateObjectSerialData GOutOfCombatStateObjectData
+		{
+			get
+			{
+				return this.GOutOfCombatStateObject;
+			}
+		}
+
+		public IGadgetStateObjectSerialData GGStateObjectData
+		{
+			get
+			{
+				return this.GGStateObject;
+			}
+		}
+
+		public IGadgetStateObjectSerialData GTStateObjectData
+		{
+			get
+			{
+				return this.GTStateObject;
+			}
+		}
+
+		public IGadgetStateObjectSerialData SprayStateObjectData
+		{
+			get
+			{
+				return this.SprayStateObject;
+			}
+		}
+
+		public float JokerBarValue
+		{
+			get
+			{
+				return this.GadgetJokeBarState.Value;
+			}
+		}
+
+		public float JokerBarMaxValue
+		{
+			get
+			{
+				return this.GadgetJokeBarState.MaxValue;
+			}
+		}
+
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event GadgetData.GadgetStateChanged OnGadgetStateChanged;
 
@@ -69,11 +198,11 @@ namespace HeavyMetalMachines.Combat
 					GameHubBehaviour.Hub.Stream.GadgetDataStream.Changed(this);
 				}
 				obj.GadgetState = gadgetState;
-				if (obj.CoolDown != cooldown)
+				if (obj.Cooldown != cooldown)
 				{
 					GameHubBehaviour.Hub.Stream.GadgetDataStream.Changed(this);
 				}
-				obj.CoolDown = cooldown;
+				obj.Cooldown = cooldown;
 				if (obj.Value != value)
 				{
 					GameHubBehaviour.Hub.Stream.GadgetDataStream.Changed(this);
@@ -142,8 +271,6 @@ namespace HeavyMetalMachines.Combat
 				this.G2StateObject.InvalidateCache();
 				this.GPStateObject.InvalidateCache();
 				this.GOutOfCombatStateObject.InvalidateCache();
-				this.GSAStateObject.InvalidateCache();
-				this.GSPStateObject.InvalidateCache();
 				this.GGStateObject.InvalidateCache();
 				this.GTStateObject.InvalidateCache();
 				this.SprayStateObject.InvalidateCache();
@@ -159,8 +286,6 @@ namespace HeavyMetalMachines.Combat
 			this.G2StateObject.WriteToBitStream(stream);
 			this.GPStateObject.WriteToBitStream(stream);
 			this.GOutOfCombatStateObject.WriteToBitStream(stream);
-			this.GSAStateObject.WriteToBitStream(stream);
-			this.GSPStateObject.WriteToBitStream(stream);
 			this.GGStateObject.WriteToBitStream(stream);
 			this.GTStateObject.WriteToBitStream(stream);
 			this.GadgetJokeBarState.WriteToBitStream(stream);
@@ -182,12 +307,30 @@ namespace HeavyMetalMachines.Combat
 			this.G2StateObject.ReadFromBitStream(streamFor);
 			this.GPStateObject.ReadFromBitStream(streamFor);
 			this.GOutOfCombatStateObject.ReadFromBitStream(streamFor);
-			this.GSAStateObject.ReadFromBitStream(streamFor);
-			this.GSPStateObject.ReadFromBitStream(streamFor);
 			this.GGStateObject.ReadFromBitStream(streamFor);
 			this.GTStateObject.ReadFromBitStream(streamFor);
 			this.GadgetJokeBarState.ReadFromBitStream(streamFor);
 			this.SprayStateObject.ReadFromBitStream(streamFor);
+		}
+
+		public void Apply(IGadgetDataSerialData other)
+		{
+			this.BombExplosionStateObject.Apply(other.BombExplosionStateObjectData);
+			this.KillStateObject.Apply(other.KillStateObjectData);
+			this.TakeoffStateObject.Apply(other.TakeoffStateObjectData);
+			this.RespawnStateObject.Apply(other.RespawnStateObjectData);
+			this.BombStateObject.Apply(other.BombStateObjectData);
+			this.GBoostStateObject.Apply(other.GBoostStateObjectData);
+			this.G0StateObject.Apply(other.G0StateObjectData);
+			this.G1StateObject.Apply(other.G1StateObjectData);
+			this.G2StateObject.Apply(other.G2StateObjectData);
+			this.GPStateObject.Apply(other.GPStateObjectData);
+			this.GOutOfCombatStateObject.Apply(other.GOutOfCombatStateObjectData);
+			this.GGStateObject.Apply(other.GGStateObjectData);
+			this.GTStateObject.Apply(other.GTStateObjectData);
+			this.SprayStateObject.Apply(other.SprayStateObjectData);
+			this.GadgetJokeBarState.Value = other.JokerBarValue;
+			this.GadgetJokeBarState.MaxValue = other.JokerBarMaxValue;
 		}
 
 		public readonly GadgetData.GadgetStateObject RespawnStateObject = new GadgetData.GadgetStateObject(GadgetSlot.RespawnGadget);
@@ -220,16 +363,12 @@ namespace HeavyMetalMachines.Combat
 
 		public readonly GadgetData.GadgetStateObject GridHighlightStateObject = new GadgetData.GadgetStateObject(GadgetSlot.GridHighlightGadget);
 
-		public readonly GadgetData.GadgetStateObject GSAStateObject = new GadgetData.GadgetStateObject(GadgetSlot.None);
-
-		public readonly GadgetData.GadgetStateObject GSPStateObject = new GadgetData.GadgetStateObject(GadgetSlot.None);
-
 		public readonly GadgetData.GadgetJokeBarStateObject GadgetJokeBarState = new GadgetData.GadgetJokeBarStateObject();
 
 		public delegate void GadgetStateChanged(GadgetSlot slot, GadgetState gadgetState);
 
 		[Serializable]
-		public class GadgetStateObject : IBitStreamSerializable
+		public class GadgetStateObject : IBitStreamSerializable, IGadgetStateObjectSerialData, IBaseStreamSerialData<IGadgetStateObjectSerialData>
 		{
 			public GadgetStateObject(GadgetSlot slot)
 			{
@@ -294,6 +433,10 @@ namespace HeavyMetalMachines.Combat
 				}
 			}
 
+			public GadgetState GadgetState { get; set; }
+
+			public long Cooldown { get; set; }
+
 			public int Value
 			{
 				get
@@ -309,6 +452,12 @@ namespace HeavyMetalMachines.Combat
 					this._value = value;
 				}
 			}
+
+			public float Heat { get; set; }
+
+			public int Counter { get; set; }
+
+			public int[] AffectedIds { get; set; }
 
 			public void ClientGadgetHit(int otherId)
 			{
@@ -326,10 +475,10 @@ namespace HeavyMetalMachines.Combat
 			public void WriteToBitStream(BitStream bs)
 			{
 				this._cachedData.UpdateCount();
-				if (this._cachedData.HasChanged(this.CoolDown, this.Value, this.Heat, this.Counter, this.GadgetState, this.EffectState))
+				if (this._cachedData.HasChanged(this.Cooldown, this.Value, this.Heat, this.Counter, this.GadgetState, this.EffectState))
 				{
 					bs.WriteBool(true);
-					bs.WriteCompressedLong(this.CoolDown);
+					bs.WriteCompressedLong(this.Cooldown);
 					bs.WriteCompressedInt(this.Value);
 					bs.WriteTinyUFloat(this.Heat);
 					bs.WriteCompressedInt(this.Counter);
@@ -350,7 +499,7 @@ namespace HeavyMetalMachines.Combat
 					return;
 				}
 				GadgetState gadgetState = this.GadgetState;
-				this.CoolDown = bs.ReadCompressedLong();
+				this.Cooldown = bs.ReadCompressedLong();
 				this.Value = bs.ReadCompressedInt();
 				this.Heat = bs.ReadTinyUFloat();
 				this.Counter = bs.ReadCompressedInt();
@@ -377,21 +526,81 @@ namespace HeavyMetalMachines.Combat
 				}
 			}
 
+			public void Apply(IGadgetStateObjectSerialData other)
+			{
+				GadgetState gadgetState = this.GadgetState;
+				this.Cooldown = other.Cooldown;
+				this.Value = other.Value;
+				this.Heat = other.Heat;
+				this.Counter = other.Counter;
+				if (other.AffectedIds != null)
+				{
+					this.AffectedIds = new int[other.AffectedIds.Length];
+					Array.Copy(other.AffectedIds, this.AffectedIds, this.AffectedIds.Length);
+				}
+				else
+				{
+					this.AffectedIds = null;
+				}
+				this.GadgetState = other.GadgetState;
+				this.EffectState = other.EffectState;
+				if (gadgetState != this.GadgetState)
+				{
+					GadgetState gadgetState2 = this.GadgetState;
+					if (gadgetState2 != GadgetState.Ready)
+					{
+						if (gadgetState2 == GadgetState.Cooldown)
+						{
+							if (this.ListenToGadgetEnterCooldown != null)
+							{
+								this.ListenToGadgetEnterCooldown();
+							}
+						}
+					}
+					else if (this.ListenToGadgetReady != null)
+					{
+						this.ListenToGadgetReady();
+					}
+				}
+			}
+
+			public override string ToString()
+			{
+				return string.Format("[Slot={0} State={1} EffectState={2} Cooldown={3} V={4} H={5} C={6}]", new object[]
+				{
+					this._slot,
+					this.GadgetState,
+					this._effectState,
+					this.Cooldown,
+					this.Value,
+					this.Heat,
+					this.Counter
+				});
+			}
+
+			public void RunStateForAPReplay(GadgetState gadgetState)
+			{
+				if (gadgetState != GadgetState.Ready)
+				{
+					if (gadgetState == GadgetState.Cooldown)
+					{
+						if (this.ListenToGadgetEnterCooldown != null)
+						{
+							this.ListenToGadgetEnterCooldown();
+						}
+					}
+				}
+				else if (this.ListenToGadgetReady != null)
+				{
+					this.ListenToGadgetReady();
+				}
+			}
+
 			private GadgetSlot _slot;
 
 			private EffectState _effectState;
 
-			public GadgetState GadgetState;
-
-			public long CoolDown;
-
 			private int _value;
-
-			public float Heat;
-
-			public int Counter;
-
-			public int[] AffectedIds;
 
 			private GadgetData.GadgetStateObject.NetworkCachedData _cachedData = new GadgetData.GadgetStateObject.NetworkCachedData();
 

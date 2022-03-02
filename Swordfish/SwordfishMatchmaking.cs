@@ -19,30 +19,20 @@ namespace HeavyMetalMachines.Swordfish
 		public SwordfishMatchmaking(SwordfishClientApi clientApi)
 		{
 			this._client = clientApi.matchmakingClient;
-			this._client.Connection += new EventHandler<MatchConnectionArgs>(this.OnClientConnected);
-			this._client.Disconnection += new EventHandler<MatchmakingEventArgs>(this.OnClientDisconnected);
-			this._client.MatchMade += new EventHandler<MatchmakingEventArgs>(this.OnMatchmakingMade);
-			this._client.MatchStarted += this.OnMatchmakingStarted;
-			this._client.MatchConfirmed += new EventHandler<MatchmakingEventArgs>(this.OnMatchConfirmed);
-			this._client.MatchCanceled += this.OnMatchmakingCanceled;
-			this._client.MatchAccepted += this.OnMatchmakingAccepted;
-			this._client.QueueAverageTime += this.OnQueueAverageTime;
-			this._client.TimeToPlayPredicted += this.OnTimeToPlayPredicted;
-			this._client.QueueSize += this.OnGetQueueSize;
-			this._client.MatchError += new EventHandlerEx<MatchmakingEventArgs>(this.OnMatchError);
-			this._client.NoServerAvailable += new EventHandlerEx<MatchmakingEventArgs>(this.OnNoServerAvailable);
 			this._lobby = clientApi.lobby;
-			this._lobby.LobbyFinished += this.OnLobbyFinished;
 		}
 
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		public event System.Action OnClientDisconnectedEvent;
+		public event Action OnClientDisconnectedEvent;
 
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		public event System.Action OnClientConnectedEvent;
+		public event Action OnClientConnectedEvent;
 
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		public event System.Action OnMatchStartedEvent;
+		public event Action OnMatchStartedEvent;
+
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
+		public event Action OnClientMatchMadeEvent;
 
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<string[]> OnMatchAcceptedEvent;
@@ -62,36 +52,61 @@ namespace HeavyMetalMachines.Swordfish
 
 		public void Dispose()
 		{
-			this._client.Connection -= new EventHandler<MatchConnectionArgs>(this.OnClientConnected);
-			this._client.Disconnection -= new EventHandler<MatchmakingEventArgs>(this.OnClientDisconnected);
-			this._client.MatchMade -= new EventHandler<MatchmakingEventArgs>(this.OnMatchmakingMade);
-			this._client.MatchStarted -= this.OnMatchmakingStarted;
+			this.Connected = false;
+			this.WaitingForMatchResult = false;
+			this.Undefined = false;
+			this.State = SwordfishMatchmaking.MatchmakingState.None;
+			this._client.Connection -= new EventHandler<MatchConnectionArgs>(this.OnPlayerJoinedQueue);
+			this._client.Disconnection -= new EventHandler<MatchmakingEventArgs>(this.OnPlayerLeftQueue);
+			this._client.MatchMade -= this.OnMatchMade;
+			this._client.MatchStarted -= this.OnMatchStarted;
 			this._client.MatchConfirmed -= new EventHandler<MatchmakingEventArgs>(this.OnMatchConfirmed);
-			this._client.MatchCanceled -= this.OnMatchmakingCanceled;
-			this._client.MatchAccepted -= this.OnMatchmakingAccepted;
+			this._client.MatchCanceled -= this.OnPlayerCanceledQueueOrMatchWasRefused;
+			this._client.MatchAccepted -= this.OnMatchAccepted;
 			this._client.QueueAverageTime -= this.OnQueueAverageTime;
 			this._client.TimeToPlayPredicted -= this.OnTimeToPlayPredicted;
 			this._client.QueueSize -= this.OnGetQueueSize;
-			this._client.MatchError -= new EventHandlerEx<MatchmakingEventArgs>(this.OnMatchError);
+			this._client.MatchError -= new EventHandlerEx<MatchmakingErrorEventArgs>(this.OnMatchError);
 			this._client.NoServerAvailable -= new EventHandlerEx<MatchmakingEventArgs>(this.OnNoServerAvailable);
-			this._client = null;
-			this._lobby.LobbyFinished -= this.OnLobbyFinished;
-			this._lobby = null;
+			this._lobby.LobbyFinished -= new EventHandlerEx<MatchmakingLobbyFinishedEventArgs>(this.OnCustomMatchLobbyFinished);
+			GameHubObject.Hub.State.ListenToStateChanged -= this.ListenToStateChanged;
 		}
 
-		private void OnLobbyFinished(object sender, MatchmakingLobbyFinishedEventArgs eventArgs)
+		public void Initialize()
 		{
-			SwordfishMatchmaking.Log.InfoFormat("Matchmmaking disconnected={0} sender={1}", new object[]
+			this._client.Connection += new EventHandler<MatchConnectionArgs>(this.OnPlayerJoinedQueue);
+			this._client.Disconnection += new EventHandler<MatchmakingEventArgs>(this.OnPlayerLeftQueue);
+			this._client.MatchMade += this.OnMatchMade;
+			this._client.MatchStarted += this.OnMatchStarted;
+			this._client.MatchConfirmed += new EventHandler<MatchmakingEventArgs>(this.OnMatchConfirmed);
+			this._client.MatchCanceled += this.OnPlayerCanceledQueueOrMatchWasRefused;
+			this._client.MatchAccepted += this.OnMatchAccepted;
+			this._client.QueueAverageTime += this.OnQueueAverageTime;
+			this._client.TimeToPlayPredicted += this.OnTimeToPlayPredicted;
+			this._client.QueueSize += this.OnGetQueueSize;
+			this._client.MatchError += new EventHandlerEx<MatchmakingErrorEventArgs>(this.OnMatchError);
+			this._client.NoServerAvailable += new EventHandlerEx<MatchmakingEventArgs>(this.OnNoServerAvailable);
+			this._lobby.LobbyFinished += new EventHandlerEx<MatchmakingLobbyFinishedEventArgs>(this.OnCustomMatchLobbyFinished);
+			GameHubObject.Hub.State.ListenToStateChanged += this.ListenToStateChanged;
+		}
+
+		private void ListenToStateChanged(GameState changedstate)
+		{
+			if (changedstate.StateKind != GameState.GameStateKind.MainMenu)
 			{
-				eventArgs,
-				sender
-			});
+				this.State = SwordfishMatchmaking.MatchmakingState.None;
+			}
+		}
+
+		private void OnCustomMatchLobbyFinished(object sender, MatchmakingLobbyFinishedEventArgs eventArgs)
+		{
 			this.Connected = false;
 			this.Undefined = false;
 			this.WaitingForMatchResult = false;
 			this.State = SwordfishMatchmaking.MatchmakingState.None;
-			if (eventArgs.ErrorType == LobbyMatchmakingMessage.LobbyMessageErrorType.InMatch)
+			if (eventArgs.ErrorType == 5)
 			{
+				SwordfishMatchmaking.Log.Debug("OnLobbyFinished: Match started. Going to pick mode.");
 				return;
 			}
 			SwordfishMatchmaking.Log.WarnFormat("OnLobbyFinished: Custom match won't go to Pick Screen. reason: {0}", new object[]
@@ -111,7 +126,7 @@ namespace HeavyMetalMachines.Swordfish
 
 		public void RequestQueueAvgTime(string queueName)
 		{
-			SwordfishMatchmaking.Log.InfoFormat("Matchmmaking requesting queue avg time. QueueName={0}", new object[]
+			SwordfishMatchmaking.Log.InfoFormat("Matchmaking requesting queue avg time. QueueName={0}", new object[]
 			{
 				queueName
 			});
@@ -120,7 +135,7 @@ namespace HeavyMetalMachines.Swordfish
 
 		private void OnQueueAverageTime(object sender, MatchmakingQueueAverageTime e)
 		{
-			SwordfishMatchmaking.Log.InfoFormat("Matchmmaking OnQueueAverageTime. QueueName={0} AverageTime={1}", new object[]
+			SwordfishMatchmaking.Log.InfoFormat("Matchmaking OnQueueAverageTime. QueueName={0} AverageTime={1}", new object[]
 			{
 				e.QueueName,
 				e.AverageTime
@@ -131,9 +146,9 @@ namespace HeavyMetalMachines.Swordfish
 			}
 		}
 
-		private void OnMatchmakingAccepted(object sender, MatchAcceptedArgs e)
+		private void OnMatchAccepted(object sender, MatchAcceptedArgs e)
 		{
-			SwordfishMatchmaking.Log.InfoFormat("Matchmmaking acceppted={0} sender={1} clients={2}", new object[]
+			SwordfishMatchmaking.Log.InfoFormat("Matchmaking acceppted={0} sender={1} clients={2}", new object[]
 			{
 				e,
 				sender,
@@ -148,7 +163,7 @@ namespace HeavyMetalMachines.Swordfish
 		private void OnMatchError(object sender, EventArgs e)
 		{
 			MatchmakingEventArgs matchmakingEventArgs = (MatchmakingEventArgs)e;
-			SwordfishMatchmaking.Log.ErrorFormat("Matchmmaking OnMatchError arg={0} sender={1}", new object[]
+			SwordfishMatchmaking.Log.ErrorFormat("Matchmaking OnMatchError arg={0} sender={1}", new object[]
 			{
 				matchmakingEventArgs.QueueName,
 				sender
@@ -164,7 +179,7 @@ namespace HeavyMetalMachines.Swordfish
 		private void OnNoServerAvailable(object sender, EventArgs e)
 		{
 			MatchmakingEventArgs matchmakingEventArgs = (MatchmakingEventArgs)e;
-			SwordfishMatchmaking.Log.ErrorFormat("Matchmmaking OnNoServerAvailable arg={0} sender={1}", new object[]
+			SwordfishMatchmaking.Log.ErrorFormat("Matchmaking OnNoServerAvailable arg={0} sender={1}", new object[]
 			{
 				matchmakingEventArgs.QueueName,
 				sender
@@ -187,24 +202,25 @@ namespace HeavyMetalMachines.Swordfish
 			this._lastPlayRequestErrorAction = null;
 		}
 
-		private void OnClientDisconnected(object sender, EventArgs e)
+		private void OnPlayerLeftQueue(object sender, EventArgs e)
 		{
-			SwordfishMatchmaking.Log.InfoFormat("Matchmmaking disconnected={0} sender={1}", new object[]
+			SwordfishMatchmaking.Log.InfoFormat("Matchmaking disconnected={0} sender={1}", new object[]
 			{
 				e,
 				sender
 			});
 			this.Connected = false;
 			this.Undefined = false;
+			this.WaitingForMatchResult = false;
 			if (this.OnClientDisconnectedEvent != null)
 			{
 				this.OnClientDisconnectedEvent();
 			}
-			GameHubObject.Hub.ClientApi.hubClient.ConnectionInstability -= this.HubClientOnConnectionInstability;
+			this.TryUnregisterInstabilityCallback();
 			this._lastPlayRequestErrorAction = null;
 		}
 
-		private void OnClientConnected(object sender, EventArgs e)
+		private void OnPlayerJoinedQueue(object sender, EventArgs e)
 		{
 			MatchmakingEventArgs matchmakingEventArgs = e as MatchmakingEventArgs;
 			this.MatchMadeQueue = ((matchmakingEventArgs != null) ? matchmakingEventArgs.QueueName : string.Empty);
@@ -217,7 +233,9 @@ namespace HeavyMetalMachines.Swordfish
 			this.Undefined = false;
 			this.LastFailed = false;
 			this.WaitingForMatchResult = false;
-			GameHubObject.Hub.Swordfish.Log.BILogClient(ClientBITags.MatchmakingStart, true);
+			GameHubObject.Hub.Swordfish.Log.BILogClient(8, true);
+			this.TryRegisterInstabilityCallback();
+			GameHubObject.Hub.Swordfish.Connection.SetJoinedQueue();
 			this.SendJoinedMatchmakingQueueEvent();
 			if (this.OnClientConnectedEvent != null)
 			{
@@ -236,7 +254,7 @@ namespace HeavyMetalMachines.Swordfish
 
 		private void OnGetQueueSize(object sender, MatchmakingQueueSize e)
 		{
-			UnityEngine.Debug.Log(string.Concat(new object[]
+			Debug.Log(string.Concat(new object[]
 			{
 				"MATCHMAKING OnGetQueueSize - ",
 				e.QueueName,
@@ -250,7 +268,7 @@ namespace HeavyMetalMachines.Swordfish
 			this._getQueueCallback = null;
 		}
 
-		private void OnMatchmakingStarted(object sender, MatchStartedEventArgs e)
+		private void OnMatchStarted(object sender, MatchStartedEventArgs e)
 		{
 			SwordfishMatchmaking.Log.InfoFormat("Match started={0} sender={1} Host={2}:{3} MatchId={4}", new object[]
 			{
@@ -266,10 +284,9 @@ namespace HeavyMetalMachines.Swordfish
 			this.State = SwordfishMatchmaking.MatchmakingState.Started;
 			this.Undefined = false;
 			this.WaitingForMatchResult = false;
-			GameHubObject.Hub.Swordfish.Log.BILogClient(ClientBITags.MatchmakingSuccess, true);
-			GameHubObject.Hub.Config.SetSetting("CURRENT_REGION", GameHubObject.Hub.ClientApi.GetCurrentRegionName());
-			GameHubObject.Hub.Config.SaveSettings();
-			this._isPlayNowRequested = false;
+			GameHubObject.Hub.Swordfish.Log.BILogClient(12, true);
+			GameHubObject.Hub.PlayerPrefs.SetString("CURRENT_REGION", GameHubObject.Hub.ClientApi.GetCurrentRegionName());
+			GameHubObject.Hub.PlayerPrefs.Save();
 			if (this.OnMatchStartedEvent != null)
 			{
 				this.OnMatchStartedEvent();
@@ -277,33 +294,43 @@ namespace HeavyMetalMachines.Swordfish
 			this._lastPlayRequestErrorAction = null;
 		}
 
-		private void OnMatchmakingMade(object sender, EventArgs e)
+		private void OnMatchMade(object sender, MatchMadeEventArgs evt)
 		{
-			MatchmakingEventArgs matchmakingEventArgs = e as MatchmakingEventArgs;
+			if (!this.Connected)
+			{
+				SwordfishMatchmaking.Log.Warn("Received OnMatchMade event without being connected to the queue.");
+				return;
+			}
 			this.MatchMadeQueue = string.Empty;
 			this._numPlayersInMatchMade = 0;
 			this._totalPlayersAndBotsInMatchMade = 0;
 			this._matchAcceptTimeout = 0;
-			if (matchmakingEventArgs != null)
+			if (evt != null)
 			{
-				this.MatchMadeQueue = matchmakingEventArgs.QueueName;
-				this._numPlayersInMatchMade = matchmakingEventArgs.NumberOfPlayersLastMatch;
-				this._totalPlayersAndBotsInMatchMade = matchmakingEventArgs.MatchSize;
-				this._matchAcceptTimeout = matchmakingEventArgs.MatchAcceptTimeout;
+				this.MatchMadeQueue = evt.QueueName;
+				this._numPlayersInMatchMade = evt.NumberOfPlayersLastMatch;
+				this._totalPlayersAndBotsInMatchMade = evt.MatchSize;
+				this._matchAcceptTimeout = evt.MatchAcceptTimeout;
+				this.MatchId = evt.MatchId;
 			}
-			SwordfishMatchmaking.Log.InfoFormat("Match made={0} sender={1} queue={2} numPlayers={3} totalMatch={4} acceptTimout={5}", new object[]
+			SwordfishMatchmaking.Log.InfoFormat("Match made={0} sender={1} queue={2} numPlayers={3} totalMatch={4} acceptTimout={5}, MatchId={6}", new object[]
 			{
-				e,
+				evt,
 				sender,
 				this.MatchMadeQueue,
 				this._numPlayersInMatchMade,
 				this._totalPlayersAndBotsInMatchMade,
-				this._matchAcceptTimeout
+				this._matchAcceptTimeout,
+				evt.MatchId
 			});
 			this.State = SwordfishMatchmaking.MatchmakingState.Made;
 			this.Undefined = false;
 			this.WaitingForMatchResult = true;
-			GameHubObject.Hub.Swordfish.Log.BILogClient(ClientBITags.MatchmakingMade, true);
+			GameHubObject.Hub.Swordfish.Log.BILogClient(11, true);
+			if (this.OnClientMatchMadeEvent != null)
+			{
+				this.OnClientMatchMadeEvent();
+			}
 		}
 
 		private void OnMatchConfirmed(object sender, EventArgs e)
@@ -316,10 +343,10 @@ namespace HeavyMetalMachines.Swordfish
 			this.State = SwordfishMatchmaking.MatchmakingState.Made;
 			this.Undefined = false;
 			this.WaitingForMatchResult = true;
-			GameHubObject.Hub.Swordfish.Log.BILogClient(ClientBITags.MatchmakingFound, true);
+			GameHubObject.Hub.Swordfish.Log.BILogClient(10, true);
 		}
 
-		private void OnMatchmakingCanceled(object sender, MatchCancelledArgs e)
+		private void OnPlayerCanceledQueueOrMatchWasRefused(object sender, MatchCancelledArgs e)
 		{
 			if (this.State == SwordfishMatchmaking.MatchmakingState.None)
 			{
@@ -329,7 +356,7 @@ namespace HeavyMetalMachines.Swordfish
 					Arrays.ToStringWithComma(e.Clients),
 					sender
 				});
-				GameHubObject.Hub.Swordfish.Log.BILogClient(ClientBITags.MatchmakingCanceled, true);
+				GameHubObject.Hub.Swordfish.Log.BILogClient(9, true);
 			}
 			else if (this.State == SwordfishMatchmaking.MatchmakingState.Made)
 			{
@@ -341,7 +368,7 @@ namespace HeavyMetalMachines.Swordfish
 				}
 				if (flag)
 				{
-					GameHubObject.Hub.Swordfish.Log.BILogClient(ClientBITags.MatchmakingDeclined, true);
+					GameHubObject.Hub.Swordfish.Log.BILogClient(14, true);
 					SwordfishMatchmaking.Log.InfoFormat("Match declined={0} clients={1} sender={2}", new object[]
 					{
 						e,
@@ -351,7 +378,7 @@ namespace HeavyMetalMachines.Swordfish
 				}
 				else
 				{
-					GameHubObject.Hub.Swordfish.Log.BILogClient(ClientBITags.MatchmakingFail, true);
+					GameHubObject.Hub.Swordfish.Log.BILogClient(13, true);
 					SwordfishMatchmaking.Log.InfoFormat("Match fail={0} clients={1} sender={2}", new object[]
 					{
 						e,
@@ -378,32 +405,64 @@ namespace HeavyMetalMachines.Swordfish
 			this.WaitingForMatchResult = false;
 		}
 
-		public void StartMatch(string[] clientIds, string config, System.Action onError)
+		public void StartMatch(string[] clientIds, string config, Action onError)
 		{
-			SingletonMonoBehaviour<RegionController>.Instance.UpdateCurrentRegionOnSFServer(true);
-			SwordfishMatchmaking.Log.InfoFormat("Start Custom match group={0} - config={1}", new object[]
+			this._startMatchRequestData.ClientIds = clientIds;
+			this._startMatchRequestData.Config = config;
+			this._startMatchRequestData.OnError = onError;
+			if (SingletonMonoBehaviour<RegionController>.Instance.RegionsDataPopulated)
 			{
-				Arrays.ToStringWithComma(clientIds),
-				config
-			});
+				this.StartMatchAfterRegionDataReceived();
+			}
+			else
+			{
+				SingletonMonoBehaviour<RegionController>.Instance.OnRefreshRegionList += this.OnRefreshRegionList;
+			}
+		}
+
+		private void OnRefreshRegionList(Dictionary<string, RegionServerPing> regionDictionary)
+		{
+			SingletonMonoBehaviour<RegionController>.Instance.OnRefreshRegionList -= this.OnRefreshRegionList;
+			if (regionDictionary.Count > 0)
+			{
+				this.StartMatchAfterRegionDataReceived();
+			}
+			else
+			{
+				this.OnRefreshRegionListError();
+			}
+			this._startMatchRequestData.Clear();
+		}
+
+		private void OnRefreshRegionListError()
+		{
+			Action onError = this._startMatchRequestData.OnError;
+			if (onError != null)
+			{
+				onError();
+			}
+		}
+
+		private void StartMatchAfterRegionDataReceived()
+		{
+			string[] clientIds = this._startMatchRequestData.ClientIds;
+			string config = this._startMatchRequestData.Config;
+			Action onError = this._startMatchRequestData.OnError;
+			SingletonMonoBehaviour<RegionController>.Instance.UpdateCurrentRegionOnSFServer(true);
 			this.LastFailed = false;
 			this._lastPlayRequestErrorAction = onError;
-			GameHubObject.Hub.ClientApi.hubClient.ConnectionInstability += this.HubClientOnConnectionInstability;
-			this._isPlayNowRequested = true;
+			this.TryRegisterInstabilityCallback();
 			this._client.PlayNow(onError, clientIds, config, new SwordfishClientApi.NetworkErrorCallback(this.OnPlayError));
 		}
 
-		public void StartMatch(string queueName, System.Action onError)
+		public void StartMatch(string queueName, Action onError)
 		{
-			SingletonMonoBehaviour<RegionController>.Instance.UpdateCurrentRegionOnSFServer(true);
-			this.LastFailed = false;
-			this.Undefined = true;
-			this._lastPlayRequestErrorAction = onError;
 			if (this._client.IsInGroup())
 			{
-				SwordfishMatchmaking.Log.Error("MATCHMAKING CLIENT IS IN GROUP, BUT IT SHOULDN'T BE!!! --> INCONSISTENT STATE!");
+				SwordfishMatchmaking.Log.Error("MATCHMAKING CLIENT IS IN GROUP, BUT IT SHOULDN'T BE!!! --> CALLING LeaveAllGroups!");
+				GameHubObject.Hub.ClientApi.group.LeaveAllGroups();
 			}
-			GameHubObject.Hub.ClientApi.hubClient.ConnectionInstability += this.HubClientOnConnectionInstability;
+			this.ResetPlayRequestVarsAndTryRegisterInstabilityCallback(onError);
 			this._client.PlaySolo(onError, queueName, new SwordfishClientApi.NetworkErrorCallback(this.OnPlayError));
 			SwordfishMatchmaking.Log.InfoFormat("Start solo -> Queue: {0}", new object[]
 			{
@@ -411,19 +470,9 @@ namespace HeavyMetalMachines.Swordfish
 			});
 		}
 
-		private void HubClientOnConnectionInstability(object sender, ConnectionInstabilityMessage eventArgs)
+		public void StartGroupMatch(Guid groupId, string[] users, string queueName, Action onError)
 		{
-			this.OnPlayError(this._lastPlayRequestErrorAction, new ConnectionException("Connection instability detected."));
-			this._lastPlayRequestErrorAction = null;
-			GameHubObject.Hub.ClientApi.hubClient.ConnectionInstability -= this.HubClientOnConnectionInstability;
-		}
-
-		public void StartGroupMatch(Guid groupId, string[] users, string queueName, System.Action onError)
-		{
-			SingletonMonoBehaviour<RegionController>.Instance.UpdateCurrentRegionOnSFServer(true);
-			this.LastFailed = false;
-			this.Undefined = true;
-			this._lastPlayRequestErrorAction = onError;
+			this.ResetPlayRequestVarsAndTryRegisterInstabilityCallback(onError);
 			this._client.PlayGroup(onError, groupId, users, queueName, new SwordfishClientApi.NetworkErrorCallback(this.OnPlayError));
 			SwordfishMatchmaking.Log.InfoFormat("Start group={0}:{1}:{2} -> Queue '{3}'", new object[]
 			{
@@ -434,6 +483,42 @@ namespace HeavyMetalMachines.Swordfish
 			});
 		}
 
+		private void ResetPlayRequestVarsAndTryRegisterInstabilityCallback(Action onError)
+		{
+			SingletonMonoBehaviour<RegionController>.Instance.UpdateCurrentRegionOnSFServer(true);
+			this.LastFailed = false;
+			this.Undefined = true;
+			this._lastPlayRequestErrorAction = onError;
+			this.TryRegisterInstabilityCallback();
+		}
+
+		private void TryRegisterInstabilityCallback()
+		{
+			if (this._instabilityCallbackInstalled)
+			{
+				return;
+			}
+			GameHubObject.Hub.ClientApi.hubClient.ConnectionInstability += new EventHandlerEx<ConnectionInstabilityMessage>(this.HubClientOnConnectionInstability);
+			this._instabilityCallbackInstalled = true;
+		}
+
+		private void TryUnregisterInstabilityCallback()
+		{
+			if (!this._instabilityCallbackInstalled)
+			{
+				return;
+			}
+			GameHubObject.Hub.ClientApi.hubClient.ConnectionInstability -= new EventHandlerEx<ConnectionInstabilityMessage>(this.HubClientOnConnectionInstability);
+			this._instabilityCallbackInstalled = false;
+		}
+
+		private void HubClientOnConnectionInstability(object sender, ConnectionInstabilityMessage eventArgs)
+		{
+			this.OnPlayError(this._lastPlayRequestErrorAction, new ConnectionException("Connection instability detected."));
+			this._lastPlayRequestErrorAction = null;
+			this.TryUnregisterInstabilityCallback();
+		}
+
 		private void OnPlayError(object state, ConnectionException e)
 		{
 			SwordfishMatchmaking.Log.Fatal("Connection with matchmaking service failed", e);
@@ -442,24 +527,19 @@ namespace HeavyMetalMachines.Swordfish
 			this.Undefined = false;
 			this.WaitingForMatchResult = false;
 			this.State = SwordfishMatchmaking.MatchmakingState.None;
-			System.Action action = state as System.Action;
+			Action action = state as Action;
 			if (action != null)
 			{
 				action();
 			}
-			if (this._isPlayNowRequested)
-			{
-				this._isPlayNowRequested = false;
-				this.TryCallPlayRequestErrorActionAndClearIt();
-			}
 		}
 
-		public void Accept()
+		public void Accept(string queueName)
 		{
-			this._client.Accept(this.MatchMadeQueue);
+			this._client.Accept(queueName);
 			SwordfishMatchmaking.Log.InfoFormat("Accepted queue:{0}", new object[]
 			{
-				this.MatchMadeQueue
+				queueName
 			});
 		}
 
@@ -468,6 +548,7 @@ namespace HeavyMetalMachines.Swordfish
 			if (this._client.IsWaitingInQueue())
 			{
 				this._client.CancelSearch(this.MatchMadeQueue);
+				GameHubObject.Hub.Swordfish.Log.BILogClient(81, true);
 			}
 			this.LastFailed = true;
 			this.State = SwordfishMatchmaking.MatchmakingState.None;
@@ -507,6 +588,10 @@ namespace HeavyMetalMachines.Swordfish
 				});
 				return 0;
 			}
+			if (this.MatchMadeQueue == "Ranked")
+			{
+				return 0;
+			}
 			return Mathf.Max(0, this._totalPlayersAndBotsInMatchMade - this._numPlayersInMatchMade);
 		}
 
@@ -515,7 +600,14 @@ namespace HeavyMetalMachines.Swordfish
 			return this._matchAcceptTimeout;
 		}
 
+		public bool IsInQueue()
+		{
+			return this._client.IsInQueueState();
+		}
+
 		public static readonly BitLogger Log = new BitLogger(typeof(SwordfishMatchmaking));
+
+		private SwordfishMatchmaking.StartMatchRequestData _startMatchRequestData;
 
 		private MatchmakingClient _client;
 
@@ -541,15 +633,15 @@ namespace HeavyMetalMachines.Swordfish
 
 		public List<string> PartyMembers = new List<string>();
 
-		private bool _isPlayNowRequested;
-
-		private System.Action _lastPlayRequestErrorAction;
+		private Action _lastPlayRequestErrorAction;
 
 		private int _numPlayersInMatchMade;
 
 		private int _totalPlayersAndBotsInMatchMade;
 
 		private int _matchAcceptTimeout;
+
+		private bool _instabilityCallbackInstalled;
 
 		private Action<MatchmakingQueueSize> _getQueueCallback;
 
@@ -560,6 +652,22 @@ namespace HeavyMetalMachines.Swordfish
 			Confirmed,
 			Started,
 			Reconnecting
+		}
+
+		private struct StartMatchRequestData
+		{
+			public void Clear()
+			{
+				this.ClientIds = null;
+				this.Config = string.Empty;
+				this.OnError = null;
+			}
+
+			public string[] ClientIds;
+
+			public string Config;
+
+			public Action OnError;
 		}
 	}
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.Localization;
 
 namespace HeavyMetalMachines.Announcer
 {
@@ -9,7 +10,7 @@ namespace HeavyMetalMachines.Announcer
 		{
 			get
 			{
-				return (!string.IsNullOrEmpty(this.Name)) ? Language.Get(this.Name, TranslationSheets.Announcer) : string.Empty;
+				return (!string.IsNullOrEmpty(this.Name)) ? Language.Get(this.Name, TranslationContext.Announcer) : string.Empty;
 			}
 		}
 
@@ -20,7 +21,7 @@ namespace HeavyMetalMachines.Announcer
 		[ScriptId]
 		public int Index;
 
-		public FMODAsset Audio;
+		public AudioEventAsset Audio;
 
 		public bool clientOnlyAudio;
 
@@ -72,7 +73,8 @@ namespace HeavyMetalMachines.Announcer
 			LeaverModifierWarning,
 			BombPicked,
 			BombPickedNearGoal,
-			BombShootingNearGoal
+			BombShootingNearGoal,
+			SpectatorConnected
 		}
 	}
 }

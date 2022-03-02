@@ -1,17 +1,22 @@
 ﻿using System;
 using Assets.Standard_Assets.Scripts.HMM.Customization;
 using HeavyMetalMachines.Match;
-using HeavyMetalMachines.Utils;
+using HeavyMetalMachines.ParentalControl.Restrictions;
+using HeavyMetalMachines.Players.Presenting;
+using HeavyMetalMachines.Publishing;
+using HeavyMetalMachines.Publishing.Presenting;
 using HeavyMetalMachines.VFX;
 using Pocketverse;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
 	public class HudWinnerObject : GameHubBehaviour
 	{
-		public void Setup(PlayerData playerData)
+		public void Setup(PlayerData playerData, IMatchTeams teams, IGetDisplayableNickName getDisplayableNickName, ITeamNameRestriction teamNameRestriction)
 		{
+			this._labelsGui.PsnLabel.gameObject.SetActive(false);
 			bool flag = playerData.Team == GameHubBehaviour.Hub.Players.CurrentPlayerTeam;
 			bool isCurrentPlayer = playerData.IsCurrentPlayer;
 			this._borderSpriteGui.BorderLeftSprite.sprite2D = ((!flag) ? this._borderSpriteGui.BorderLeftEnemySprite : this._borderSpriteGui.BorderLeftAllySprite);
@@ -25,34 +30,40 @@ namespace HeavyMetalMachines.Frontend
 				this._borderSpriteGui.BaseSprite.sprite2D = ((!flag) ? this._borderSpriteGui.BaseEnemySprite : this._borderSpriteGui.BaseAllySprite);
 			}
 			this._labelsGui.PlayerNameLabel.color = ((!flag) ? this._labelsGui.PlayerNameEnemyLabelColor : this._labelsGui.PlayerNameAllyLabelColor);
-			this._playerPortraitSprite.SpriteName = HudUtils.GetHudWinnerPlayertName(GameHubBehaviour.Hub, playerData.Customizations.SelectedSkin);
-			this._labelsGui.CharacterNameLabel.text = playerData.Character.LocalizedName;
+			Guid guidBySlot = playerData.Customizations.GetGuidBySlot(59);
+			this._playerPortraitSprite.SpriteName = HudUtils.GetHudWinnerPlayertName(GameHubBehaviour.Hub, guidBySlot);
+			this._labelsGui.CharacterNameLabel.text = playerData.GetCharacterLocalizedName();
 			if (!playerData.IsBot && playerData.IsBotControlled)
 			{
-				this._labelsGui.PlayerNameLabel.text = playerData.Character.LocalizedBotName;
+				this._labelsGui.PlayerNameLabel.text = playerData.GetCharacterBotLocalizedName();
 			}
 			else
 			{
-				this._labelsGui.PlayerNameLabel.text = playerData.Name;
+				string text = (!playerData.IsBot) ? getDisplayableNickName.GetFormattedNickName(playerData.PlayerId, playerData.Name) : playerData.Name;
+				this._labelsGui.PlayerNameLabel.text = text;
 				if (!playerData.IsBot)
 				{
-					TeamUtils.GetUserTagAsync(GameHubBehaviour.Hub, playerData.UserId, delegate(string teamTag)
-					{
-						if (!string.IsNullOrEmpty(teamTag))
-						{
-							this._labelsGui.PlayerNameLabel.text = string.Format("{0} {1}", teamTag, playerData.Name);
-						}
-					}, delegate(Exception exception)
-					{
-						HudWinnerObject.Log.WarnFormat("Error on GetUserTagAsync. Exception:{0}", new object[]
-						{
-							exception
-						});
-					});
+					this.SetupPsnInfo(playerData);
 				}
 			}
-			this._carSprite.SpriteName = HudUtils.GetCarSkinSpriteName(GameHubBehaviour.Hub, playerData.Character, playerData.Customizations.SelectedSkin);
-			PortraitDecoratorGui.UpdatePortraitSprite(playerData.Customizations.SelectedPortraitItemTypeId, this._playerPortraitBorder, PortraitDecoratorGui.PortraitSpriteType.LoadingVersusBox);
+			this._carSprite.SpriteName = HudUtils.GetCarSkinSpriteName(GameHubBehaviour.Hub.InventoryColletion, playerData.CharacterItemType.Id, guidBySlot);
+			Guid guidBySlot2 = playerData.Customizations.GetGuidBySlot(60);
+			PortraitDecoratorGui.UpdatePortraitSprite(guidBySlot2, this._playerPortraitBorder, PortraitDecoratorGui.PortraitSpriteType.LoadingVersusBox);
+		}
+
+		private void SetupPsnInfo(PlayerData playerData)
+		{
+			Publisher publisherById = Publishers.GetPublisherById(playerData.PublisherId);
+			PublisherPresentingData publisherPresentingData = this._getPublisherPresentingData.Get(publisherById);
+			if (publisherPresentingData.ShouldShowPublisherUserName)
+			{
+				this._labelsGui.PsnLabel.gameObject.SetActive(true);
+				this._labelsGui.PsnLabel.text = playerData.PublisherUserName;
+			}
+			else
+			{
+				this._labelsGui.PsnLabel.gameObject.SetActive(false);
+			}
 		}
 
 		public void PlayAnimationOpen()
@@ -76,6 +87,9 @@ namespace HeavyMetalMachines.Frontend
 		[SerializeField]
 		private HMMUI2DDynamicSprite _playerPortraitBorder;
 
+		[Inject]
+		private IGetPublisherPresentingData _getPublisherPresentingData;
+
 		[SerializeField]
 		private HudWinnerObject.GuiLabels _labelsGui;
 
@@ -95,6 +109,10 @@ namespace HeavyMetalMachines.Frontend
 			public UILabel CharacterNameLabel;
 
 			public UILabel PlayerNameLabel;
+
+			public UILabel PlayerTagLabel;
+
+			public UILabel PsnLabel;
 		}
 
 		[Serializable]

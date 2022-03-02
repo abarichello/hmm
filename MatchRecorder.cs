@@ -26,19 +26,30 @@ namespace HeavyMetalMachines
 		{
 			if (!this._enabled)
 			{
+				MatchRecorder.Log.Debug("Match recording disabled.");
 				return;
 			}
 			MemoryMatchBuffer memoryMatchBuffer = (MemoryMatchBuffer)this.States;
 			MemoryMatchBuffer memoryMatchBuffer2 = (MemoryMatchBuffer)this.KeyFrames;
+			MatchRecorder.Log.DebugFormat("Match sizes states={0} frames={1}", new object[]
+			{
+				memoryMatchBuffer,
+				memoryMatchBuffer2
+			});
 			MatchInformation match = new MatchInformation
 			{
-				Version = "2.07.972",
+				Version = "Release.15.00.250",
 				MatchId = GameHubObject.Hub.Swordfish.Connection.ServerMatchId,
 				Data = GameHubObject.Hub.Match,
 				States = this.States,
 				KeyFrames = this.KeyFrames
 			};
 			string text = MatchFile.WriteFile(match, GameHubObject.Hub.Config.GetValue(ConfigAccess.HORTADestFolder));
+			this._enabled = false;
+			MatchRecorder.Log.DebugFormat("Match saved to file={0}", new object[]
+			{
+				text
+			});
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(MatchRecorder));

@@ -3,25 +3,42 @@ using System.Collections;
 using Assets.ClientApiObjects;
 using Assets.ClientApiObjects.Components;
 using ClientAPI;
+using ClientAPI.Objects;
 using ClientAPI.Service;
+using HeavyMetalMachines.CharacterSelection.Server;
 using HeavyMetalMachines.Frontend;
+using HeavyMetalMachines.Localization;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Matches;
+using HeavyMetalMachines.Matches.API;
+using HeavyMetalMachines.Swordfish;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Server
 {
 	[Serializable]
-	public class ServerStartup : GameState
+	public class ServerStartup : GameState, IObserveClientsConnection
 	{
 		protected override void OnStateEnabled()
 		{
-			this._hub = GameHubBehaviour.Hub;
-			if (GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish, false))
+			try
 			{
-				return;
+				this._initializeLocalization.Initialize();
+				this._swordfishServices.Initialize();
+				this._hub = GameHubBehaviour.Hub;
+				if (!GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish, false))
+				{
+					this.ConnectToSwordfish();
+				}
 			}
-			this.ConnectToSwordfish();
+			catch (Exception e)
+			{
+				ServerStartup.Log.Fatal("Failed to initialize server, quitting", e);
+				ServerEmergencyQuit.Quit();
+			}
 		}
 
 		private void ConnectToSwordfish()
@@ -30,26 +47,45 @@ namespace HeavyMetalMachines.Server
 			this._hub.ClientApi.BaseUrl = GameHubBehaviour.Hub.Config.GetValue(ConfigAccess.SFBaseUrl);
 			this._hub.ClientApi.RequestTimeOut = GameHubBehaviour.Hub.Config.GetIntValue(ConfigAccess.SFTimeout);
 			this._hub.UserService = new UserService(this._hub.ClientApi);
-			this._hub.UserService.ServerLogin(null, GameHubBehaviour.Hub.Config.GetValue(ConfigAccess.SFGameUser), GameHubBehaviour.Hub.Config.GetValue(ConfigAccess.SFGamePass), new SwordfishClientApi.ParameterizedCallback<string>(this.OnServerConnected), new SwordfishClientApi.ErrorCallback(this.OnFailToConnect));
+			ServerStartup.Log.DebugFormat("Will connect to swordfish:{0}", new object[]
+			{
+				this._hub.ClientApi.BaseUrl
+			});
+			this._hub.UserService.ServerLogin(null, GameHubBehaviour.Hub.Config.GetValue(ConfigAccess.SFGameUser), GameHubBehaviour.Hub.Config.GetValue(ConfigAccess.SFGamePass), new SwordfishClientApi.ParameterizedCallback<ServerLoginInfo>(this.OnServerConnected), new SwordfishClientApi.ErrorCallback(this.OnFailToConnect));
 			this.Phase = ServerStartup.StartupPhase.ConnectingToSwordfish;
 		}
 
 		private void OnFailToConnect(object state, Exception exception)
 		{
 			ServerStartup.Log.Error("Failed to connect server to Swordfish, shutting down.", exception);
-			GameHubBehaviour.Hub.Quit();
+			GameHubBehaviour.Hub.Quit(13);
 		}
 
-		private void OnServerConnected(object state, string sessionId)
+		private void OnServerConnected(object state, ServerLoginInfo loginInfo)
 		{
-			this._hub.Swordfish.Connection.SessionId = sessionId;
-			this.GetMatchData();
-			this._hub.GetSWFVersion(delegate
+			this._hub.Swordfish.Connection.SessionId = loginInfo.WsToken;
+			this._hub.Swordfish.Connection.RaiseConnected();
+			ServerStartup.Log.DebugFormat("Server connected session={0}", new object[]
 			{
-			}, delegate(object o, Exception e)
-			{
-				ServerStartup.Log.Error(o, e);
+				this._hub.Swordfish.Connection.SessionId
 			});
+			this.GetMatchData();
+			this._hub.CheckClientAndServerSwordfishApiVersion(new Action(this.OnCheckClientAndServerSwordfishApiVersionMatching), new Action(this.OnCheckClientAndServerSwordfishApiVersionUnmatching), new SwordfishClientApi.ErrorCallback(this.OnCheckClientAndServerSwordfishApiVersionError));
+		}
+
+		private void OnCheckClientAndServerSwordfishApiVersionMatching()
+		{
+			ServerStartup.Log.Debug("Client and server swordfish api versions are matching.");
+		}
+
+		private void OnCheckClientAndServerSwordfishApiVersionUnmatching()
+		{
+			ServerStartup.Log.Debug("Client and server swordfish api versions are not matching.");
+		}
+
+		private void OnCheckClientAndServerSwordfishApiVersionError(object state, Exception exception)
+		{
+			ServerStartup.Log.ErrorStackTrace("OnCheckGameAndServerSwordfishApiVersionError");
 		}
 
 		private void GetMatchData()
@@ -61,6 +97,10 @@ namespace HeavyMetalMachines.Server
 				PickMode pick = (PickMode)GameHubBehaviour.Hub.Config.GetIntValue(ConfigAccess.PickMode, 1);
 				GameHubBehaviour.Hub.Match.FeedData(intValue, intValue2, pick);
 			}
+			ServerStartup.Log.DebugFormat("Swordfish port taken={0}", new object[]
+			{
+				GameHubBehaviour.Hub.Server.ServerPort
+			});
 			this.OpenServer();
 			this.Phase = ServerStartup.StartupPhase.AwaitingPlayers;
 		}
@@ -92,17 +132,25 @@ namespace HeavyMetalMachines.Server
 						this._hub.Players.Players[0].GridIndex = 0;
 						ItemTypeScriptableObject itemTypeScriptableObject = GameHubBehaviour.Hub.InventoryColletion.AllItemTypes[GameHubBehaviour.Hub.SharedConfigs.TutorialConfig.PlayerCharacterGuid];
 						CharacterItemTypeComponent component = itemTypeScriptableObject.GetComponent<CharacterItemTypeComponent>();
-						this._hub.Players.Players[0].SetCharacter(component.MainAttributes.CharacterId);
-						this._hub.Players.UpdatePlayers();
+						this._hub.Players.Players[0].SetCharacter(component.CharacterId, GameHubBehaviour.Hub.InventoryColletion);
+						this._playersDispatcher.UpdatePlayers();
 					}
 					GameHubBehaviour.Hub.AuthMan.LogGameReadyReason();
 					this.Phase = ServerStartup.StartupPhase.Countdown;
 					this._countdownTime = Time.time + this.CountdownTime;
+					ServerStartup.Log.DebugFormat("Match start in {0}s", new object[]
+					{
+						this.CountdownTime
+					});
 				}
 				break;
 			case ServerStartup.StartupPhase.Countdown:
 				if (Time.time > this._countdownTime)
 				{
+					ServerStartup.Log.DebugFormat("Match start Now!", new object[]
+					{
+						this.CountdownTime
+					});
 					this.Phase = ServerStartup.StartupPhase.StartGameMode;
 				}
 				break;
@@ -130,7 +178,7 @@ namespace HeavyMetalMachines.Server
 			}
 			else
 			{
-				base.GoToState(this.PickModeState, false);
+				this._proceedToServerCharacterSelectionState.Proceed();
 			}
 		}
 
@@ -155,8 +203,7 @@ namespace HeavyMetalMachines.Server
 			server.ServerPort = this._hub.Config.GetIntValue(ConfigAccess.ServerPort, this.TestServerPort);
 			int redTeamBotsCount = 0;
 			int bluTeamBotsCount = 0;
-			GameArenaInfo[] arenas = this._hub.ArenaConfig.Arenas;
-			if (arenaIndex > -1 && arenaIndex < arenas.Length && !arenas[arenaIndex].SceneName.Equals(this._hub.SharedConfigs.TutorialConfig.TutorialSceneName))
+			if (arenaIndex > -1 && arenaIndex < this._hub.ArenaConfig.GetNumberOfArenas() && !this._hub.ArenaConfig.GetArenaByIndex(arenaIndex).SceneName.Equals(this._hub.SharedConfigs.TutorialConfig.TutorialSceneName))
 			{
 				redTeamBotsCount = GameHubBehaviour.Hub.Config.GetIntValue(ConfigAccess.RedTeamBotsCount);
 				bluTeamBotsCount = GameHubBehaviour.Hub.Config.GetIntValue(ConfigAccess.BluTeamBotsCount);
@@ -166,9 +213,29 @@ namespace HeavyMetalMachines.Server
 			yield break;
 		}
 
+		public IObservable<MatchClient> OnClientDisconnected()
+		{
+			throw new NotImplementedException();
+		}
+
+		public IObservable<MatchClient> OnClientReconnected()
+		{
+			throw new NotImplementedException();
+		}
+
 		public static readonly BitLogger Log = new BitLogger(typeof(ServerStartup));
 
-		public PickModeServerSetup PickModeState;
+		[SerializeField]
+		private SwordfishServices _swordfishServices;
+
+		[Inject]
+		private IMatchPlayersDispatcher _playersDispatcher;
+
+		[Inject]
+		private IInitializeLocalization _initializeLocalization;
+
+		[Inject]
+		private IProceedToServerCharacterSelectionState _proceedToServerCharacterSelectionState;
 
 		public ServerGame ServerGameState;
 

@@ -1,19 +1,22 @@
 ﻿using System;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids;
-using Assets.Standard_Assets.Scripts.HMM.PlotKids.Infra;
-using Assets.Standard_Assets.Scripts.HMM.PlotKids.Social;
+using HeavyMetalMachines.Chat.Business;
+using HeavyMetalMachines.Players.Business;
+using HeavyMetalMachines.VoiceChat.Business;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.VFX.PlotKids.VoiceChat
 {
 	public class VoiceChatStatusChangerGUIButton : MonoBehaviour
 	{
-		public void Setup(string universalID, bool isBot, bool isEnemy)
+		public void Setup(IPlayer player, bool isBot, bool isEnemy)
 		{
 			this._isBot = isBot;
 			this._isEnemy = isEnemy;
-			this._universalID = universalID;
+			this._player = (player ?? new Player());
 			this.RefreshCanDisplayHover();
 			if (this._isDisplayingInteractableTooltip)
 			{
@@ -23,13 +26,19 @@ namespace HeavyMetalMachines.VFX.PlotKids.VoiceChat
 			{
 				return;
 			}
+			VoiceChatStatusChangerGUIButton.Log.DebugFormat("Setup player {0}. isBot: {1}. isEnemy: {2}", new object[]
+			{
+				this._player.UniversalId,
+				this._isBot,
+				this._isEnemy
+			});
 			this.RefreshGroupChatAllowedState();
 			this.RefreshFriendVoiceMutedStatus();
 		}
 
 		private void RefreshCanDisplayHover()
 		{
-			this._canDisplayHover = (!this._isBot && !string.IsNullOrEmpty(this._universalID) && !GameHubBehaviour.Hub.User.IsUniversalIdLocalPlayer(this._universalID));
+			this._canDisplayHover = (!this._isBot && !string.IsNullOrEmpty(this._player.UniversalId) && !GameHubBehaviour.Hub.User.IsUniversalIdLocalPlayer(this._player.UniversalId));
 		}
 
 		private void Update()
@@ -50,7 +59,7 @@ namespace HeavyMetalMachines.VFX.PlotKids.VoiceChat
 			}
 			Ray ray = UICamera.mainCamera.ScreenPointToRay(Input.mousePosition);
 			RaycastHit raycastHit;
-			this.SetDisplayState(this._collider.Raycast(ray, out raycastHit, 999999f));
+			this.SetDisplayState(this._collider.Raycast(ray, ref raycastHit, 999999f));
 		}
 
 		private void SetDisplayState(bool targetDisplayState)
@@ -65,8 +74,10 @@ namespace HeavyMetalMachines.VFX.PlotKids.VoiceChat
 
 		public void onButtonClick_FriendVoiceHandle()
 		{
-			SingletonMonoBehaviour<VoiceChatController>.Instance.ToggleMuteUser(this._universalID);
-			this.RefreshFriendVoiceMutedStatus();
+			ObservableExtensions.Subscribe<Unit>(this._muteUserVoice.ToggleMute(this._player), delegate(Unit _)
+			{
+				this.RefreshFriendVoiceMutedStatus();
+			});
 		}
 
 		private void RefreshFriendVoiceMutedStatus()
@@ -91,7 +102,7 @@ namespace HeavyMetalMachines.VFX.PlotKids.VoiceChat
 				}
 				return;
 			}
-			bool flag = SingletonMonoBehaviour<VoiceChatController>.Instance.IsUserMuted(this._universalID);
+			bool flag = this._isUserMuted.IsMuted(this._player);
 			if (this._headSetIcon_ActivatedGameObject != null)
 			{
 				this._headSetIcon_ActivatedGameObject.SetActive(!flag);
@@ -108,17 +119,24 @@ namespace HeavyMetalMachines.VFX.PlotKids.VoiceChat
 			{
 				this._headSetIcon_DesactivatedSprite.gameObject.SetActive(flag);
 			}
+			VoiceChatStatusChangerGUIButton.Log.DebugFormat("Player \"{0}\" mute status = {1}", new object[]
+			{
+				this._player.UniversalId,
+				flag
+			});
 		}
 
 		public void onButtonClick_EnableDesableVoiceChat()
 		{
-			ManagerController.Get<ChatManager>().ToggleIgnoreUserGroupChat(this._universalID);
-			this.RefreshGroupChatAllowedState();
+			ObservableExtensions.Subscribe<Unit>(Observable.Do<Unit>(this._blockPlayerInGroupChat.ToggleBlock(this._player), delegate(Unit _)
+			{
+				this.RefreshGroupChatAllowedState();
+			}));
 		}
 
 		private void RefreshGroupChatAllowedState()
 		{
-			bool flag = !ManagerController.Get<ChatManager>().IsUserIgnored(this._universalID);
+			bool flag = !this._isPlayerBlockedInGroupChat.IsBlocked(this._player);
 			if (this._dialogIcon_ActivatedSprite != null)
 			{
 				this._dialogIcon_ActivatedSprite.gameObject.SetActive(flag);
@@ -139,11 +157,11 @@ namespace HeavyMetalMachines.VFX.PlotKids.VoiceChat
 
 		private void TryAlertMemberSpeaking()
 		{
-			if (this._isBot || this._isEnemy || SingletonMonoBehaviour<VoiceChatController>.Instance == null)
+			if (this._isBot || this._isEnemy)
 			{
 				return;
 			}
-			bool flag = SingletonMonoBehaviour<VoiceChatController>.Instance.IsUserSpeaking(this._universalID);
+			bool flag = this._isUserSpeaking.IsSpeaking(this._player);
 			if (flag == this._voiceAlertObject.activeSelf)
 			{
 				return;
@@ -152,6 +170,21 @@ namespace HeavyMetalMachines.VFX.PlotKids.VoiceChat
 		}
 
 		public static readonly BitLogger Log = new BitLogger(typeof(VoiceChatStatusChangerGUIButton));
+
+		[Inject]
+		private IIsPlayerSpeakingOnVoiceChat _isUserSpeaking;
+
+		[Inject]
+		private IMuteVoiceChatPlayer _muteUserVoice;
+
+		[Inject]
+		private IIsVoiceChatPlayerMuted _isUserMuted;
+
+		[Inject]
+		private IIsPlayerBlockedInGroupChat _isPlayerBlockedInGroupChat;
+
+		[Inject]
+		private IBlockPlayerInGroupChat _blockPlayerInGroupChat;
 
 		[SerializeField]
 		private GameObject ObjectToActivated;
@@ -162,7 +195,7 @@ namespace HeavyMetalMachines.VFX.PlotKids.VoiceChat
 		[SerializeField]
 		private bool _isHoverButton = true;
 
-		private string _universalID;
+		private IPlayer _player;
 
 		private bool _isBot;
 

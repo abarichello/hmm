@@ -144,7 +144,7 @@ namespace HeavyMetalMachines.VFX
 			SingletonMonoBehaviour<PanelController>.Instance.UnregisterActiveModalWindow(this);
 			if (this.DestroyOnScreenResolution)
 			{
-				UnityEngine.Object.Destroy(base.gameObject);
+				Object.Destroy(base.gameObject);
 			}
 			else
 			{
@@ -223,9 +223,9 @@ namespace HeavyMetalMachines.VFX
 		[SerializeField]
 		private bool _registerAsAvailableOnEnable;
 
+		[Tooltip("\"Highlander\" window")]
 		[Header("If one or more modal screens share the same ID the previous one will be closed when another is opened. \"-1\" = no group")]
 		[SerializeField]
-		[Tooltip("\"Highlander\" window")]
 		private int _modalGroupID = -1;
 
 		public UIButton CloseButton;

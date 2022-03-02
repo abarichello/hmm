@@ -4,12 +4,13 @@ namespace HeavyMetalMachines.VFX
 {
 	public class QuestionHintContent : BaseHintContent
 	{
-		public QuestionHintContent(string textContent, float timeoutSeconds, Action approveAction, Action refuseAction) : base(textContent, timeoutSeconds, true, null, "SystemMessage")
+		public QuestionHintContent(string textContent, float timeoutSeconds, Action approveAction, Action refuseAction, bool executeRefuseActionOnTimeout = true) : base(textContent, timeoutSeconds, true, null, "SystemMessage")
 		{
 			this._textContent = textContent;
 			this._timeoutSeconds = timeoutSeconds;
 			this._approveAction = approveAction;
 			this._refuseAction = refuseAction;
+			this._executeRefuseActionOnTimeout = executeRefuseActionOnTimeout;
 		}
 
 		public Action ApproveAction
@@ -28,8 +29,18 @@ namespace HeavyMetalMachines.VFX
 			}
 		}
 
-		private Action _approveAction;
+		public bool ExecuteRefuseActionOnTimeout
+		{
+			get
+			{
+				return this._executeRefuseActionOnTimeout;
+			}
+		}
 
-		private Action _refuseAction;
+		private readonly Action _approveAction;
+
+		private readonly Action _refuseAction;
+
+		private readonly bool _executeRefuseActionOnTimeout;
 	}
 }

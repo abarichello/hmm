@@ -32,5 +32,19 @@ namespace HeavyMetalMachines.Frontend
 			color.a = alpha;
 			graphic.color = color;
 		}
+
+		public static void EventSystemCancelSelection()
+		{
+			EventSystem current = EventSystem.current;
+			ExecuteEvents.Execute<ICancelHandler>(current.currentSelectedGameObject, new BaseEventData(current), ExecuteEvents.cancelHandler);
+		}
+
+		public static Vector2 GetTextPreferedSize(string text, Text uiText)
+		{
+			Vector2 sizeDelta = uiText.rectTransform.sizeDelta;
+			sizeDelta.x = uiText.cachedTextGenerator.GetPreferredWidth(text, uiText.GetGenerationSettings(uiText.rectTransform.rect.size));
+			sizeDelta.y = uiText.cachedTextGenerator.GetPreferredHeight(text, uiText.GetGenerationSettings(uiText.rectTransform.rect.size));
+			return sizeDelta;
+		}
 	}
 }

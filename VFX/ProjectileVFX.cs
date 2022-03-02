@@ -57,7 +57,7 @@ namespace HeavyMetalMachines.VFX
 			if (!this.CanCollectToCache)
 			{
 				this._vfxTransform = this._vfxInstance.transform;
-				this._vfxInstance.transform.parent = GameHubBehaviour.Hub.Drawer.Effects;
+				GameHubBehaviour.Hub.Drawer.AddEffect(this._vfxInstance.transform);
 				this._vfxInstance.baseMasterVFX = this.ProjectilePrefab;
 				this._vfxInstance.Activate(this._master.TargetFX, this._vfxInstance.transform);
 			}

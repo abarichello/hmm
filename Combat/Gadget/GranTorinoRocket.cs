@@ -72,7 +72,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			base.DrainCheck(causer, taker, mod, amount, eventid);
 		}
 
-		protected override void OnMyEffectDestroyed(DestroyEffect evt)
+		protected override void OnMyEffectDestroyed(DestroyEffectMessage evt)
 		{
 			this.forcedShots.Remove(evt.RemoveData.TargetEventId);
 		}
@@ -82,7 +82,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			return base.GetValidPosition(this.Combat.transform.position, base.DummyPosition());
 		}
 
-		protected override int FireExtraGadgetOnDeath(DestroyEffect evt)
+		protected override int FireExtraGadgetOnDeath(DestroyEffectMessage evt)
 		{
 			if (evt.EffectData.EffectInfo == this.MyInfo.ExtraEffect)
 			{
@@ -101,7 +101,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			{
 				return -1;
 			}
-			this.Combat.GadgetStates.SetGadgetState(this._gadgetState, base.Slot, this._gadgetState.GadgetState, this._gadgetState.CoolDown, this._gadgetState.Value, this._gadgetState.Heat, this.pickupsGot, null);
+			this.Combat.GadgetStates.SetGadgetState(this._gadgetState, base.Slot, this._gadgetState.GadgetState, this._gadgetState.Cooldown, this._gadgetState.Value, this._gadgetState.Heat, this.pickupsGot, null);
 			EffectEvent effectEvent = base.GetEffectEvent(this.MyInfo.ExtraEffect);
 			effectEvent.Origin = evt.RemoveData.Origin;
 			effectEvent.LifeTime = this._upgPickupLifetime.Get();
@@ -109,13 +109,14 @@ namespace HeavyMetalMachines.Combat.Gadget
 			int result = GameHubBehaviour.Hub.Events.TriggerEvent(effectEvent);
 			if (this.pickupInOrigin != -1 && GameHubBehaviour.Hub.Effects.GetBaseFx(this.pickupInOrigin) != null && (GameHubBehaviour.Hub.Effects.GetBaseFx(this.pickupInOrigin).transform.position - effectEvent.Origin).sqrMagnitude < 2f)
 			{
-				float f = 0.0174532924f * UnityEngine.Random.Range(-(this.MyInfo.PickupMaxSpreadAngle / 2f), this.MyInfo.PickupMaxSpreadAngle / 2f);
-				float num = Mathf.Cos(f);
-				float num2 = Mathf.Sin(f);
+				float num = 0.017453292f * Random.Range(-(this.MyInfo.PickupMaxSpreadAngle / 2f), this.MyInfo.PickupMaxSpreadAngle / 2f);
+				float num2 = Mathf.Cos(num);
+				float num3 = Mathf.Sin(num);
 				float x = evt.EffectData.Direction.x;
 				float z = evt.EffectData.Direction.z;
-				Vector3 a = new Vector3(x * num - z * num2, 0f, x * num2 + z * num);
-				effectEvent.Origin -= a * UnityEngine.Random.Range(0f, this.MyInfo.PickupMaxSpread);
+				Vector3 vector;
+				vector..ctor(x * num2 - z * num3, 0f, x * num3 + z * num2);
+				effectEvent.Origin -= vector * Random.Range(0f, this.MyInfo.PickupMaxSpread);
 			}
 			else
 			{
@@ -136,7 +137,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 				return;
 			}
 			base.GadgetUpdate();
-			this.Combat.GadgetStates.SetGadgetState(this._gadgetState, base.Slot, this._gadgetState.GadgetState, this._gadgetState.CoolDown, this._gadgetState.Value, this._gadgetState.Heat, this.pickupsGot, null);
+			this.Combat.GadgetStates.SetGadgetState(this._gadgetState, base.Slot, this._gadgetState.GadgetState, this._gadgetState.Cooldown, this._gadgetState.Value, this._gadgetState.Heat, this.pickupsGot, null);
 		}
 
 		public ModifierData[] BuffModifiers()

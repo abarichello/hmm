@@ -1,6 +1,6 @@
 ﻿using System;
+using HeavyMetalMachines.DataTransferObjects.Util;
 using HeavyMetalMachines.Event;
-using HeavyMetalMachines.Utils;
 using Pocketverse;
 using UnityEngine;
 
@@ -40,7 +40,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			this.DrainLifePctFromTarget.SetLevel(upgradeName, level);
 		}
 
-		public override void OnDestroyEffect(DestroyEffect evt)
+		public override void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			base.OnDestroyEffect(evt);
 			if (this._effectDict.ContainsKey(evt.RemoveData.TargetEventId))

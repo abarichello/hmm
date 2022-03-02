@@ -12,7 +12,7 @@ namespace HeavyMetalMachines.Scene
 		{
 			if (GameHubBehaviour.Hub.Net.IsServer())
 			{
-				UnityEngine.Object.Destroy(this);
+				Object.Destroy(this);
 				return;
 			}
 			this._animator = base.GetComponent<Animator>();

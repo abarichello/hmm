@@ -8,9 +8,9 @@ namespace HeavyMetalMachines.Frontend
 	{
 		private void Start()
 		{
-			this._url = string.Format(GameHubBehaviour.Hub.Config.GetValue(ConfigAccess.CombatTestKnowMoreURL), Language.CurrentLanguage());
+			this._url = string.Format(GameHubBehaviour.Hub.Config.GetValue(ConfigAccess.CombatTestKnowMoreURL), Language.CurrentLanguage);
 			this._logBi = true;
-			this._biTag = ClientBITags.CombatTestKnowMore;
+			this._biTag = 57;
 			this._collider = base.GetComponent<BoxCollider>();
 			if (!(GameHubBehaviour.Hub.State.Current is MainMenu))
 			{

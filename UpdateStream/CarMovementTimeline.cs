@@ -1,5 +1,5 @@
 ﻿using System;
-using Hoplon.Common.Time;
+using Hoplon.Time;
 using Hoplon.Timeline;
 using UnityEngine;
 
@@ -19,6 +19,17 @@ namespace HeavyMetalMachines.UpdateStream
 			result.AngularVelocity = Mathf.Lerp(first.AngularVelocity, second.AngularVelocity, t);
 			result.TargetV = Mathf.Lerp(first.TargetV, second.TargetV, t);
 			result.TargetH = Mathf.Lerp(first.TargetH, second.TargetH, t);
+			float num = second.TurretAngle - first.TurretAngle;
+			float num2 = 0f;
+			if (1f < num)
+			{
+				num2 = 2f;
+			}
+			else if (-1f > num)
+			{
+				num2 = -2f;
+			}
+			result.TurretAngle = Mathf.Lerp(first.TurretAngle + num2, second.TurretAngle, t);
 			result.HAxis = Mathf.Lerp(first.HAxis, second.HAxis, t);
 			result.VAxis = Mathf.Lerp(first.VAxis, second.VAxis, t);
 			result.SpeedZ = Mathf.Lerp(first.SpeedZ, second.SpeedZ, t);
@@ -33,6 +44,7 @@ namespace HeavyMetalMachines.UpdateStream
 			result.AngularVelocity = obj.AngularVelocity;
 			result.TargetV = obj.TargetV;
 			result.TargetH = obj.TargetH;
+			result.TurretAngle = obj.TurretAngle;
 			result.HAxis = obj.HAxis;
 			result.VAxis = obj.VAxis;
 			result.SpeedZ = obj.SpeedZ;

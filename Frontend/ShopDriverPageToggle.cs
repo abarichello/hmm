@@ -3,6 +3,7 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Frontend
 {
+	[Obsolete]
 	public class ShopDriverPageToggle : MonoBehaviour
 	{
 		public UILabel PageNumber;

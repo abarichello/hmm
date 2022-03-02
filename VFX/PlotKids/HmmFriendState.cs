@@ -10,6 +10,7 @@ namespace HeavyMetalMachines.VFX.PlotKids
 		Offline,
 		Away,
 		PlayingOtherGame,
-		OnlineNarrator
+		OnlineNarrator,
+		Teammate
 	}
 }

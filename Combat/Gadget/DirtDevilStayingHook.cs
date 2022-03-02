@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Reflection;
 using HeavyMetalMachines.Event;
 using Pocketverse;
 using UnityEngine;
@@ -54,6 +55,11 @@ namespace HeavyMetalMachines.Combat.Gadget
 			base.SetTargetAndDirection(effectEvent);
 			this._currentGoDirection = effectEvent.Direction;
 			this._currentHookGoEffect = GameHubBehaviour.Hub.Events.TriggerEvent(effectEvent);
+			DirtDevilStayingHook.Log.DebugFormat("{0} {1}", new object[]
+			{
+				MethodBase.GetCurrentMethod().Name,
+				effectEvent.EffectInfo.Effect
+			});
 			return this._currentHookGoEffect;
 		}
 
@@ -65,6 +71,11 @@ namespace HeavyMetalMachines.Combat.Gadget
 				this.DestroyCurrentHookStay();
 				this.HookBackOwnerEffect(this._currentHookBackEffect);
 			}
+			DirtDevilStayingHook.Log.DebugFormat("{0} {1}", new object[]
+			{
+				MethodBase.GetCurrentMethod().Name,
+				this._currentHookBackEffect
+			});
 			return this._currentHookBackEffect;
 		}
 
@@ -75,6 +86,11 @@ namespace HeavyMetalMachines.Combat.Gadget
 			effectEvent.Origin = this.DummyPosition(effectEvent);
 			this._currentOwnerBackEffect = GameHubBehaviour.Hub.Events.TriggerEvent(effectEvent);
 			base.ExistingFiredEffectsAdd(this._currentOwnerBackEffect);
+			DirtDevilStayingHook.Log.DebugFormat("{0} {1}", new object[]
+			{
+				MethodBase.GetCurrentMethod().Name,
+				effectEvent.EffectInfo.Effect
+			});
 		}
 
 		private void HookStay(CombatObject targetCombatObject)
@@ -90,6 +106,11 @@ namespace HeavyMetalMachines.Combat.Gadget
 			this._currentHookStayStartTime = (long)GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
 			this._currentHookStayTarget = targetCombatObject;
 			base.ExistingFiredEffectsAdd(this._currentHookStayEffect);
+			DirtDevilStayingHook.Log.DebugFormat("{0} {1}", new object[]
+			{
+				MethodBase.GetCurrentMethod().Name,
+				effectEvent.EffectInfo.Effect
+			});
 		}
 
 		private void HookStayWall(Vector3 wallPosition)
@@ -110,6 +131,13 @@ namespace HeavyMetalMachines.Combat.Gadget
 			this._currentHookStayEffect = GameHubBehaviour.Hub.Events.TriggerEvent(effectEvent);
 			this._currentHookStayEffectWallPosition = wallPosition;
 			base.ExistingFiredEffectsAdd(this._currentHookStayEffect);
+			DirtDevilStayingHook.Log.DebugFormat("{0} {1} @={2} lifetime={3}", new object[]
+			{
+				MethodBase.GetCurrentMethod().Name,
+				effectEvent.EffectInfo.Effect,
+				wallPosition,
+				num
+			});
 		}
 
 		private int HookBack()
@@ -122,6 +150,11 @@ namespace HeavyMetalMachines.Combat.Gadget
 			effectEvent.Origin = this._currentHookStayTarget.Transform.position;
 			int num = GameHubBehaviour.Hub.Events.TriggerEvent(effectEvent);
 			base.ExistingFiredEffectsAdd(num);
+			DirtDevilStayingHook.Log.DebugFormat("{0} {1}", new object[]
+			{
+				MethodBase.GetCurrentMethod().Name,
+				effectEvent.EffectInfo.Effect
+			});
 			return num;
 		}
 
@@ -137,6 +170,12 @@ namespace HeavyMetalMachines.Combat.Gadget
 			effectEvent.Direction = this._currentGoDirection;
 			int num = GameHubBehaviour.Hub.Events.TriggerEvent(effectEvent);
 			base.ExistingFiredEffectsAdd(num);
+			DirtDevilStayingHook.Log.DebugFormat("{0} {1} {2}", new object[]
+			{
+				MethodBase.GetCurrentMethod().Name,
+				effectEvent.EffectInfo.Effect,
+				effectEvent.Origin
+			});
 			return num;
 		}
 
@@ -149,6 +188,11 @@ namespace HeavyMetalMachines.Combat.Gadget
 			effectEvent.Direction = base.CalcDirection(this.Combat.transform.position, effectEvent.Origin);
 			int effectID = GameHubBehaviour.Hub.Events.TriggerEvent(effectEvent);
 			base.ExistingFiredEffectsAdd(effectID);
+			DirtDevilStayingHook.Log.DebugFormat("{0} {1}", new object[]
+			{
+				MethodBase.GetCurrentMethod().Name,
+				effectEvent.EffectInfo.Effect
+			});
 		}
 
 		private void OnCasterDeath(CombatObject obj, UnspawnEvent msg)
@@ -221,7 +265,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			}
 		}
 
-		protected override void OnMyEffectDestroyed(DestroyEffect evt)
+		protected override void OnMyEffectDestroyed(DestroyEffectMessage evt)
 		{
 			if (evt.RemoveData.TargetEventId == this._currentHookGoEffect)
 			{

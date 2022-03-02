@@ -1,5 +1,4 @@
 ﻿using System;
-using Commons.Swordfish.Battlepass;
 
 namespace HeavyMetalMachines.Customization
 {
@@ -11,8 +10,6 @@ namespace HeavyMetalMachines.Customization
 
 		void Setup(CustomizationInventoryCategoryData data);
 
-		void SelectCategory(Guid categoryId, PlayerCustomizationSlot customizationSlot);
-
 		void OnEquipItemResponse(bool success);
 
 		void RegisterCategoriesView(ICustomizationInventoryCategoriesView categoriesView);
@@ -20,5 +17,7 @@ namespace HeavyMetalMachines.Customization
 		int GetNewItemsCount(Guid categoryId);
 
 		void MarkAllItemsAsSeen(Guid[] categoriesWithNewItems);
+
+		IGetCustomizationChange GetCustomizationInventory();
 	}
 }

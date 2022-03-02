@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using HeavyMetalMachines.Character;
+using Assets.ClientApiObjects;
+using Assets.ClientApiObjects.Components;
+using HeavyMetalMachines.Characters;
 using HeavyMetalMachines.Match;
 using HeavyMetalMachines.Server.Pick.Rules.Apis;
 using Pocketverse;
@@ -9,7 +11,7 @@ namespace HeavyMetalMachines.Server.Pick.Rules
 {
 	public class PriorityBotCharacterSelector : IBotCharacterSelector
 	{
-		public PriorityBotCharacterSelector(CharacterInfo[] validCharactersForBots, IMatchPlayers matchPlayers, PriorityBotCharacterSelector.GetBotDesiredPickCb botDesiredPickGetter, IPriorityRolesProvider priorityRolesProvider)
+		public PriorityBotCharacterSelector(IItemType[] validCharactersForBots, IMatchPlayers matchPlayers, PriorityBotCharacterSelector.GetBotDesiredPickCb botDesiredPickGetter, IPriorityRolesProvider priorityRolesProvider)
 		{
 			this._validCharactersForBots = validCharactersForBots;
 			this._matchPlayers = matchPlayers;
@@ -19,7 +21,7 @@ namespace HeavyMetalMachines.Server.Pick.Rules
 
 		public int SelectCharacter(PlayerData bot)
 		{
-			CharacterInfo[] array = this.GetAvailableCharactersForPick(bot);
+			IItemType[] array = this.GetAvailableCharactersForPick(bot);
 			if (array.Length <= 0)
 			{
 				PriorityBotCharacterSelector.Log.WarnFormat("No possible character to randomly select for player={0} team={1}", new object[]
@@ -29,14 +31,18 @@ namespace HeavyMetalMachines.Server.Pick.Rules
 				});
 				return -1;
 			}
-			List<CharacterInfo.DriverRoleKind> priorityRoles = this._priorityRolesProvider.GetPriorityRoles(bot.Team);
+			List<DriverRoleKind> priorityRoles = this._priorityRolesProvider.GetPriorityRoles(bot.Team);
 			array = PriorityBotCharacterSelector.FilterCharactersByPriorityRoles(array, priorityRoles);
 			return PriorityBotCharacterSelector.SelectRandomCharacter(array);
 		}
 
-		protected static CharacterInfo[] FilterCharactersByPriorityRoles(CharacterInfo[] availableCharacters, List<CharacterInfo.DriverRoleKind> priorityRoles)
+		protected static IItemType[] FilterCharactersByPriorityRoles(IItemType[] availableCharacters, List<DriverRoleKind> priorityRoles)
 		{
-			CharacterInfo[] array = Array.FindAll<CharacterInfo>(availableCharacters, (CharacterInfo characterInfo) => priorityRoles.Contains(characterInfo.Role));
+			IItemType[] array = Array.FindAll<IItemType>(availableCharacters, delegate(IItemType characterInfo)
+			{
+				CharacterItemTypeComponent component = characterInfo.GetComponent<CharacterItemTypeComponent>();
+				return priorityRoles.Contains(component.Role);
+			});
 			if (array.Length == 0)
 			{
 				PriorityBotCharacterSelector.Log.WarnFormat("No character available for Bot with the role set in SharedConfig.", new object[0]);
@@ -45,19 +51,21 @@ namespace HeavyMetalMachines.Server.Pick.Rules
 			return array;
 		}
 
-		private static int SelectRandomCharacter(IList<CharacterInfo> availableCharacters)
+		private static int SelectRandomCharacter(IItemType[] availableCharacters)
 		{
-			return availableCharacters[SysRandom.Int(0, availableCharacters.Count)].CharacterId;
+			IItemType itemType = availableCharacters[SysRandom.Int(0, availableCharacters.Length)];
+			return itemType.GetComponent<CharacterItemTypeComponent>().CharacterId;
 		}
 
-		protected CharacterInfo[] GetAvailableCharactersForPick(PlayerData bot)
+		protected IItemType[] GetAvailableCharactersForPick(PlayerData bot)
 		{
-			return Array.FindAll<CharacterInfo>(this._validCharactersForBots, (CharacterInfo characterInfo) => this.IsCharacterAvailableForPick(bot.PlayerAddress, bot.Team, characterInfo.CharacterId));
+			return Array.FindAll<IItemType>(this._validCharactersForBots, (IItemType charItemType) => this.IsCharacterAvailableForPick(bot, charItemType));
 		}
 
-		private bool IsCharacterAvailableForPick(byte targetAddress, TeamKind team, int characterId)
+		private bool IsCharacterAvailableForPick(PlayerData bot, IItemType charItemType)
 		{
-			return !this.IsCharacterReservedInTeam(targetAddress, team, characterId);
+			CharacterItemTypeComponent component = charItemType.GetComponent<CharacterItemTypeComponent>();
+			return !this.IsCharacterReservedInTeam(bot.PlayerAddress, bot.Team, component.CharacterId);
 		}
 
 		private bool IsCharacterReservedInTeam(byte targetAddress, TeamKind team, int characterId)
@@ -98,13 +106,13 @@ namespace HeavyMetalMachines.Server.Pick.Rules
 
 		private static readonly BitLogger Log = new BitLogger(typeof(PriorityBotCharacterSelector));
 
-		private readonly CharacterInfo[] _validCharactersForBots;
+		private readonly IItemType[] _validCharactersForBots;
 
 		private readonly IMatchPlayers _matchPlayers;
 
 		private readonly IPriorityRolesProvider _priorityRolesProvider;
 
-		public PriorityBotCharacterSelector.GetBotDesiredPickCb GetBotDesiredPick;
+		public readonly PriorityBotCharacterSelector.GetBotDesiredPickCb GetBotDesiredPick;
 
 		public delegate int GetBotDesiredPickCb(byte playerAddress);
 	}

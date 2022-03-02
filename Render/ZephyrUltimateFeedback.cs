@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Combat.Gadget;
 using Pocketverse;
@@ -12,7 +13,7 @@ namespace HeavyMetalMachines.Render
 		{
 			if (!GameHubBehaviour.Hub || (GameHubBehaviour.Hub.Net.IsServer() && !GameHubBehaviour.Hub.Net.IsTest()))
 			{
-				UnityEngine.Object.Destroy(this);
+				Object.Destroy(this);
 				return;
 			}
 		}
@@ -74,8 +75,26 @@ namespace HeavyMetalMachines.Render
 			this._teamUltimateReadyMaterial = null;
 		}
 
+		private void OnValidate()
+		{
+			if (this._renderers.Length == 0)
+			{
+				return;
+			}
+			List<Renderer> list = new List<Renderer>(this._renderers.Length);
+			for (int i = 0; i < this._renderers.Length; i++)
+			{
+				Renderer renderer = this._renderers[i];
+				if (renderer != null && (renderer is MeshRenderer || renderer is SkinnedMeshRenderer))
+				{
+					list.Add(renderer);
+				}
+			}
+			this._renderers = list.ToArray();
+		}
+
 		[SerializeField]
-		private MeshRenderer[] _renderers;
+		private Renderer[] _renderers;
 
 		[SerializeField]
 		private Material _allyClearMaterial;

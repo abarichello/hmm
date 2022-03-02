@@ -95,7 +95,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			this._trailPieceDropTimeInterval = (int)num3;
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (this._allEffects.Contains(evt.RemoveData.TargetEventId))
 			{

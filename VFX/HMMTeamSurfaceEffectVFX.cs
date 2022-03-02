@@ -11,13 +11,22 @@ namespace HeavyMetalMachines.VFX
 		{
 			base.Awake();
 			this._allyMaterialInstance = this.MaterialInstance;
-			this._enemyMaterialInstance = UnityEngine.Object.Instantiate<Material>(this.EnemyOverlapMaterial);
+			this._enemyMaterialInstance = Object.Instantiate<Material>(this.EnemyOverlapMaterial);
 		}
 
 		protected override void OnActivate()
 		{
-			TeamKind team = GameHubBehaviour.Hub.Players.GetPlayerOrBotsByObjectId(this._targetFXInfo.Owner.ObjId).Team;
-			this.MaterialInstance = ((team != GameHubBehaviour.Hub.Players.CurrentPlayerTeam) ? this._enemyMaterialInstance : this._allyMaterialInstance);
+			VFXTeam vfxteam;
+			if (this.PrevizMode)
+			{
+				vfxteam = base.CurrentTeam;
+			}
+			else
+			{
+				TeamKind team = GameHubBehaviour.Hub.Players.GetPlayerOrBotsByObjectId(this._targetFXInfo.Owner.ObjId).Team;
+				vfxteam = ((team == GameHubBehaviour.Hub.Players.CurrentPlayerTeam) ? VFXTeam.Ally : VFXTeam.Enemy);
+			}
+			this.MaterialInstance = ((vfxteam != VFXTeam.Ally) ? this._enemyMaterialInstance : this._allyMaterialInstance);
 			if (this.EnableFading)
 			{
 				this.OriginalColor = this.MaterialInstance.GetColor(this.PropertyIds.Color);

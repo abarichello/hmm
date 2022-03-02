@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.Localization;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Frontend
@@ -15,7 +16,7 @@ namespace HeavyMetalMachines.Frontend
 			switch (stage)
 			{
 			case 1:
-				this.TitleLabel.text = Language.Get(this.Stage1Draft, TranslationSheets.MainMenuGui);
+				this.TitleLabel.text = Language.Get(this.Stage1Draft, TranslationContext.MainMenuGui);
 				this.stage1_background.sprite2D = this.ActiveSprite;
 				this.stage1_check.SetActive(false);
 				this.stage1_label.SetActive(true);
@@ -24,7 +25,7 @@ namespace HeavyMetalMachines.Frontend
 				this.stage4_activated.SetActive(false);
 				break;
 			case 2:
-				this.TitleLabel.text = Language.Get(this.Stage2Draft, TranslationSheets.MainMenuGui);
+				this.TitleLabel.text = Language.Get(this.Stage2Draft, TranslationContext.MainMenuGui);
 				this.stage1_background.sprite2D = this.DeActiveSprite;
 				this.stage1_check.SetActive(true);
 				this.stage1_label.SetActive(false);
@@ -34,7 +35,7 @@ namespace HeavyMetalMachines.Frontend
 				this.stage4_activated.SetActive(false);
 				break;
 			case 3:
-				this.TitleLabel.text = Language.Get(this.Stage3Draft, TranslationSheets.MainMenuGui);
+				this.TitleLabel.text = Language.Get(this.Stage3Draft, TranslationContext.MainMenuGui);
 				this.stage1_background.sprite2D = this.DeActiveSprite;
 				this.stage1_check.SetActive(true);
 				this.stage1_label.SetActive(false);
@@ -47,7 +48,7 @@ namespace HeavyMetalMachines.Frontend
 				this.stage4_activated.SetActive(false);
 				break;
 			case 4:
-				this.TitleLabel.text = Language.Get(this.Stage4Draft, TranslationSheets.MainMenuGui);
+				this.TitleLabel.text = Language.Get(this.Stage4Draft, TranslationContext.MainMenuGui);
 				this.stage1_background.sprite2D = this.DeActiveSprite;
 				this.stage1_check.SetActive(true);
 				this.stage1_label.SetActive(false);

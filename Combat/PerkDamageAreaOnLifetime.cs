@@ -43,7 +43,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				vector = base.transform.position;
 			}
-			Collider[] array = Physics.OverlapSphere(vector, this.Effect.Data.Range, 1077058560);
+			Collider[] array = Physics.OverlapSphere(vector, this.Effect.Data.Range, 1077054464);
 			ModifierData[] datas = (!this.UseExtraModifiers) ? this.Effect.Data.Modifiers : this.Effect.Data.ExtraModifiers;
 			foreach (Collider comp in array)
 			{

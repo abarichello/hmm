@@ -100,12 +100,8 @@ namespace HeavyMetalMachines.Combat
 			this._delayed = future;
 		}
 
-		public object Invoke(int classId, short methodId, object[] args)
+		public object Invoke(int classId, short methodId, object[] args, BitStream bitstream = null)
 		{
-			if (classId != 1052)
-			{
-				throw new Exception("Hierarchy in RemoteClass is not allowed!!! " + classId);
-			}
 			this._delayed = null;
 			if (methodId != 1)
 			{
@@ -117,7 +113,7 @@ namespace HeavyMetalMachines.Combat
 
 		public int FloodIntervalMillis = 100;
 
-		public const int StaticClassId = 1052;
+		public const int StaticClassId = 1077;
 
 		private Identifiable _identifiable;
 

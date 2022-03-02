@@ -203,23 +203,23 @@ namespace HeavyMetalMachines.VFX
 				{
 					BombBlockerFeedback.BombBlockerPoint bombBlockerPoint2 = this.points[i + 1];
 					Vector3 vector = bombBlockerPoint2.point - bombBlockerPoint.point;
-					Vector3 pos = bombBlockerPoint.point + vector * 0.5f;
-					pos.y += 5f;
-					matrix.SetTRS(pos, Quaternion.LookRotation(vector, Vector3.up), Vector3.one);
+					Vector3 vector2 = bombBlockerPoint.point + vector * 0.5f;
+					vector2.y += 5f;
+					matrix.SetTRS(vector2, Quaternion.LookRotation(vector, Vector3.up), Vector3.one);
 					Gizmos.matrix = matrix;
 					Gizmos.color = new Color(0f, 0f, 1f, 0.2f);
 					Gizmos.DrawCube(Vector3.zero, new Vector3(1f, 10f, vector.magnitude));
-					Vector3 forward = bombBlockerPoint2.point - bombBlockerPoint.point;
-					Vector3 pos2 = bombBlockerPoint.point + vector * 0.5f;
-					forward.x = -forward.x;
-					forward.z = -forward.z;
-					pos2.x = -pos2.x;
-					pos2.z = -pos2.z;
-					pos2.y += 5f;
-					matrix.SetTRS(pos2, Quaternion.LookRotation(forward, Vector3.up), Vector3.one);
+					Vector3 vector3 = bombBlockerPoint2.point - bombBlockerPoint.point;
+					Vector3 vector4 = bombBlockerPoint.point + vector * 0.5f;
+					vector3.x = -vector3.x;
+					vector3.z = -vector3.z;
+					vector4.x = -vector4.x;
+					vector4.z = -vector4.z;
+					vector4.y += 5f;
+					matrix.SetTRS(vector4, Quaternion.LookRotation(vector3, Vector3.up), Vector3.one);
 					Gizmos.matrix = matrix;
 					Gizmos.color = new Color(1f, 0f, 0f, 0.2f);
-					Gizmos.DrawCube(Vector3.zero, new Vector3(1f, 10f, forward.magnitude));
+					Gizmos.DrawCube(Vector3.zero, new Vector3(1f, 10f, vector3.magnitude));
 				}
 			}
 		}
@@ -234,7 +234,7 @@ namespace HeavyMetalMachines.VFX
 
 		private Transform audioTransform;
 
-		public FMODAsset bombBlockerAudio;
+		public AudioEventAsset bombBlockerAudio;
 
 		private FMODAudioManager.FMODAudio bombBlockerAudioInstance;
 

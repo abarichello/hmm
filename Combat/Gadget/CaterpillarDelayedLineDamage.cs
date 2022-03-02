@@ -110,7 +110,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			this._currentExplosionEffect = GameHubBehaviour.Hub.Events.TriggerEvent(effectEvent);
 		}
 
-		protected override void InnerOnDestroyEffect(DestroyEffect evt)
+		protected override void InnerOnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (evt.RemoveData.TargetEventId == this._currentWarmupEffect)
 			{
@@ -155,7 +155,8 @@ namespace HeavyMetalMachines.Combat.Gadget
 							Vector3 position = combatObject.transform.position;
 							Vector3 vector = Vector3.Cross(this._warmupDirection, Vector3.up);
 							Vector3 vector2 = vector * -1f;
-							Plane plane = new Plane(vector, this._warmupPosition);
+							Plane plane;
+							plane..ctor(vector, this._warmupPosition);
 							Vector3 vector3;
 							if (plane.GetSide(position))
 							{

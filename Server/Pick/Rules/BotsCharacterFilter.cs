@@ -1,29 +1,31 @@
 ﻿using System;
 using System.Collections.Generic;
-using HeavyMetalMachines.Character;
+using Assets.ClientApiObjects;
+using Assets.ClientApiObjects.Components;
 using HeavyMetalMachines.Server.Pick.Rules.Apis;
 
 namespace HeavyMetalMachines.Server.Pick.Rules
 {
 	public class BotsCharacterFilter : ICharacterInfoFilter
 	{
-		public CharacterInfo[] FilterCharacters(IList<CharacterInfo> characters)
+		public IItemType[] FilterCharacters(IItemType[] characters)
 		{
-			List<CharacterInfo> list = new List<CharacterInfo>();
-			for (int i = 0; i < characters.Count; i++)
+			List<IItemType> list = new List<IItemType>();
+			foreach (IItemType itemType in characters)
 			{
-				CharacterInfo characterInfo = characters[i];
-				if (BotsCharacterFilter.IsCharacterValid(characterInfo))
+				if (BotsCharacterFilter.IsCharacterValid(itemType))
 				{
-					list.Add(characterInfo);
+					list.Add(itemType);
 				}
 			}
 			return list.ToArray();
 		}
 
-		private static bool IsCharacterValid(CharacterInfo character)
+		private static bool IsCharacterValid(IItemType charItemType)
 		{
-			return character.IsAnAvailableBot && character.CanBePicked;
+			CharacterItemTypeComponent component = charItemType.GetComponent<CharacterItemTypeComponent>();
+			BotItemTypeComponent component2 = charItemType.GetComponent<BotItemTypeComponent>();
+			return component2 != null && component2.IsAnAvailableBot && component.CanBePicked;
 		}
 	}
 }

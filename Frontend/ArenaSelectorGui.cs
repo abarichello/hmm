@@ -1,17 +1,39 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
+using ClientAPI;
 using FMod;
+using HeavyMetalMachines.Arena;
+using HeavyMetalMachines.BI;
+using HeavyMetalMachines.CharacterSelection.Client;
+using HeavyMetalMachines.Frontend.ArenaSelector;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Matches;
+using HeavyMetalMachines.ParentalControl.Restrictions;
+using HeavyMetalMachines.Players.Business;
+using HeavyMetalMachines.Swordfish;
 using HeavyMetalMachines.Utils;
+using Hoplon.Input.UiNavigation;
+using Hoplon.Unity.Loading;
 using Pocketverse;
 using SharedUtils.Loading;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
 	public class ArenaSelectorGui : GameHubBehaviour, IDynamicAssetListener<Texture2D>
 	{
+		private IUiNavigationGroupHolder UiNavigationGroupHolder
+		{
+			get
+			{
+				return this._uiNavigationGroupHolder;
+			}
+		}
+
 		protected void Awake()
 		{
 			this._backgroundTileGameObject.SetActive(false);
@@ -26,19 +48,6 @@ namespace HeavyMetalMachines.Frontend
 			GameHubBehaviour.Hub.User.OnMatchDataReceived += this.UserOnMatchDataReceived;
 		}
 
-		private IEnumerator TestInitCoroutine()
-		{
-			yield return new WaitForSeconds(2f);
-			if (this._testSingleSelection)
-			{
-				this.PrepareForOnlyOneArenaUnlocked(this._targetArenaTest);
-			}
-			this._mainInOutAnimation.Play("ArenaSelectorInAnimation");
-			this.SuspensionPointsShow();
-			this._backgroundTileGameObject.SetActive(true);
-			yield break;
-		}
-
 		private int TryGetArenaCardGuiIndex(int arenaIndex)
 		{
 			for (int i = 0; i < this._arenaCardGuiInfos.Length; i++)
@@ -51,7 +60,7 @@ namespace HeavyMetalMachines.Frontend
 			return -1;
 		}
 
-		private ArenaSelectorGui.ArenaCardInfo GetArenaCardInfo(int arenaIndex)
+		private ArenaCardInfo GetArenaCardInfo(int arenaIndex)
 		{
 			for (int i = 0; i < this._arenaCardInfos.Length; i++)
 			{
@@ -60,7 +69,7 @@ namespace HeavyMetalMachines.Frontend
 					return this._arenaCardInfos[i];
 				}
 			}
-			HeavyMetalMachines.Utils.Debug.Assert(false, string.Format("Arena card info not found fo arena index [{0}]", arenaIndex), HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+			Debug.Assert(false, string.Format("Arena card info not found fo arena index [{0}]", arenaIndex), Debug.TargetTeam.All);
 			return this._arenaCardInfos[0];
 		}
 
@@ -87,20 +96,40 @@ namespace HeavyMetalMachines.Frontend
 
 		private void UserOnMatchDataReceived(MatchData.MatchState matchState)
 		{
-			if (matchState == MatchData.MatchState.CharacterPick)
+			this._clientBILogger.BILogClientMsg(107, DebugBIMessageFormatter.Get("QAHMM-31739", "UserMatchDataReceived"), true);
+			ArenaSelectorGui.Log.InfoFormat("UserOnMatchDataReceived. matchState={0}, kind={1}", new object[]
 			{
-				if (GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish) && GameHubBehaviour.Hub.ArenaConfig.Arenas[GameHubBehaviour.Hub.Match.ArenaIndex].IsCustomOnly)
-				{
-					this.GoToPickMode();
-					return;
-				}
-				if (!this._enableArenaSelector || GameHubBehaviour.Hub.Match.Kind == MatchData.MatchKind.Custom)
-				{
-					this.GoToPickMode();
-					return;
-				}
+				matchState,
+				GameHubBehaviour.Hub.Match.Kind
+			});
+			if (matchState != MatchData.MatchState.CharacterPick)
+			{
+				return;
+			}
+			if (GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish) && GameHubBehaviour.Hub.ArenaConfig.GetCurrentArena().IsCustomOnly)
+			{
+				ArenaSelectorGui.Log.Info("skipping Arena Selector because it is custom only");
+				this.GoToPickMode();
+				return;
+			}
+			switch (GameHubBehaviour.Hub.Match.Kind)
+			{
+			case 2:
+				ArenaSelectorGui.Log.Info("skipping Arena Selector because it is tutorial");
+				this.GoToTutorialLoading();
+				return;
+			case 3:
+			case 4:
+			case 5:
+			case 6:
+				ArenaSelectorGui.Log.Info("skipping Arena Selector because it is kind " + GameHubBehaviour.Hub.Match.Kind.ToString());
+				this.GoToPickMode();
+				return;
+			default:
+				ArenaSelectorGui.Log.Info("showing Arena Selector");
 				this.Show();
 				GameHubBehaviour.Hub.State.Current.GetStateGuiController<MainMenuGui>().MatchAccept.HideAcceptanceWindow(false);
+				return;
 			}
 		}
 
@@ -200,7 +229,7 @@ namespace HeavyMetalMachines.Frontend
 
 		private void ShiftContentIndex()
 		{
-			ArenaSelectorGui.ArenaCardInfo arenaCardInfo = this._arenaCardInfos[this._contentIndex];
+			ArenaCardInfo arenaCardInfo = this._arenaCardInfos[this._contentIndex];
 			this._arenaCardGuiInfos[this._lerpIndex[this._lerpIndex.Length - 1]].Setup(arenaCardInfo);
 			this._contentIndex--;
 			if (this._contentIndex < 0)
@@ -249,13 +278,13 @@ namespace HeavyMetalMachines.Frontend
 		private void SuspensionPointsShow()
 		{
 			this._idleTitleAnimation.GetComponent<UIWidget>().UpdateAnchors();
-			this._idleTitleAnimation.wrapMode = WrapMode.Loop;
+			this._idleTitleAnimation.wrapMode = 2;
 			GUIUtils.PlayAnimation(this._idleTitleAnimation, false, 1f, string.Empty);
 		}
 
 		private void SuspensionPointsHide()
 		{
-			this._idleTitleAnimation.wrapMode = WrapMode.Once;
+			this._idleTitleAnimation.wrapMode = 1;
 			GUIUtils.PlayAnimation(this._idleTitleAnimation, true, 4f, string.Empty);
 		}
 
@@ -277,6 +306,7 @@ namespace HeavyMetalMachines.Frontend
 			this._mainInOutAnimation.Play("ArenaSelectorInAnimation");
 			this.PlayAudio(this._inAudioAsset);
 			this._backgroundTileGameObject.SetActive(true);
+			this.UiNavigationGroupHolder.AddHighPriorityGroup();
 		}
 
 		private void PrepareForOnlyOneArenaUnlocked(int arenaIndex)
@@ -300,107 +330,130 @@ namespace HeavyMetalMachines.Frontend
 		{
 			this._mainInOutAnimation.Play("ArenaSelectorOutAnimation");
 			this.PlayAudio(this._outAudioAsset);
+			this.UiNavigationGroupHolder.RemoveHighPriorityGroup();
 		}
 
 		private void GoToPickMode()
 		{
-			GameHubBehaviour.Hub.State.GotoState(GameHubBehaviour.Hub.User.HackPickMode, false);
-		}
-
-		private int GetNumValidArenas()
-		{
-			int num = 0;
-			for (int i = 0; i < GameHubBehaviour.Hub.ArenaConfig.Arenas.Length; i++)
+			DisposableExtensions.AddTo<IDisposable>(ObservableExtensions.Subscribe<Unit>(Observable.DoOnCompleted<Unit>(Observable.DoOnCompleted<Unit>(this.PrepareMatch(), delegate()
 			{
-				if (this.IsValidArena(GameHubBehaviour.Hub.ArenaConfig.Arenas[i]))
-				{
-					num++;
-				}
-			}
-			return num;
+				this._clientBILogger.BILogClientMsg(107, DebugBIMessageFormatter.Get("QAHMM-31739", "GoToPick"), true);
+			}), delegate()
+			{
+				this._proceedToClientCharacterSelectionState.Proceed();
+			})), this);
 		}
 
-		private bool IsValidArena(GameArenaInfo arenaInfo)
+		private IObservable<Unit> PrepareMatch()
 		{
-			return !arenaInfo.IsTutorial && !arenaInfo.IsCustomOnly;
+			return Observable.DoOnCompleted<Unit>(this._diContainer.Resolve<IPrepareMatch>().Prepare(), delegate()
+			{
+				IPlayer player2 = this._diContainer.Resolve<IGetLocalPlayer>().Get();
+				IVoiceChatRestriction voiceChatRestriction = this._diContainer.Resolve<IVoiceChatRestriction>();
+				PlayerIdentification[] matchPlayerIdentifications = this.GetMatchPlayerIdentifications();
+				PlayerIdentification[] array = matchPlayerIdentifications;
+				for (int i = 0; i < array.Length; i++)
+				{
+					PlayerIdentification player = array[i];
+					if (player.PlayerId != player2.PlayerId)
+					{
+						if (voiceChatRestriction.IsEnabledByPlayer(player.PlayerId))
+						{
+							SwordfishClientApi.Callback callback = delegate(object state)
+							{
+								Debug.LogFormat("pick blocked voice user {0} - {1}", new object[]
+								{
+									player.PlayerId,
+									player.UniversalId
+								});
+							};
+							SwordfishClientApi.ErrorCallback errorCallback = delegate(object state, Exception exception)
+							{
+								Debug.LogFormat("pick error blocking voice user {0} - {1} \n {2}", new object[]
+								{
+									player.PlayerId,
+									player.UniversalId,
+									exception.Message
+								});
+							};
+							GameHubBehaviour.Hub.ClientApi.voice.BlockUserForMe(null, player.PlayerId, callback, errorCallback);
+						}
+					}
+				}
+			});
+		}
+
+		private PlayerIdentification[] GetMatchPlayerIdentifications()
+		{
+			IGetCurrentMatch getCurrentMatch = this._diContainer.Resolve<IGetCurrentMatch>();
+			foreach (MatchClient matchClient in GetCurrentMatchExtensions.Get(getCurrentMatch).Clients)
+			{
+				Debug.LogFormat("TOMATE MatchClient. Name={0} IsBot={1}", new object[]
+				{
+					matchClient.PlayerName,
+					matchClient.IsBot
+				});
+			}
+			return (from client in GetCurrentMatchExtensions.Get(getCurrentMatch).Clients
+			where !client.IsBot
+			select new PlayerIdentification
+			{
+				PlayerId = client.PlayerId,
+				UniversalId = client.UniversalId
+			}).ToArray<PlayerIdentification>();
+		}
+
+		private void GoToTutorialLoading()
+		{
+			GameHubBehaviour.Hub.State.GotoState(GameHubBehaviour.Hub.User.HackLoadingMode, false);
 		}
 
 		private bool LoadArenasData()
 		{
-			int numValidArenas = this.GetNumValidArenas();
-			this._arenaCardInfos = new ArenaSelectorGui.ArenaCardInfo[numValidArenas];
-			int num = 0;
-			int i = 0;
-			int num2 = 0;
-			while (i < GameHubBehaviour.Hub.ArenaConfig.Arenas.Length)
-			{
-				GameArenaInfo gameArenaInfo = GameHubBehaviour.Hub.ArenaConfig.Arenas[i];
-				if (this.IsValidArena(gameArenaInfo))
-				{
-					this._arenaCardInfos[num2].NameText = Language.Get(gameArenaInfo.DraftName, TranslationSheets.MainMenuGui);
-					this._arenaCardInfos[num2].ImageSprite = this._arenaSprites[num2];
-					this._arenaCardInfos[num2].ArenaIndex = i;
-					int num3 = 1;
-					if (!GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish))
-					{
-						num3 = GameHubBehaviour.Hub.User.GetTotalPlayerLevel();
-						num3++;
-					}
-					int unlockLevel = GameHubBehaviour.Hub.SharedConfigs.ArenaConfig.Arenas[i].UnlockLevel;
-					this._arenaCardInfos[num2].UnlockLevelText = unlockLevel.ToString("0");
-					bool flag = num3 < unlockLevel;
-					this._arenaCardInfos[num2].Locked = flag;
-					if (flag)
-					{
-						num++;
-					}
-					num2++;
-				}
-				i++;
-			}
-			if (numValidArenas == 1)
-			{
-				Array.Resize<ArenaSelectorGui.ArenaCardInfo>(ref this._arenaCardInfos, 3);
-				this._arenaCardInfos[1] = (this._arenaCardInfos[2] = this._arenaCardInfos[0]);
-			}
-			if (numValidArenas == 2)
-			{
-				Array.Resize<ArenaSelectorGui.ArenaCardInfo>(ref this._arenaCardInfos, 4);
-				this._arenaCardInfos[2] = this._arenaCardInfos[0];
-				this._arenaCardInfos[3] = this._arenaCardInfos[1];
-			}
+			this._arenaCardInfos = this._arenaSelectorCardsProvider.Get(this._arenaSprites);
 			this._contentIndex = -1;
 			if (this._arenaCardInfos.Length > this._arenaCardGuiInfos.Length)
 			{
 				this._contentIndex = this._arenaCardGuiInfos.Length;
 			}
-			for (int j = 0; j < this._arenaCardGuiInfos.Length; j++)
+			int num = 0;
+			for (int i = 0; i < this._arenaCardGuiInfos.Length; i++)
 			{
-				ArenaSelectorGui.ArenaCardInfo arenaCardInfo = this._arenaCardInfos[j];
-				this._arenaCardGuiInfos[j].Setup(arenaCardInfo);
+				ArenaCardInfo arenaCardInfo = this._arenaCardInfos[i];
+				this._arenaCardGuiInfos[i].Setup(arenaCardInfo);
+				if (arenaCardInfo.Locked)
+				{
+					num++;
+				}
 			}
 			return num == this._arenaCardInfos.Length - 1;
 		}
 
 		private void CacheArenaSprites()
 		{
-			int numValidArenas = this.GetNumValidArenas();
-			this._arenaTextureNameIndexes = new Dictionary<string, int>(numValidArenas);
-			this._arenaSprites = new Sprite[numValidArenas];
+			int numberOfArenas = GameHubBehaviour.Hub.ArenaConfig.GetNumberOfArenas();
+			this._arenaTextureNameIndexes = new Dictionary<string, List<int>>(numberOfArenas);
+			this._arenaSprites = new Sprite[numberOfArenas];
 			int i = 0;
 			int num = 0;
-			while (i < GameHubBehaviour.Hub.ArenaConfig.Arenas.Length)
+			while (i < numberOfArenas)
 			{
-				GameArenaInfo gameArenaInfo = GameHubBehaviour.Hub.ArenaConfig.Arenas[i];
-				if (this.IsValidArena(gameArenaInfo))
+				IGameArenaInfo arenaByIndex = GameHubBehaviour.Hub.ArenaConfig.GetArenaByIndex(i);
+				if (!string.IsNullOrEmpty(arenaByIndex.ArenaSelectorImageName))
 				{
-					this._arenaTextureNameIndexes[gameArenaInfo.ArenaSelectorImageName] = num;
-					num++;
-					if (!SingletonMonoBehaviour<LoadingManager>.Instance.TextureManager.GetAssetAsync(gameArenaInfo.ArenaSelectorImageName, this))
+					List<int> list;
+					if (!this._arenaTextureNameIndexes.TryGetValue(arenaByIndex.ArenaSelectorImageName, out list))
 					{
-						HeavyMetalMachines.Utils.Debug.Assert(false, string.Format("ArenaSelectorGui.LoadTexture: Image/Bundle not found -> [{0},{1}]", base.name, gameArenaInfo.ArenaSelectorImageName), HeavyMetalMachines.Utils.Debug.TargetTeam.GUI);
+						list = new List<int>();
+						this._arenaTextureNameIndexes.Add(arenaByIndex.ArenaSelectorImageName, list);
+					}
+					list.Add(num);
+					if (!Loading.TextureManager.GetAssetAsync(arenaByIndex.ArenaSelectorImageName, this))
+					{
+						Debug.Assert(false, string.Format("ArenaSelectorGui.LoadTexture: Image/Bundle not found -> [{0},{1}]", base.name, arenaByIndex.ArenaSelectorImageName), Debug.TargetTeam.GUI);
 					}
 				}
+				num++;
 				i++;
 			}
 		}
@@ -412,20 +465,35 @@ namespace HeavyMetalMachines.Frontend
 
 		private void CreateAndCacheTexture(string textureName, Texture2D texture)
 		{
-			this._arenaSprites[this._arenaTextureNameIndexes[textureName]] = Sprite.Create(texture, new Rect(0f, 0f, (float)texture.width, (float)texture.height), Vector2.zero);
+			List<int> list = this._arenaTextureNameIndexes[textureName];
+			for (int i = 0; i < list.Count; i++)
+			{
+				this._arenaSprites[list[i]] = Sprite.Create(texture, new Rect(0f, 0f, (float)texture.width, (float)texture.height), Vector2.zero);
+			}
 		}
 
-		private void PlayAudio(FMODAsset fmodAsset)
+		private void PlayAudio(AudioEventAsset fmodAsset)
 		{
 			FMODAudioManager.PlayOneShotAt(fmodAsset, Vector3.zero, 0);
 		}
 
-		[SerializeField]
-		private bool _enableArenaSelector;
+		public static readonly BitLogger Log = new BitLogger(typeof(ArenaSelectorGui));
+
+		[Inject]
+		private IProceedToClientCharacterSelectionState _proceedToClientCharacterSelectionState;
+
+		[Inject]
+		private IArenaSelectorCardsProvider _arenaSelectorCardsProvider;
+
+		[Inject]
+		private DiContainer _diContainer;
+
+		[Inject]
+		private IClientBILogger _clientBILogger;
 
 		[Header("[Arena Data]")]
 		[SerializeField]
-		private ArenaSelectorGui.ArenaCardInfo[] _arenaCardInfos;
+		private ArenaCardInfo[] _arenaCardInfos;
 
 		[Header("[Arena GUI Data]")]
 		[SerializeField]
@@ -436,9 +504,6 @@ namespace HeavyMetalMachines.Frontend
 
 		[Header("[Window GUI Components]")]
 		[SerializeField]
-		private UILabel _titleLabel;
-
-		[SerializeField]
 		private Animation _idleTitleAnimation;
 
 		[SerializeField]
@@ -446,9 +511,6 @@ namespace HeavyMetalMachines.Frontend
 
 		[SerializeField]
 		private Animation _titleSelectionAnimation;
-
-		[SerializeField]
-		private GameObject _cardsGroupGameObject;
 
 		[SerializeField]
 		private GameObject _backgroundTileGameObject;
@@ -490,7 +552,7 @@ namespace HeavyMetalMachines.Frontend
 
 		private Sprite[] _arenaSprites;
 
-		private Dictionary<string, int> _arenaTextureNameIndexes;
+		private Dictionary<string, List<int>> _arenaTextureNameIndexes;
 
 		[SerializeField]
 		private float _endLerpNormalized;
@@ -499,42 +561,25 @@ namespace HeavyMetalMachines.Frontend
 
 		[Header("[Audio]")]
 		[SerializeField]
-		private FMODAsset _inAudioAsset;
+		private AudioEventAsset _inAudioAsset;
 
 		[SerializeField]
-		private FMODAsset _outAudioAsset;
+		private AudioEventAsset _outAudioAsset;
 
 		[SerializeField]
-		private FMODAsset _spinAudioAsset;
+		private AudioEventAsset _spinAudioAsset;
 
 		[SerializeField]
-		private FMODAsset _selectionAudioAsset;
+		private AudioEventAsset _selectionAudioAsset;
 
-		[Header("[Test Only]")]
+		[Header("[Ui Navigation]")]
 		[SerializeField]
-		private int _targetArenaTest;
-
-		[SerializeField]
-		private bool _testSingleSelection;
-
-		[Serializable]
-		private struct ArenaCardInfo
-		{
-			public string NameText;
-
-			public Sprite ImageSprite;
-
-			public bool Locked;
-
-			public int ArenaIndex;
-
-			public string UnlockLevelText;
-		}
+		private UiNavigationGroupHolder _uiNavigationGroupHolder;
 
 		[Serializable]
 		private struct ArenaCardGuiInfo
 		{
-			public void Setup(ArenaSelectorGui.ArenaCardInfo arenaCardInfo)
+			public void Setup(ArenaCardInfo arenaCardInfo)
 			{
 				this.NameLabel.text = arenaCardInfo.NameText;
 				this.ImageSprite.sprite2D = arenaCardInfo.ImageSprite;
@@ -544,8 +589,8 @@ namespace HeavyMetalMachines.Frontend
 				{
 					this.LockLevelLabel.text = arenaCardInfo.UnlockLevelText;
 				}
-				this.ImageWidgetAlpha.alpha = ((!arenaCardInfo.Locked) ? 1f : 0.5f);
-				this.NameLabelWidgetAlpha.alpha = ((!arenaCardInfo.Locked) ? 1f : 0.7f);
+				this.ImageWidgetAlpha.Alpha = ((!arenaCardInfo.Locked) ? 1f : 0.5f);
+				this.NameLabelWidgetAlpha.Alpha = ((!arenaCardInfo.Locked) ? 1f : 0.7f);
 				this.ArenaIndex = arenaCardInfo.ArenaIndex;
 			}
 

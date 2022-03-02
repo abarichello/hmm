@@ -1,6 +1,7 @@
 ﻿using System;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Combat.Gadget;
+using HeavyMetalMachines.Match;
 using HeavyMetalMachines.Utils;
 
 namespace HeavyMetalMachines.Frontend
@@ -24,7 +25,7 @@ namespace HeavyMetalMachines.Frontend
 			{
 				return false;
 			}
-			if (combatObject.Player.Character.Character == CharacterTarget.Zephyr)
+			if (combatObject.Player.GetCharacter() == CharacterTarget.Zephyr)
 			{
 				return false;
 			}

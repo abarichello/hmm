@@ -8,7 +8,7 @@ namespace HeavyMetalMachines.UpdateStream
 	{
 		protected override Timeline<TransformPose> InstantiateTimeline()
 		{
-			return new TransformTimeline(this.configuration.SmoothClockInstance, 1024u);
+			return new TransformTimeline(this.configuration.SmoothClockInstance, 1024U);
 		}
 
 		protected override void SetCurrentPose(ref TransformPose pose)

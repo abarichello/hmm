@@ -17,6 +17,10 @@ namespace HeavyMetalMachines.PostProcessing
 			this.CRTMonitor.Parameters.LineStrength = 1f;
 			this.ScreenBlur.Parameters.Strength = 1f;
 			this.ScreenBlur.Parameters.Iterations = 1;
+			this.Vignette.Parameters.Ratio = 1f;
+			this.Vignette.Parameters.Radius = 1f;
+			this.Vignette.Parameters.Slope = 8f;
+			this.Vignette.Parameters.Amount = -1f;
 		}
 
 		public PostProcessingState Duplicate()
@@ -32,7 +36,9 @@ namespace HeavyMetalMachines.PostProcessing
 			num |= ((!this.Exposure.Enabled) ? 0 : 1) << ++num2;
 			num |= ((!this.CRTMonitor.Enabled) ? 0 : 1) << ++num2;
 			num |= ((!this.ScaledOverlayImage.Enabled) ? 0 : 1) << ++num2;
-			return num | ((!this.ScreenCenterFlare.Enabled) ? 0 : 1) << num2 + 1;
+			num |= ((!this.ScreenCenterFlare.Enabled) ? 0 : 1) << ++num2;
+			num |= ((!this.ScreenBlur.Enabled) ? 0 : 1) << ++num2;
+			return num | ((!this.Vignette.Enabled) ? 0 : 1) << num2 + 1;
 		}
 
 		public bool Enabled;
@@ -48,5 +54,7 @@ namespace HeavyMetalMachines.PostProcessing
 		public PostProcessingParameters<CRTMonitor> CRTMonitor;
 
 		public PostProcessingParameters<ScreenBlur> ScreenBlur;
+
+		public PostProcessingParameters<Vignette> Vignette;
 	}
 }

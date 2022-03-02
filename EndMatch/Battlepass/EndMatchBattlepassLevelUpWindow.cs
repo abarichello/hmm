@@ -4,7 +4,8 @@ using System.Collections.Generic;
 using Assets.ClientApiObjects;
 using Assets.ClientApiObjects.Components;
 using Assets.Standard_Assets.Scripts.HMM.GameStates.MainMenu.Progression;
-using Commons.Swordfish.Battlepass;
+using HeavyMetalMachines.DataTransferObjects.Battlepass;
+using HeavyMetalMachines.DataTransferObjects.Progression;
 using Pocketverse;
 using UnityEngine;
 
@@ -129,11 +130,11 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 					component.UpdateSlotInfo(this._isPremium);
 					component.UpdateLevelsData(EndMatchBattlepassLevelUpWindow.SlotLevelType.Current, this._levelInfos);
 					component.EnableColorFameText();
-					if (component.GetFreeSlots().rewardKind != ProgressionInfo.RewardKind.None)
+					if (component.GetFreeSlots().rewardKind != null)
 					{
 						this._freeUnlockGlowAnimation.Play("glow_level_up_free");
 					}
-					if (this._isPremium && component.GetPremiumSlots().rewardKind != ProgressionInfo.RewardKind.None)
+					if (this._isPremium && component.GetPremiumSlots().rewardKind != null)
 					{
 						this._premiumUnlockGlowAnimation.Play("glow_level_up_premium");
 					}
@@ -175,11 +176,11 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 			EndMatchBattlepassLevelUpWindow.LevelUpDataSlot result = default(EndMatchBattlepassLevelUpWindow.LevelUpDataSlot);
 			switch (rewardKind)
 			{
-			case ProgressionInfo.RewardKind.SoftCurrency:
+			case 1:
 				result = this.GetBattlepassComponentInfo(this._softCoinItemTypeScriptableObject);
 				result.FameAmount = int.Parse(reward.Argument);
 				break;
-			case ProgressionInfo.RewardKind.ItemType:
+			case 2:
 			{
 				ItemTypeScriptableObject itemTypeReward;
 				if (GameHubBehaviour.Hub.InventoryColletion.AllItemTypes.TryGetValue(new Guid(reward.Argument), out itemTypeReward))
@@ -188,8 +189,8 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 				}
 				break;
 			}
-			case ProgressionInfo.RewardKind.HardCurrency:
-				result = this.GetBattlepassComponentInfo(this._softCoinItemTypeScriptableObject);
+			case 4:
+				result = this.GetBattlepassComponentInfo(this._hardCoinItemTypeScriptableObject);
 				result.FameAmount = int.Parse(reward.Argument);
 				break;
 			}
@@ -322,6 +323,9 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 		[SerializeField]
 		private ItemTypeScriptableObject _softCoinItemTypeScriptableObject;
 
+		[SerializeField]
+		private ItemTypeScriptableObject _hardCoinItemTypeScriptableObject;
+
 		[Header("[Configs]")]
 		[SerializeField]
 		private EndMatchBattlepassLevelUpWindow.LevelViewInfo[] _levelInfos;
@@ -412,6 +416,14 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 			public Color FamaColorEnabled;
 
 			public Color FamaColorDisabled;
+
+			public Color FamaOutlineColor;
+
+			public Color HardCointColorEnabled;
+
+			public Color HardCoinColorDisabled;
+
+			public Color HardCoinOutlineColor;
 		}
 
 		[Serializable]

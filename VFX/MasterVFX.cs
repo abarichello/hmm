@@ -8,8 +8,41 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.VFX
 {
+	[HelpURL("https://confluence.hoplon.com/display/HMM/Master+VFX")]
 	public class MasterVFX : GameHubBehaviour
 	{
+		public virtual bool PrevizMode
+		{
+			get
+			{
+				return this.previzMode;
+			}
+			set
+			{
+				this.previzMode = value;
+			}
+		}
+
+		public virtual VFXTeam CurrentTeam
+		{
+			get
+			{
+				return this.currentTeam;
+			}
+			set
+			{
+				this.currentTeam = value;
+			}
+		}
+
+		public MasterVFX.TargetFXInfo GetTargetInfoForStateRecording
+		{
+			get
+			{
+				return this._targetFXInfo;
+			}
+		}
+
 		public float StartTime
 		{
 			get
@@ -99,6 +132,7 @@ namespace HeavyMetalMachines.VFX
 
 		public virtual MasterVFX Activate(Identifiable owner, Identifiable target, Transform transform)
 		{
+			this.wasDestroyedStatusForStateRecording = false;
 			this._targetFXInfo.Owner = owner;
 			this._targetFXInfo.Target = target;
 			this._targetFXInfo.Origin = this.Origin;
@@ -184,7 +218,19 @@ namespace HeavyMetalMachines.VFX
 		private bool IsSelf()
 		{
 			bool result = true;
-			if (GameHubBehaviour.Hub != null && this._targetFXInfo.Target != null)
+			if (GameHubBehaviour.Hub == null)
+			{
+				return true;
+			}
+			if (GameHubBehaviour.Hub.Players == null)
+			{
+				return true;
+			}
+			if (GameHubBehaviour.Hub.Players.CurrentPlayerData == null)
+			{
+				return true;
+			}
+			if (this._targetFXInfo.Target != null)
 			{
 				result = (this._targetFXInfo.Target.ObjId == GameHubBehaviour.Hub.Players.CurrentPlayerData.GetPlayerCarObjectId());
 			}
@@ -203,6 +249,8 @@ namespace HeavyMetalMachines.VFX
 			}
 			if (vfx.delay <= 0f || !boAllowDelay)
 			{
+				vfx.PrevizMode = this.previzMode;
+				vfx.CurrentTeam = this.currentTeam;
 				vfx.Activate(this._targetFXInfo);
 			}
 			else
@@ -306,6 +354,7 @@ namespace HeavyMetalMachines.VFX
 
 		public void Destroy(BaseFX.EDestroyReason reason)
 		{
+			this.wasDestroyedStatusForStateRecording = true;
 			this.destroyReason = reason;
 			this.shouldDeactivate = true;
 			for (int i = 0; i < this.associatedVFX.Length; i++)
@@ -343,6 +392,19 @@ namespace HeavyMetalMachines.VFX
 			return this._targetFXInfo.Owner;
 		}
 
+		public void PrestartForpreviz()
+		{
+			for (int i = 0; i < this.associatedVFX.Length; i++)
+			{
+				BaseVFX baseVFX = this.associatedVFX[i];
+				if (baseVFX.GetType() == typeof(BillboardVFX))
+				{
+					BaseVFX baseVFX2 = baseVFX;
+					baseVFX2.Activate(this._targetFXInfo);
+				}
+			}
+		}
+
 		public static void EditorAssertMinDurationOrWaitForParticlesDeath(MasterVFX vfx)
 		{
 		}
@@ -366,6 +428,10 @@ namespace HeavyMetalMachines.VFX
 
 		public bool DontUseCache;
 
+		private bool previzMode;
+
+		private VFXTeam currentTeam;
+
 		public MasterVFX.TargetTeam TeamRequirement;
 
 		[HideInInspector]
@@ -386,6 +452,8 @@ namespace HeavyMetalMachines.VFX
 		private Dictionary<string, List<BaseVFX>> m_cConditionVFX = new Dictionary<string, List<BaseVFX>>();
 
 		public Vector3 Origin;
+
+		public bool wasDestroyedStatusForStateRecording;
 
 		public enum State
 		{

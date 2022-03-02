@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using FMod;
+using HeavyMetalMachines.Localization;
 using Pocketverse;
 using UnityEngine;
 
@@ -118,7 +119,7 @@ namespace HeavyMetalMachines.Frontend
 		private TranslationSheets translationSheet;
 
 		[SerializeField]
-		private FMODAsset transitionSFX;
+		private AudioEventAsset transitionSFX;
 
 		protected string[] selectionStrings;
 

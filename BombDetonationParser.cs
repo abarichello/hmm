@@ -4,7 +4,7 @@ using Pocketverse;
 
 namespace HeavyMetalMachines
 {
-	public class BombDetonationParser : KeyFrameParser
+	public class BombDetonationParser : KeyFrameParser, IBombDetonationDispatcher
 	{
 		public override KeyFrameType Type
 		{
@@ -16,18 +16,17 @@ namespace HeavyMetalMachines
 
 		public override void Process(BitStream stream)
 		{
-			TeamKind teamKind = (TeamKind)stream.ReadCompressedInt();
+			TeamKind damagedTeam = (TeamKind)stream.ReadCompressedInt();
 			int pickupInstanceId = stream.ReadCompressedInt();
-			int deliveryScore = (teamKind != TeamKind.Red) ? GameHubObject.Hub.BombManager.ScoreBoard.BombScoreRed : GameHubObject.Hub.BombManager.ScoreBoard.BombScoreBlue;
-			GameHubObject.Hub.BombManager.DetonateBomb(teamKind, pickupInstanceId, deliveryScore);
+			GameHubObject.Hub.BombManager.DetonateBomb(damagedTeam, pickupInstanceId);
 		}
 
-		public void Send(TeamKind damagedTeam, int pickupId)
+		public void Send(TeamKind damagedTeam, int pickupId, int lastFrameId)
 		{
 			BitStream stream = base.GetStream();
 			stream.WriteCompressedInt((int)damagedTeam);
 			stream.WriteCompressedInt(pickupId);
-			this.LastFrameId = PlaybackManager.BombInstance.LastId;
+			this.LastFrameId = lastFrameId;
 			this.SendKeyframe(stream.ToArray());
 		}
 	}

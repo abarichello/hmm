@@ -9,22 +9,7 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 	[CreateAssetMenu(menuName = "GadgetScript/Block/CombatObject/SetCombatPhysicsState")]
 	public class SetCombatPhysicsStateBlock : BaseBlock
 	{
-		protected override bool CheckSanity(IGadgetContext gadgetContext, IEventContext eventContext)
-		{
-			if (this._enabled == null)
-			{
-				base.LogSanitycheckError("'Enabled' parameter cannot be null.");
-				return false;
-			}
-			if (this._combat == null)
-			{
-				base.LogSanitycheckError("'Combat' parameter cannot be null.");
-				return false;
-			}
-			return true;
-		}
-
-		protected override IBlock InnerExecute(IGadgetContext gadgetContext, IEventContext eventContext)
+		public override IBlock Execute(IGadgetContext gadgetContext, IEventContext eventContext)
 		{
 			IHMMGadgetContext ihmmgadgetContext = (IHMMGadgetContext)gadgetContext;
 			IHMMEventContext ihmmeventContext = (IHMMEventContext)eventContext;
@@ -47,11 +32,6 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 				list[i].isKinematic = !value;
 			}
 			return this._nextBlock;
-		}
-
-		public override bool UsesParameterWithId(int parameterId)
-		{
-			return base.CheckIsParameterWithId(this._enabled, parameterId) || base.CheckIsParameterWithId(this._combat, parameterId);
 		}
 
 		[Header("Read")]

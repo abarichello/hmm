@@ -6,7 +6,7 @@ using UnityEngine;
 namespace HeavyMetalMachines.Combat
 {
 	[RequireComponent(typeof(Collider))]
-	public class PerkFixedAddPassiveModifierWhenNear : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkFixedAddPassiveModifierWhenNear : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		public override void PerkInitialized()
 		{
@@ -68,7 +68,7 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (GameHubBehaviour.Hub.Net.IsClient())
 			{

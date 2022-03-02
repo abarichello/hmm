@@ -27,7 +27,7 @@ namespace HeavyMetalMachines.VFX
 				return;
 			}
 			this._lastShakeTime = time;
-			float value = UnityEngine.Random.value;
+			float value = Random.value;
 			Vector3 zero = Vector3.zero;
 			if (value < 0.5f)
 			{

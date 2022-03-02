@@ -6,7 +6,6 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Tutorial
 {
-	[RequireComponent(typeof(BoxCollider))]
 	public class TutorialPathNode : GameHubBehaviour
 	{
 		private void OnEnable()

@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkDamageOnBorder : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkDamageOnBorder : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		private Vector3 MyPosition
 		{
@@ -38,7 +38,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				return;
 			}
-			List<Collider> list = new List<Collider>(Physics.OverlapSphere(this.MyPosition, this.OuterRange, 1077058560));
+			List<Collider> list = new List<Collider>(Physics.OverlapSphere(this.MyPosition, this.OuterRange, 1077054464));
 			for (int i = 0; i < list.Count; i++)
 			{
 				if (!this._affectedColliders.Contains(list[i]))
@@ -84,7 +84,7 @@ namespace HeavyMetalMachines.Combat
 			combatObject.ListenToObjectUnspawn -= this.OnObjectDeath;
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			for (int i = 0; i < this._affectedCombats.Count; i++)
 			{

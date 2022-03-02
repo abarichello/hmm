@@ -5,7 +5,6 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	[RequireComponent(typeof(Rigidbody))]
 	public class PerkLinkedMovement : BasePerk, IPerkMovement
 	{
 		private Identifiable TargetIdentifiable
@@ -19,26 +18,36 @@ namespace HeavyMetalMachines.Combat
 		public override void PerkInitialized()
 		{
 			Transform target = this.GetTarget();
-			this._body = base.gameObject.GetComponent<Rigidbody>();
 			if (GameHubBehaviour.Hub.Net.IsClient())
 			{
 				this._attachableMath.Setup(base._trans, target, this.Type, this.Offset, this.ClientPositionModifier);
+				return;
 			}
-			if (GameHubBehaviour.Hub.Net.IsServer() && this.TargetIdentifiable)
+			if (!this.TargetIdentifiable)
 			{
-				if (this._joint == null)
+				return;
+			}
+			this._body = base.gameObject.GetComponent<Rigidbody>();
+			if (!this._body)
+			{
+				PerkLinkedMovement.Log.ErrorFormat("This perk requires a RigidBody to work. Effect name: {0}", new object[]
 				{
-					this._joint = this.TargetIdentifiable.gameObject.AddComponent<FixedJoint>();
-				}
-				this._body.mass = 0f;
-				this._body.angularDrag = 0f;
-				this._body.drag = 0f;
-				this._joint.connectedBody = this._body;
-				if (this._attachTargetToEffect)
-				{
-					CombatObject attached = CombatRef.GetCombat(target) ?? CombatRef.GetCombat(this.TargetIdentifiable.transform);
-					this.Effect.Attached = attached;
-				}
+					base.gameObject.name
+				});
+				return;
+			}
+			if (this._joint == null)
+			{
+				this._joint = this.TargetIdentifiable.gameObject.AddComponent<FixedJoint>();
+			}
+			this._body.mass = 0f;
+			this._body.angularDrag = 0f;
+			this._body.drag = 0f;
+			this._joint.connectedBody = this._body;
+			if (this._attachTargetToEffect)
+			{
+				CombatObject attached = CombatRef.GetCombat(target) ?? CombatRef.GetCombat(this.TargetIdentifiable.transform);
+				this.Effect.Attached = attached;
 			}
 		}
 
@@ -52,11 +61,12 @@ namespace HeavyMetalMachines.Combat
 
 		public Vector3 UpdatePosition()
 		{
-			if (GameHubBehaviour.Hub.Net.IsClient())
+			if (GameHubBehaviour.Hub.Net.IsServer())
 			{
-				this._attachableMath.UpdateTransform();
+				return this._body.position;
 			}
-			return this._body.position;
+			this._attachableMath.UpdateTransform();
+			return base.transform.position;
 		}
 
 		protected Transform GetTarget()
@@ -71,7 +81,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				return targetIdentifiable.transform;
 			}
-			Transform dummy = bitComponentInChildren.GetDummy(this.dummyKind, this.customDummyName);
+			Transform dummy = bitComponentInChildren.GetDummy(this.dummyKind, this.customDummyName, this);
 			if (dummy == null)
 			{
 				return targetIdentifiable.transform;
@@ -79,16 +89,18 @@ namespace HeavyMetalMachines.Combat
 			return dummy;
 		}
 
-		public override void PerkDestroyed(DestroyEffect destroyEffect)
+		public override void PerkDestroyed(DestroyEffectMessage destroyEffectMessage)
 		{
-			base.PerkDestroyed(destroyEffect);
+			base.PerkDestroyed(destroyEffectMessage);
 			if (this._joint)
 			{
-				UnityEngine.Object.Destroy(this._joint);
+				Object.Destroy(this._joint);
 			}
 			this._joint = null;
 			this.Effect.Attached = null;
 		}
+
+		private static readonly BitLogger Log = new BitLogger(typeof(PerkLinkedMovement));
 
 		public BasePerk.PerkTarget RefTarget;
 

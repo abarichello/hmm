@@ -35,6 +35,10 @@ namespace HeavyMetalMachines.Combat
 			}
 			if (!this.Effect.CheckHit(targetCombat))
 			{
+				PerkCreateLink.Log.DebugFormat("QAHMM-18163 CombatObject: {0} cannot be hit", new object[]
+				{
+					targetCombat
+				});
 				return;
 			}
 			this._target = targetCombat.Movement;
@@ -92,7 +96,18 @@ namespace HeavyMetalMachines.Combat
 			{
 				tag = base.name;
 			}
-			this._link = new CombatLink(point, point2, this.Range, this.Compression, this.Tension, this.TensionBreakForce, this.ClampIn, this.ClampOut, this.ClampOnCorners, tag);
+			CombatLink.CombatLinkConfiguration config = new CombatLink.CombatLinkConfiguration
+			{
+				Range = this.Range,
+				Compression = this.Compression,
+				Tension = this.Tension,
+				TensionBreakForce = this.TensionBreakForce,
+				ClampIn = this.ClampIn,
+				ClampOut = this.ClampOut,
+				ClampOnCorners = this.ClampOnCorners,
+				Tag = tag
+			};
+			this._link = new CombatLink(point, point2, config);
 			this._owner.AddLink(this._link, this.StealLink);
 			this._target.AddLink(this._link, this.StealLink);
 			LinkCreatedCallback.ILinkCreatedCallbackListener linkCreatedCallbackListener = this.GetTargetGadget() as LinkCreatedCallback.ILinkCreatedCallbackListener;
@@ -145,7 +160,7 @@ namespace HeavyMetalMachines.Combat
 			this._link.TensionBreakForce = tensionBreakForceChange.TensionBreakForce;
 		}
 
-		public override void PerkDestroyed(DestroyEffect destroyEffect)
+		public override void PerkDestroyed(DestroyEffectMessage destroyEffectMessage)
 		{
 			if (this._link != null)
 			{

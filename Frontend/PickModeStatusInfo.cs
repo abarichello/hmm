@@ -1,53 +1,87 @@
 ﻿using System;
 using System.Collections.Generic;
-using HeavyMetalMachines.Character;
-using HeavyMetalMachines.Combat.Gadget;
-using HeavyMetalMachines.Options;
+using Assets.ClientApiObjects;
+using Assets.ClientApiObjects.Components;
+using HeavyMetalMachines.Characters;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Input;
+using HeavyMetalMachines.Input.ControllerInput;
+using HeavyMetalMachines.Localization;
+using HeavyMetalMachines.Presenting;
 using HeavyMetalMachines.Utils;
 using HeavyMetalMachines.VFX;
+using Hoplon.Input;
+using Hoplon.Input.Business;
+using Hoplon.ToggleableFeatures;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Frontend
 {
 	public class PickModeStatusInfo : GameHubBehaviour
 	{
+		public void Initialize()
+		{
+			this._isVisible = false;
+			this._mainPanel.GetComponent<NGUIPanelAlpha>().Alpha = 0f;
+		}
+
 		protected void Start()
 		{
-			GameHubBehaviour.Hub.Options.Controls.OnResetDefaultCallback += this.ControlsOnResetAllOrPrimaryCallback;
-			GameHubBehaviour.Hub.Options.Controls.OnResetPrimaryDefaultCallback += this.ControlsOnResetAllOrPrimaryCallback;
-			GameHubBehaviour.Hub.Options.Controls.OnKeyChangedCallback += this.ControlsOnKeyChangedCallback;
+			this._inputBindNotifierDisposable = ObservableExtensions.Subscribe<int>(Observable.Do<int>(this._inputBindNotifier.ObserveBind(), delegate(int actionId)
+			{
+				this.ControlsOnKeyChangedCallback(actionId);
+			}));
+			this._inputBindResetDefaultNotifierDisposable = ObservableExtensions.Subscribe<Unit>(Observable.Do<Unit>(this._inputBindNotifier.ObserveResetDefault(), delegate(Unit _)
+			{
+				this.ControlsOnResetAllOrPrimaryCallback();
+			}));
+			this._inputActiveDeviceChangeNotifierDisposable = ObservableExtensions.Subscribe<InputDevice>(this._inputActiveDeviceChangeNotifier.ObserveActiveDeviceChange(), new Action<InputDevice>(this.OnInputActiveDeviceChange));
 		}
 
 		protected void OnDestroy()
 		{
-			this._currentCharInfo = null;
-			GameHubBehaviour.Hub.Options.Controls.OnResetDefaultCallback -= this.ControlsOnResetAllOrPrimaryCallback;
-			GameHubBehaviour.Hub.Options.Controls.OnResetPrimaryDefaultCallback -= this.ControlsOnResetAllOrPrimaryCallback;
-			GameHubBehaviour.Hub.Options.Controls.OnKeyChangedCallback -= this.ControlsOnKeyChangedCallback;
+			this._currentCharAssetPrefix = string.Empty;
+			if (this._inputBindNotifierDisposable != null)
+			{
+				this._inputBindNotifierDisposable.Dispose();
+				this._inputBindNotifierDisposable = null;
+			}
+			if (this._inputBindResetDefaultNotifierDisposable != null)
+			{
+				this._inputBindResetDefaultNotifierDisposable.Dispose();
+				this._inputBindResetDefaultNotifierDisposable = null;
+			}
+			if (this._inputActiveDeviceChangeNotifierDisposable != null)
+			{
+				this._inputActiveDeviceChangeNotifierDisposable.Dispose();
+				this._inputActiveDeviceChangeNotifierDisposable = null;
+			}
 		}
 
-		public void Setup(HeavyMetalMachines.Character.CharacterInfo charInfo)
+		public void Setup(IItemType charItemType)
 		{
-			this._currentCharInfo = charInfo;
-			this.StatsInfoGui.NameLabel.text = charInfo.LocalizedName;
+			CharacterItemTypeComponent component = charItemType.GetComponent<CharacterItemTypeComponent>();
+			this._currentCharAssetPrefix = component.AssetPrefix;
+			this.StatsInfoGui.NameLabel.text = component.GetCharacterLocalizedName();
 			this.StatsInfoGui.NameLabel.TryUpdateText();
-			this.SetSkills(charInfo);
-			this.SetupRole(charInfo);
-			HeavyMetalMachines.Character.CharacterInfo.PickModeStats pickModeStatsInfo = charInfo.PickModeStatsInfo;
+			this.SetSkills(component);
+			this.SetupRole(component);
+			PickModeStats pickModeStats = component.PickModeStats;
 			float[] array = new float[]
 			{
-				pickModeStatsInfo.Durability,
-				pickModeStatsInfo.Repair,
-				pickModeStatsInfo.Control,
-				pickModeStatsInfo.Damage,
-				pickModeStatsInfo.Mobility
+				pickModeStats.Durability,
+				pickModeStats.Repair,
+				pickModeStats.Control,
+				pickModeStats.Damage,
+				pickModeStats.Mobility
 			};
 			for (int i = 0; i < array.Length; i++)
 			{
 				this.StatsInfoGui.StatsSliders[i].value = this.GetStatInfoSliderValue(array[i]);
 			}
-			bool flag = charInfo.Dificult <= 2;
+			bool flag = component.Difficulty <= CharacterDifficulty.DifficultyLevel2;
 			if (flag)
 			{
 				this.StatsInfoGui.RecommendationSprite.gameObject.SetActive(true);
@@ -57,64 +91,64 @@ namespace HeavyMetalMachines.Frontend
 			{
 				this.StatsInfoGui.RecommendationSprite.gameObject.SetActive(false);
 			}
-			bool active = GameHubBehaviour.Hub.Characters.IsCharacterUnderRotationForPlayer(charInfo.CharacterId, GameHubBehaviour.Hub.User.Bag);
+			bool active = GameHubBehaviour.Hub.Characters.IsCharacterUnderRotationForPlayer(component.CharacterId, GameHubBehaviour.Hub.User.Bag);
 			this.StatsInfoGui.RotationGroup.SetActive(active);
 		}
 
 		private void ControlsOnResetAllOrPrimaryCallback()
 		{
-			if (this._currentCharInfo != null)
+			if (!string.IsNullOrEmpty(this._currentCharAssetPrefix))
 			{
-				this.SetAllSkillActionDescriptions(this._currentCharInfo);
+				this.SetAllSkillActionDescriptions(this._currentCharAssetPrefix);
 			}
 		}
 
-		private void ControlsOnKeyChangedCallback(ControlAction controlAction)
+		private void ControlsOnKeyChangedCallback(ControllerInputActions controlAction)
 		{
 			switch (controlAction)
 			{
-			case ControlAction.GadgetBasic:
-			case ControlAction.Gadget0:
-			case ControlAction.Gadget1:
+			case 5:
+			case 6:
+			case 7:
 				break;
 			default:
-				if (controlAction != ControlAction.GadgetBoost)
+				if (controlAction != 15)
 				{
 					return;
 				}
 				break;
 			}
-			if (this._currentCharInfo != null)
+			if (!string.IsNullOrEmpty(this._currentCharAssetPrefix))
 			{
-				this.SetSkillActionDescription(this._currentCharInfo, controlAction);
+				this.SetSkillActionDescription(this._currentCharAssetPrefix, controlAction);
 			}
 		}
 
-		private void SetupRole(HeavyMetalMachines.Character.CharacterInfo charInfo)
+		private void SetupRole(CharacterItemTypeComponent charComponent)
 		{
 			Sprite sprite2D;
 			string key;
-			switch (charInfo.Role)
+			switch (charComponent.Role)
 			{
-			case HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Support:
+			case 0:
 				sprite2D = this.ClassSupportSprite;
 				key = "SUPPORT_TITLE_PICKMODE";
 				break;
-			case HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Carrier:
+			case 1:
 				sprite2D = this.ClassCarrierSprite;
 				key = "TRANSPORTER_TITLE_PICKMODE";
 				break;
-			case HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Tackler:
+			case 2:
 				sprite2D = this.ClassTacklerSprite;
 				key = "INTERCEPTOR_TITLE_PICKMODE";
 				break;
 			default:
-				HeavyMetalMachines.Utils.Debug.Assert(false, string.Format("Pick Mode Status ERROR. Invalid Role for [{0}]: [{1}]", charInfo.Asset, charInfo.Role), HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+				Debug.Assert(false, string.Format("Pick Mode Status ERROR. Invalid Role for [{0}]: [{1}]", charComponent.AssetPrefix, charComponent.Role), Debug.TargetTeam.All);
 				return;
 			}
-			this.StatsInfoGui.SkinLabel.text = charInfo.GetRoleTranslation();
+			this.StatsInfoGui.SkinLabel.text = charComponent.GetRoleLocalized();
 			this.StatsInfoGui.ClassSprite.sprite2D = sprite2D;
-			this.StatsInfoGui.ClassTooltip.TooltipText = Language.Get(key, TranslationSheets.PickMode);
+			this.StatsInfoGui.ClassTooltip.TooltipText = Language.Get(key, TranslationContext.PickMode);
 		}
 
 		private float GetStatInfoSliderValue(float value)
@@ -139,35 +173,43 @@ namespace HeavyMetalMachines.Frontend
 			GameHubBehaviour.Hub.GuiScripts.DriverHelper.SetWindowVisibility(true);
 		}
 
-		private void SetSkills(HeavyMetalMachines.Character.CharacterInfo charInfo)
+		private void SetSkills(CharacterItemTypeComponent charComponent)
 		{
-			this.StatsInfoGui.GadgetPassiveDescription.transform.parent.gameObject.SetActive(charInfo.HasPassive);
-			this.StatsInfoGui.GadgetPassiveDescription.text = Language.Get(charInfo.Asset.ToUpper() + "_GADGET_PASSIVE_SHORT", TranslationSheets.CharactersShortInfo);
-			this.SetAllSkillActionDescriptions(charInfo);
-			this.SetupSkill(this.StatsInfoGui.GadgetPassiveSprite, charInfo.Asset + "_GadgetPassive", this.StatsInfoGui.GadgetPassiveEventTrigger, charInfo.PassiveGadget, this.StatsInfoGui.GadgetPassiveTooltipPositionGameObject);
-			this.SetupSkill(this.StatsInfoGui.Gadget0Sprite, charInfo.Asset + "_Gadget01", this.StatsInfoGui.Gadget0EventTrigger, charInfo.CustomGadget0, this.StatsInfoGui.Gadget0TooltipPositionGameObject);
-			this.SetupSkill(this.StatsInfoGui.Gadget1Sprite, charInfo.Asset + "_Gadget02", this.StatsInfoGui.Gadget1EventTrigger, charInfo.CustomGadget1, this.StatsInfoGui.Gadget1TooltipPositionGameObject);
-			this.SetupSkill(this.StatsInfoGui.Gadget2Sprite, charInfo.Asset + "_Gadget03", this.StatsInfoGui.Gadget2EventTrigger, charInfo.CustomGadget2, this.StatsInfoGui.Gadget2TooltipPositionGameObject);
-			this.SetupSkill(this.StatsInfoGui.GadgetNitroSprite, charInfo.Asset + "_GadgetNitro", this.StatsInfoGui.GadgetNitroEventTrigger, charInfo.BoostGadget, this.StatsInfoGui.GadgetNitroTooltipPositionGameObject);
+			this.StatsInfoGui.GadgetPassiveDescription.transform.parent.gameObject.SetActive(charComponent.HasPassive);
+			this.StatsInfoGui.GadgetPassiveDescription.text = Language.Get(charComponent.AssetPrefix.ToUpper() + "_GADGET_PASSIVE_SHORT", TranslationContext.CharactersShortInfo);
+			this.SetAllSkillActionDescriptions(charComponent.AssetPrefix);
+			this.SetSkillsSprites(charComponent.AssetPrefix, charComponent.HasPassive);
 		}
 
-		private void SetAllSkillActionDescriptions(HeavyMetalMachines.Character.CharacterInfo charInfo)
+		private void SetSkillsSprites(string assetPrefix, bool hasPassive)
 		{
-			this.SetSkillActionDescription(charInfo, ControlAction.GadgetBasic);
-			this.SetSkillActionDescription(charInfo, ControlAction.Gadget0);
-			this.SetSkillActionDescription(charInfo, ControlAction.Gadget1);
-			this.SetSkillActionDescription(charInfo, ControlAction.GadgetBoost);
+			if (hasPassive)
+			{
+				this.StatsInfoGui.GadgetPassiveSprite.SpriteName = assetPrefix + "_GadgetPassive";
+			}
+			this.StatsInfoGui.Gadget0Sprite.SpriteName = assetPrefix + "_Gadget01";
+			this.StatsInfoGui.Gadget1Sprite.SpriteName = assetPrefix + "_Gadget02";
+			this.StatsInfoGui.Gadget2Sprite.SpriteName = assetPrefix + "_Gadget03";
+			this.StatsInfoGui.GadgetNitroSprite.SpriteName = assetPrefix + "_GadgetNitro";
 		}
 
-		private void SetSkillActionDescription(HeavyMetalMachines.Character.CharacterInfo charInfo, ControlAction controlAction)
+		private void SetAllSkillActionDescriptions(string assetPrefix)
+		{
+			this.SetSkillActionDescription(assetPrefix, 5);
+			this.SetSkillActionDescription(assetPrefix, 6);
+			this.SetSkillActionDescription(assetPrefix, 7);
+			this.SetSkillActionDescription(assetPrefix, 15);
+		}
+
+		private void SetSkillActionDescription(string assetPrefix, ControllerInputActions inputAction)
 		{
 			string str = "_GADGET_00_SHORT";
 			UILabel uilabel = this.StatsInfoGui.Gadget0Description;
-			if (controlAction != ControlAction.Gadget0)
+			if (inputAction != 6)
 			{
-				if (controlAction != ControlAction.Gadget1)
+				if (inputAction != 7)
 				{
-					if (controlAction == ControlAction.GadgetBoost)
+					if (inputAction == 15)
 					{
 						uilabel = this.StatsInfoGui.GadgetBoostDescription;
 						str = "_GADGET_03_SHORT";
@@ -184,38 +226,13 @@ namespace HeavyMetalMachines.Frontend
 				uilabel = this.StatsInfoGui.Gadget1Description;
 				str = "_GADGET_01_SHORT";
 			}
-			string textlocalized = ControlOptions.GetTextlocalized(controlAction, ControlOptions.ControlActionInputType.Primary);
-			uilabel.text = string.Format(Language.Get(charInfo.Asset.ToUpper() + str, TranslationSheets.CharactersShortInfo), textlocalized);
-		}
-
-		private void SetupSkill(HMMUI2DDynamicSprite icon, string spritename, UIEventTrigger eventTrigger, GadgetInfo info, GameObject tooltipPositionGameObject)
-		{
-			icon.SpriteName = spritename;
-			if (eventTrigger)
+			ISprite sprite;
+			string text;
+			this._inputTranslation.TryToGetInputActionKeyboardMouseAssetOrFallbackToTranslation(inputAction, ref sprite, ref text);
+			uilabel.text = Language.GetFormatted(assetPrefix.ToUpper() + str, TranslationContext.CharactersShortInfo, new object[]
 			{
-				eventTrigger.onHoverOut.Clear();
-				eventTrigger.onHoverOver.Clear();
-				eventTrigger.onHoverOut.Add(new EventDelegate(this, "HideTooltip"));
-				eventTrigger.onHoverOver.Add(new EventDelegate(this, "ShowSkillTooltip"));
-				eventTrigger.onHoverOver[0].parameters[0].obj = info;
-				eventTrigger.onHoverOver[0].parameters[1].obj = tooltipPositionGameObject;
-				eventTrigger.onHoverOver[0].parameters[2].value = spritename;
-			}
-		}
-
-		public void HideTooltip()
-		{
-			GameHubBehaviour.Hub.GuiScripts.TooltipController.HideWindow();
-		}
-
-		public void ShowSkillTooltip(GadgetInfo gadgetInfo, GameObject tooltipPositionGameObject, string spriteName)
-		{
-			string upgradeDescription = HudGarageShopGadgetObject.GetUpgradeDescription(gadgetInfo, gadgetInfo.LocalizedDescription, gadgetInfo.LocalizedName);
-			TooltipInfo tooltipInfo = new TooltipInfo(TooltipInfo.TooltipType.Normal, TooltipInfo.DescriptionSummaryType.None, PreferredDirection.Left, null, spriteName, gadgetInfo.LocalizedName, string.Empty, upgradeDescription, gadgetInfo.LocalizedCooldownDescription, string.Empty, string.Empty, tooltipPositionGameObject.transform.position, string.Empty);
-			if (GameHubBehaviour.Hub.GuiScripts)
-			{
-				GameHubBehaviour.Hub.GuiScripts.TooltipController.TryToOpenWindow(tooltipInfo);
-			}
+				text
+			});
 		}
 
 		public float GetTooltipWidth()
@@ -225,11 +242,38 @@ namespace HeavyMetalMachines.Frontend
 
 		public void SetVisibility(bool isVisible)
 		{
-			this._mainPanel.alpha = ((!isVisible) ? 0f : 1f);
+			if (isVisible && this._inputGetActiveDevicePoller.GetActiveDevice() == 3)
+			{
+				return;
+			}
+			if (isVisible == this._isVisible)
+			{
+				return;
+			}
+			this._isVisible = isVisible;
+			if (isVisible)
+			{
+				this._animation.Play("TooltipPickmodeInAnimation");
+			}
+			else
+			{
+				this._animation.Play("TooltipPickmodeOutAnimation");
+			}
+		}
+
+		private void OnInputActiveDeviceChange(InputDevice activeDevice)
+		{
+			if (this._isVisible)
+			{
+				this.SetVisibility(false);
+			}
 		}
 
 		[SerializeField]
 		private UIPanel _mainPanel;
+
+		[SerializeField]
+		private Animation _animation;
 
 		[Header("[Gui Components]")]
 		[SerializeField]
@@ -248,7 +292,30 @@ namespace HeavyMetalMachines.Frontend
 		[SerializeField]
 		private Sprite ClassTacklerSprite;
 
-		private HeavyMetalMachines.Character.CharacterInfo _currentCharInfo;
+		private string _currentCharAssetPrefix;
+
+		[InjectOnClient]
+		private IInputTranslation _inputTranslation;
+
+		[InjectOnClient]
+		private IInputBindNotifier _inputBindNotifier;
+
+		[InjectOnClient]
+		private IIsFeatureToggled _isFeatureToggled;
+
+		[InjectOnClient]
+		private IInputGetActiveDevicePoller _inputGetActiveDevicePoller;
+
+		[InjectOnClient]
+		private IInputActiveDeviceChangeNotifier _inputActiveDeviceChangeNotifier;
+
+		private IDisposable _inputBindNotifierDisposable;
+
+		private IDisposable _inputBindResetDefaultNotifierDisposable;
+
+		private IDisposable _inputActiveDeviceChangeNotifierDisposable;
+
+		private bool _isVisible;
 
 		[Serializable]
 		private struct StatsGui
@@ -282,26 +349,6 @@ namespace HeavyMetalMachines.Frontend
 			public HMMUI2DDynamicSprite Gadget2Sprite;
 
 			public HMMUI2DDynamicSprite GadgetNitroSprite;
-
-			public UIEventTrigger GadgetPassiveEventTrigger;
-
-			public UIEventTrigger Gadget0EventTrigger;
-
-			public UIEventTrigger Gadget1EventTrigger;
-
-			public UIEventTrigger Gadget2EventTrigger;
-
-			public UIEventTrigger GadgetNitroEventTrigger;
-
-			public GameObject GadgetPassiveTooltipPositionGameObject;
-
-			public GameObject Gadget0TooltipPositionGameObject;
-
-			public GameObject Gadget1TooltipPositionGameObject;
-
-			public GameObject Gadget2TooltipPositionGameObject;
-
-			public GameObject GadgetNitroTooltipPositionGameObject;
 
 			public List<UISlider> StatsSliders;
 

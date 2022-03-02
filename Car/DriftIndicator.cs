@@ -12,8 +12,10 @@ namespace HeavyMetalMachines.Car
 			component.material.SetTexture("_MainTex", driftTexture);
 			component.material.SetColor("_TintColor", playerColor * 0.5f);
 			MeshFilter component2 = this._driftIndicatorTransform.GetComponent<MeshFilter>();
-			this._driftMesh = (component2.mesh ?? new Mesh());
-			this._driftMesh.name = "DriftMesh";
+			this._driftMesh = new Mesh
+			{
+				name = "DriftMesh"
+			};
 			this._driftMesh.MarkDynamic();
 			component2.mesh = this._driftMesh;
 		}
@@ -58,8 +60,8 @@ namespace HeavyMetalMachines.Car
 			while (i < num)
 			{
 				float num5 = (float)(i & 1);
-				this._auxDirectionVector3.x = -Mathf.Sin(0.0174532924f * num4) + driftIndicatorXDiff;
-				this._auxDirectionVector3.z = Mathf.Cos(0.0174532924f * num4) + driftIndicatorZDiff;
+				this._auxDirectionVector3.x = -Mathf.Sin(0.017453292f * num4) + driftIndicatorXDiff;
+				this._auxDirectionVector3.z = Mathf.Cos(0.017453292f * num4) + driftIndicatorZDiff;
 				this._vertices[i] = (driftIndicatorRadius + driftIndicatorThickness * num5) * this._auxDirectionVector3;
 				this._colors[i] = Color.white;
 				this._uv[i].x = num3 / (num2 - 1f);

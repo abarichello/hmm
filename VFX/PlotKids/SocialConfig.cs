@@ -46,9 +46,9 @@ namespace HeavyMetalMachines.VFX.PlotKids
 		public Texture2D FallbackPlayerIcon;
 
 		[Header("Chat Spam Filter")]
-		[Range(1f, 10f)]
 		[SerializeField]
 		[Tooltip("Allows X repeated messages.")]
+		[Range(1f, 10f)]
 		private int _spamMessageCountThreshold = 2;
 
 		[SerializeField]

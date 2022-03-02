@@ -1,5 +1,6 @@
 ﻿using System;
 using HeavyMetalMachines.Frontend;
+using HeavyMetalMachines.Localization;
 using HeavyMetalMachines.Tutorial.InGame;
 using Pocketverse;
 using UnityEngine;
@@ -101,9 +102,9 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 			ConfirmWindowProperties properties = new ConfirmWindowProperties
 			{
 				Guid = tConfirmWindowGuid,
-				QuestionText = Language.Get("CONTROLS_SELECTION_CONFIRM_QUESTION", TranslationSheets.Tutorial),
-				RefuseButtonText = Language.Get("CONTROLS_SELECTION_CONFIRM_QUESTION_REFUSE_BUTTON", TranslationSheets.Tutorial),
-				ConfirmButtonText = Language.Get("CONTROLS_SELECTION_CONFIRM_QUESTION_ACCEPT_BUTTON", TranslationSheets.Tutorial),
+				QuestionText = Language.Get("CONTROLS_SELECTION_CONFIRM_QUESTION", TranslationContext.Tutorial),
+				RefuseButtonText = Language.Get("CONTROLS_SELECTION_CONFIRM_QUESTION_REFUSE_BUTTON", TranslationContext.Tutorial),
+				ConfirmButtonText = Language.Get("CONTROLS_SELECTION_CONFIRM_QUESTION_ACCEPT_BUTTON", TranslationContext.Tutorial),
 				OnRefuse = delegate()
 				{
 					GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.HideConfirmWindow(tConfirmWindowGuid);

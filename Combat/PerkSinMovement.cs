@@ -3,13 +3,12 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	[RequireComponent(typeof(Rigidbody))]
 	public class PerkSinMovement : PerkStraightMovement
 	{
 		public override void PerkInitialized()
 		{
 			base.PerkInitialized();
-			this._toRad = 0.0174532924f;
+			this._toRad = 0.017453292f;
 			this._maxAngle = 180 * this.BounceCount;
 			PerkSinMovement.SinDirection bounceDirection = this.BounceDirection;
 			if (bounceDirection != PerkSinMovement.SinDirection.Right)
@@ -27,11 +26,11 @@ namespace HeavyMetalMachines.Combat
 
 		public override Vector3 UpdatePosition()
 		{
-			Vector3 a = base.UpdatePosition();
+			Vector3 vector = base.UpdatePosition();
 			float num = Mathf.Lerp(0f, (float)this._maxAngle, base._deltaTimeRatio);
 			float num2 = Mathf.Sin(this._toRad * num);
-			Vector3 b = this._finalDirection * (num2 * this.BounceRadius);
-			return a + b;
+			Vector3 vector2 = this._finalDirection * (num2 * this.BounceRadius);
+			return vector + vector2;
 		}
 
 		public int BounceCount = 3;

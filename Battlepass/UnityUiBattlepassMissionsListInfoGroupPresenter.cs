@@ -1,5 +1,6 @@
 ﻿using System;
 using HeavyMetalMachines.Frontend;
+using HeavyMetalMachines.Localization;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -9,7 +10,7 @@ namespace HeavyMetalMachines.Battlepass
 	{
 		public void Setup(bool isActiveMissions, int currentValue, int totalvalue)
 		{
-			this._titleText.text = Language.Get((!isActiveMissions) ? "BATTLEPASS_MISSIONS_COMPLETED" : "BATTLEPASS_MISSIONS_ACTIVE", TranslationSheets.BattlepassMissions);
+			this._titleText.text = Language.Get((!isActiveMissions) ? "BATTLEPASS_MISSIONS_COMPLETED" : "BATTLEPASS_MISSIONS_ACTIVE", TranslationContext.BattlepassMissions);
 			string text = HudUtils.RGBToHex(this._activeMissionsTextColor);
 			string text3;
 			if (isActiveMissions)

@@ -26,11 +26,6 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 			}
 		}
 
-		public override bool UsesParameterWithId(int parameterId)
-		{
-			return false;
-		}
-
 		private static readonly List<Rigidbody> _resultsBodies = new List<Rigidbody>(4);
 
 		private static readonly List<Collider> _resultsCols = new List<Collider>(32);

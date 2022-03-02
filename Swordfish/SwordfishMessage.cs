@@ -4,6 +4,7 @@ using ClientAPI;
 using ClientAPI.Chat;
 using ClientAPI.Chat.Api;
 using ClientAPI.MessageHub;
+using Hoplon.ToggleableFeatures;
 using Pocketverse;
 using UnityEngine;
 
@@ -11,8 +12,9 @@ namespace HeavyMetalMachines.Swordfish
 {
 	public class SwordfishMessage : GameHubObject
 	{
-		public SwordfishMessage()
+		public SwordfishMessage(IIsFeatureToggled isFeatureToggled)
 		{
+			this._isFeatureToggled = isFeatureToggled;
 			this.Ready = false;
 			this._msgHub = GameHubObject.Hub.ClientApi.hubClient;
 			this._matchmaking = new SwordfishMatchmaking(GameHubObject.Hub.ClientApi);
@@ -20,7 +22,7 @@ namespace HeavyMetalMachines.Swordfish
 			{
 				return;
 			}
-			this._msgHub.BalanceChanged += GameHubObject.Hub.Store.ReloadBalance;
+			this._msgHub.BalanceChanged += new EventHandlerEx<BalanceMessage>(GameHubObject.Hub.Store.ReloadBalance);
 			this._msgHub.Connected += this.OnConnect;
 			this._msgHub.Disconnected += this.OnDisconnect;
 			AbstractHubClient msgHub = this._msgHub;
@@ -38,27 +40,15 @@ namespace HeavyMetalMachines.Swordfish
 			AbstractHubClient msgHub2 = this._msgHub;
 			if (SwordfishMessage.<>f__mg$cache2 == null)
 			{
-				SwordfishMessage.<>f__mg$cache2 = new EventHandlerEx<PresenceMessage>(SwordfishMessage.OnPresenceReceived);
+				SwordfishMessage.<>f__mg$cache2 = new EventHandlerEx<SerializationErrorWrapper>(SwordfishMessage.OnSerializationError);
 			}
-			msgHub2.PresenceReceived += SwordfishMessage.<>f__mg$cache2;
+			msgHub2.SerializationError += SwordfishMessage.<>f__mg$cache2;
 			AbstractHubClient msgHub3 = this._msgHub;
 			if (SwordfishMessage.<>f__mg$cache3 == null)
 			{
-				SwordfishMessage.<>f__mg$cache3 = new EventHandlerEx<Exception>(SwordfishMessage.OnConnectionError);
+				SwordfishMessage.<>f__mg$cache3 = new EventHandlerEx<SerializationErrorWrapper>(SwordfishMessage.OnDeserializationError);
 			}
-			msgHub3.ConnectionError += SwordfishMessage.<>f__mg$cache3;
-			AbstractHubClient msgHub4 = this._msgHub;
-			if (SwordfishMessage.<>f__mg$cache4 == null)
-			{
-				SwordfishMessage.<>f__mg$cache4 = new EventHandlerEx<SerializationErrorWrapper>(SwordfishMessage.OnSerializationError);
-			}
-			msgHub4.SerializationError += SwordfishMessage.<>f__mg$cache4;
-			AbstractHubClient msgHub5 = this._msgHub;
-			if (SwordfishMessage.<>f__mg$cache5 == null)
-			{
-				SwordfishMessage.<>f__mg$cache5 = new EventHandlerEx<SerializationErrorWrapper>(SwordfishMessage.OnDeserializationError);
-			}
-			msgHub5.DeserializationError += SwordfishMessage.<>f__mg$cache5;
+			msgHub3.DeserializationError += SwordfishMessage.<>f__mg$cache3;
 			this.Ready = true;
 		}
 
@@ -90,11 +80,6 @@ namespace HeavyMetalMachines.Swordfish
 			}
 		}
 
-		~SwordfishMessage()
-		{
-			this.Cleanup();
-		}
-
 		public void Cleanup()
 		{
 			if (this._msgHub != null)
@@ -112,24 +97,24 @@ namespace HeavyMetalMachines.Swordfish
 
 		private void OnConnect(object sender, EventArgs e)
 		{
-			this.ConnectionId = this._msgHub.Id.ToString();
-		}
-
-		private static void OnConnectionError(object sender, Exception exception)
-		{
-			SwordfishMessage.Log.Fatal("MsgHubConnectionError, exception:", exception);
-			string msg = string.Format("Exception={0}", exception.Message.Replace(' ', '.').Replace('=', '-'));
-			GameHubObject.Hub.Swordfish.Log.BILogClientMsg(ClientBITags.MsgHubConnectionError, msg, true);
-			for (Exception innerException = exception.InnerException; innerException != null; innerException = innerException.InnerException)
+			SwordfishMessage.Log.DebugFormat("Connected={0} sender={1}", new object[]
 			{
-				SwordfishMessage.Log.Fatal("Inner exception:", innerException);
-			}
+				e,
+				sender
+			});
+			this.ConnectionId = this._msgHub.Id.ToString();
 		}
 
 		private void OnDisconnect(object sender, DisconnectionReasonWrapper e)
 		{
+			SwordfishMessage.Log.DebugFormat("MsgHubDisconnected Reason={0} sender={1} Exception={2}", new object[]
+			{
+				e.GetReason(),
+				sender,
+				e.GetException()
+			});
 			string msg = string.Format("Reason={0} Exception={1}", e.GetReason(), e.GetException().Message.Replace(' ', '.').Replace('=', '-'));
-			GameHubObject.Hub.Swordfish.Log.BILogClientMsg(ClientBITags.MsgHubDisconnected, msg, true);
+			GameHubObject.Hub.Swordfish.Log.BILogClientMsg(43, msg, true);
 		}
 
 		private static void OnError(object sender, string eventargs)
@@ -143,13 +128,15 @@ namespace HeavyMetalMachines.Swordfish
 
 		private static void OnRawMessageReceived(object sender, Message eventargs)
 		{
-			if (!eventargs.ToXmlString().Contains("heartbeat"))
+			if (!eventargs.ToSerializedString().Contains("heartbeat"))
 			{
+				SwordfishMessage.Log.DebugFormat("Raw Message Received={0} S={1} sender={2}", new object[]
+				{
+					eventargs.ToSerializedString(),
+					eventargs.ToString(),
+					sender
+				});
 			}
-		}
-
-		private static void OnPresenceReceived(object sender, PresenceMessage eventArgs)
-		{
 		}
 
 		private static void OnChatMessageReceived(object sender, ChatMessage eventargs)
@@ -196,38 +183,30 @@ namespace HeavyMetalMachines.Swordfish
 			}
 		}
 
-		public void ConnectToMatch(GameState fallbackStateOnError, System.Action onErrorAction = null)
+		public void ConnectToMatch()
 		{
 			GameHubObject.Hub.Server.ServerIp = this._matchmaking.ServerHost;
 			GameHubObject.Hub.Server.ServerPort = this._matchmaking.ServerPort;
 			this.ClientMatchId = this._matchmaking.MatchId;
-			GameHubObject.Hub.User.ConnectToServer(false, delegate
-			{
-				this.ConnectFailed(fallbackStateOnError, onErrorAction);
-			}, null);
+			GameHubObject.Hub.User.ConnectToServer(false, new Action(this.ConnectFailed), null);
 		}
 
-		public void ConnectNarratorToMatch(GameState fallbackStateOnError)
+		public void ConnectNarratorToMatch()
 		{
 			GameHubObject.Hub.Server.ServerIp = this._matchmaking.ServerHost;
 			GameHubObject.Hub.Server.ServerPort = this._matchmaking.ServerPort;
 			this.ClientMatchId = this._matchmaking.MatchId;
-			GameHubObject.Hub.User.ConnectNarratorToServer(false, delegate
-			{
-				GameHubObject.Hub.State.GotoState(fallbackStateOnError, false);
-			}, null);
+			GameHubObject.Hub.User.ConnectNarratorToServer(false, new Action(this.ConnectFailed), null);
 		}
 
-		private void ConnectFailed(GameState fallbackStateOnError, System.Action onErrorAction)
+		private void ConnectFailed()
 		{
-			GameHubObject.Hub.State.GotoState(fallbackStateOnError, false);
-			if (onErrorAction != null)
-			{
-				onErrorAction();
-			}
+			GameHubObject.Hub.EndSession("ConnectToServer failed");
 		}
 
 		public Guid ClientMatchId { get; set; }
+
+		private readonly IIsFeatureToggled _isFeatureToggled;
 
 		public static readonly BitLogger Log = new BitLogger(typeof(SwordfishMessage));
 
@@ -252,15 +231,9 @@ namespace HeavyMetalMachines.Swordfish
 		private static EventHandlerEx<ChatMessage> <>f__mg$cache1;
 
 		[CompilerGenerated]
-		private static EventHandlerEx<PresenceMessage> <>f__mg$cache2;
+		private static EventHandlerEx<SerializationErrorWrapper> <>f__mg$cache2;
 
 		[CompilerGenerated]
-		private static EventHandlerEx<Exception> <>f__mg$cache3;
-
-		[CompilerGenerated]
-		private static EventHandlerEx<SerializationErrorWrapper> <>f__mg$cache4;
-
-		[CompilerGenerated]
-		private static EventHandlerEx<SerializationErrorWrapper> <>f__mg$cache5;
+		private static EventHandlerEx<SerializationErrorWrapper> <>f__mg$cache3;
 	}
 }

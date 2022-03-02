@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkColliderToTrigger : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkColliderToTrigger : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		public override void PerkInitialized()
 		{
@@ -25,7 +25,7 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			for (int i = 0; i < this._colliders.Count; i++)
 			{

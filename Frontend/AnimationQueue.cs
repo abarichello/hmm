@@ -65,7 +65,7 @@ namespace HeavyMetalMachines.Frontend
 
 		public void StoploopinAnimation()
 		{
-			if (this._animationsList.Count <= 0 || !this._animationsList[0].Animation.isPlaying || this._animationsList[0].Animation[this._animationsList[0].AnimationClipName].clip.wrapMode != WrapMode.Loop)
+			if (this._animationsList.Count <= 0 || !this._animationsList[0].Animation.isPlaying || this._animationsList[0].Animation[this._animationsList[0].AnimationClipName].clip.wrapMode != 2)
 			{
 				return;
 			}

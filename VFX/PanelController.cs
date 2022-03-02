@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using FMod;
 using HeavyMetalMachines.Frontend;
 using Pocketverse;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.VFX
 {
@@ -51,6 +53,12 @@ namespace HeavyMetalMachines.VFX
 				PanelController.EvtSystemMessage(systemMessage, senderUniversalId);
 			}
 			return result;
+		}
+
+		protected override void Awake()
+		{
+			base.Awake();
+			this._diContainer = this._diContainer.ParentContainers.First<DiContainer>();
 		}
 
 		private bool CanShowHint()
@@ -216,7 +224,7 @@ namespace HeavyMetalMachines.VFX
 
 		public static void Broadcast(UiEvent eventName)
 		{
-			SingletonMonoBehaviour<PanelController>.Instance.BroadcastMessage(eventName.ToString(), SendMessageOptions.DontRequireReceiver);
+			SingletonMonoBehaviour<PanelController>.Instance.BroadcastMessage(eventName.ToString(), 1);
 		}
 
 		public Future<int> ShowDialog(string contentText, string confirmMsg, string cancelMsg = "", string[] otherMessages = null)
@@ -284,10 +292,10 @@ namespace HeavyMetalMachines.VFX
 			T t = (T)((object)this.GetModalWindowFromType(typeFromHandle));
 			if (t == null)
 			{
-				string message = string.Format("Couldn't find Modal Window prefab: \"{0}\"", typeFromHandle.Name);
-				UnityEngine.Debug.LogError(message);
+				string text = string.Format("Couldn't find Modal Window prefab: \"{0}\"", typeFromHandle.Name);
+				Debug.LogError(text);
 				Future future = new Future();
-				future.ExceptionThrowed = new MissingReferenceException(message);
+				future.ExceptionThrowed = new MissingReferenceException(text);
 				modalGUIController = (T)((object)null);
 				return future;
 			}
@@ -330,7 +338,7 @@ namespace HeavyMetalMachines.VFX
 		{
 			if (this._uiConfiguration.AvailableModalGuiList.Contains(modalGUIController))
 			{
-				UnityEngine.Debug.LogWarning(string.Format("Trying to register Modal Window \"{0}\" again!", modalGUIController.gameObject.name), modalGUIController);
+				Debug.LogWarning(string.Format("Trying to register Modal Window \"{0}\" again!", modalGUIController.gameObject.name), modalGUIController);
 				return;
 			}
 			this._uiConfiguration.AvailableModalGuiList.Add(modalGUIController);
@@ -342,7 +350,7 @@ namespace HeavyMetalMachines.VFX
 			{
 				return;
 			}
-			UnityEngine.Debug.LogWarning(string.Format("Trying to UNregister Modal Window \"{0}\", but got no ocurrences on list!", modalGUIController.gameObject.name), modalGUIController);
+			Debug.LogWarning(string.Format("Trying to UNregister Modal Window \"{0}\", but got no ocurrences on list!", modalGUIController.gameObject.name), modalGUIController);
 		}
 
 		public void RegisterActiveModalWindow(ModalGUIController modalGUIController)
@@ -385,7 +393,7 @@ namespace HeavyMetalMachines.VFX
 			}
 			else
 			{
-				result = UnityEngine.Object.Instantiate<T>(guiController);
+				result = this._diContainer.InstantiatePrefabForComponent<T>(guiController);
 				result.transform.SetParent(this.MainDynamicParentTransform, false);
 			}
 			result.transform.localPosition = Vector3.zero;
@@ -397,7 +405,7 @@ namespace HeavyMetalMachines.VFX
 		{
 			if (baseGUI.DestroyOnScreenResolution)
 			{
-				UnityEngine.Object.Destroy(baseGUI.gameObject);
+				Object.Destroy(baseGUI.gameObject);
 				return;
 			}
 			baseGUI.Panel.alpha = 0f;
@@ -431,7 +439,10 @@ namespace HeavyMetalMachines.VFX
 		private UIBaseConfigurationSO _uiConfiguration;
 
 		[Header("Audio")]
-		public FMODAsset DefaultFeedBackSFX;
+		public AudioEventAsset DefaultFeedBackSFX;
+
+		[Inject]
+		private DiContainer _diContainer;
 
 		private Dictionary<StackableHintKind, MessageHintGuiItem> _currentActiveStackableSystemMessagesDict = new Dictionary<StackableHintKind, MessageHintGuiItem>();
 

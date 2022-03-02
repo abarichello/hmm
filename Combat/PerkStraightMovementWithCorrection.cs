@@ -25,17 +25,18 @@ namespace HeavyMetalMachines.Combat
 		{
 			if (this.SearchRange == 0f)
 			{
-				return Physics.OverlapSphere(base._trans.position, this.Effect.Data.Range, 1077058560);
+				return Physics.OverlapSphere(base._trans.position, this.Effect.Data.Range, 1077054464);
 			}
-			return Physics.OverlapSphere(base._trans.position, this.SearchRange, 1077058560);
+			return Physics.OverlapSphere(base._trans.position, this.SearchRange, 1077054464);
 		}
 
 		private void SearchTarget()
 		{
 			Vector3 position = base._trans.position;
 			Vector3 vector = position + this._initialRight;
-			Vector4 v = vector + Vector3.up;
-			Plane plane = new Plane(position, vector, v);
+			Vector4 vector2 = vector + Vector3.up;
+			Plane plane;
+			plane..ctor(position, vector, vector2);
 			Collider[] hits = this.GetHits();
 			Transform transform = null;
 			float num = 0f;
@@ -49,21 +50,18 @@ namespace HeavyMetalMachines.Combat
 					{
 						if (this.Effect.CheckHit(combat))
 						{
-							if (!this.IgnoreCreeps || !combat.IsCreep)
+							if (this.IgnorePlaneCast || plane.GetSide(combat.Transform.position) == this.PositiveSide)
 							{
-								if (this.IgnorePlaneCast || plane.GetSide(combat.Transform.position) == this.PositiveSide)
+								if (this.BombPriority && GameHubBehaviour.Hub.BombManager.IsCarryingBomb(combat.Id.ObjId))
 								{
-									if (this.BombPriority && GameHubBehaviour.Hub.BombManager.IsCarryingBomb(combat.Id.ObjId))
-									{
-										transform = combat.Transform;
-										break;
-									}
-									float num2 = Vector3.SqrMagnitude(Vector3.Scale(combat.Transform.position - base._trans.position, new Vector3(1f, 0f, 1f)));
-									if (transform == null || num2 < num)
-									{
-										num = num2;
-										transform = combat.Transform;
-									}
+									transform = combat.Transform;
+									break;
+								}
+								float num2 = Vector3.SqrMagnitude(Vector3.Scale(combat.Transform.position - base._trans.position, new Vector3(1f, 0f, 1f)));
+								if (transform == null || num2 < num)
+								{
+									num = num2;
+									transform = combat.Transform;
 								}
 							}
 						}
@@ -86,8 +84,9 @@ namespace HeavyMetalMachines.Combat
 			}
 			Vector3 position = base._trans.position;
 			Vector3 vector = position + this._initialRight;
-			Vector4 v = vector + Vector3.up;
-			Plane plane = new Plane(position, vector, v);
+			Vector4 vector2 = vector + Vector3.up;
+			Plane plane;
+			plane..ctor(position, vector, vector2);
 			if (plane.GetSide(this._targetTransform.position) != this.PositiveSide)
 			{
 				this._targetTransform = null;
@@ -106,17 +105,19 @@ namespace HeavyMetalMachines.Combat
 			}
 			float num = (float)((long)GameHubBehaviour.Hub.GameTime.GetPlaybackTime() - this._lastMillis) * 0.001f;
 			this._lastMillis = (long)GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
+			Vector3 forward = base._trans.forward;
 			if (this._targetTransform)
 			{
-				Quaternion from = Quaternion.LookRotation(base._trans.forward, Vector3.up);
-				Quaternion to = Quaternion.LookRotation(this._targetTransform.position - base._trans.position);
-				base._trans.rotation = Quaternion.RotateTowards(from, to, this.MaxDegreesPerSecond * num);
+				Quaternion quaternion = Quaternion.LookRotation(forward, Vector3.up);
+				Quaternion quaternion2 = Quaternion.LookRotation(this._targetTransform.position - base._trans.position);
+				base._trans.rotation = Quaternion.RotateTowards(quaternion, quaternion2, this.MaxDegreesPerSecond * num);
 			}
 			else if (!this.IgnorePlaneCast)
 			{
 				base._trans.rotation = Quaternion.LookRotation(this._initialForward, Vector3.up);
 			}
-			Vector3 vector = new Vector3(base._trans.forward.x, 0f, base._trans.forward.z);
+			Vector3 vector;
+			vector..ctor(forward.x, 0f, forward.z);
 			vector.Normalize();
 			this.Effect.Data.Direction = vector;
 			return base._trans.position + this._moveSpeed * vector * num;
@@ -133,8 +134,6 @@ namespace HeavyMetalMachines.Combat
 		public bool PositiveSide = true;
 
 		public bool IgnorePlaneCast;
-
-		public bool IgnoreCreeps;
 
 		public bool BombPriority;
 

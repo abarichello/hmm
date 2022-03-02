@@ -73,7 +73,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			return true;
 		}
 
-		protected override void InnerOnDestroyEffect(DestroyEffect evt)
+		protected override void InnerOnDestroyEffect(DestroyEffectMessage evt)
 		{
 			base.InnerOnDestroyEffect(evt);
 			this._totalDistance += (evt.RemoveData.Origin - evt.EffectData.Origin).magnitude;
@@ -92,7 +92,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			}
 		}
 
-		protected virtual int ReflectEffect(DestroyEffect evt, FXInfo effect, ModifierData[] modifiers)
+		protected virtual int ReflectEffect(DestroyEffectMessage evt, FXInfo effect, ModifierData[] modifiers)
 		{
 			if (++this._maxReflections > this.MyInfo.MaxReflections)
 			{
@@ -133,12 +133,12 @@ namespace HeavyMetalMachines.Combat.Gadget
 			return GameHubBehaviour.Hub.Events.TriggerEvent(effectEvent);
 		}
 
-		protected override int FireExtraGadgetOnDeath(DestroyEffect destroyEvt)
+		protected override int FireExtraGadgetOnDeath(DestroyEffectMessage destroyEvt)
 		{
 			return -1;
 		}
 
-		protected virtual void EndEffect(DestroyEffect evt, float totalDistance)
+		protected virtual void EndEffect(DestroyEffectMessage evt, float totalDistance)
 		{
 			if (this.FireExtraOnEffectDeath.BoolGet() && this._endEffectId == -1)
 			{

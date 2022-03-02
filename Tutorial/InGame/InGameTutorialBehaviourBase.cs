@@ -112,20 +112,40 @@ namespace HeavyMetalMachines.Tutorial.InGame
 
 		protected virtual void StartBehaviourOnClient()
 		{
+			InGameTutorialBehaviourBase.Log.DebugFormat("StartBehaviourOnClient: {0} Index:{1} requiredToCompletedStep:{2}", new object[]
+			{
+				base.GetType().Name,
+				this.Index,
+				this.requiredToCompletedStep
+			});
 			this.startedOnClient = true;
 		}
 
 		protected virtual void StartBehaviourOnServer()
 		{
+			InGameTutorialBehaviourBase.Log.DebugFormat("StartBehaviourOnServer: {0} Index:{1} requiredToCompletedStep:{2}", new object[]
+			{
+				base.GetType().Name,
+				this.Index,
+				this.requiredToCompletedStep
+			});
 			this.startedOnServer = true;
 		}
 
 		protected virtual void OnStepCompletedOnClient()
 		{
+			InGameTutorialBehaviourBase.Log.DebugFormat("OnStepCompletedOnClient: {0}", new object[]
+			{
+				base.GetType().Name
+			});
 		}
 
 		protected virtual void OnStepCompletedOnServer()
 		{
+			InGameTutorialBehaviourBase.Log.DebugFormat("OnStepCompletedOnServer: {0}", new object[]
+			{
+				base.GetType().Name
+			});
 		}
 
 		public virtual void CompleteBehaviour()
@@ -135,6 +155,12 @@ namespace HeavyMetalMachines.Tutorial.InGame
 			{
 				this.onBehaviourCompleted(this);
 			}
+			InGameTutorialBehaviourBase.Log.DebugFormat("CompleteBehaviour: {0}, {1} {2}", new object[]
+			{
+				base.GetType().Name,
+				this.Index,
+				(!GameHubBehaviour.Hub || !GameHubBehaviour.Hub.Net.IsServer()) ? "[CLIENT]" : "[SERVER]"
+			});
 		}
 
 		public virtual void ForceBehaviourCompleted()

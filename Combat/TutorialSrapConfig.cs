@@ -10,7 +10,7 @@ namespace HeavyMetalMachines.Combat
 		{
 			this.BoxCollider.isTrigger = true;
 			this.Rigidbody.useGravity = false;
-			this.Rigidbody.constraints |= RigidbodyConstraints.FreezePositionY;
+			this.Rigidbody.constraints |= 4;
 		}
 
 		public Rigidbody Rigidbody;

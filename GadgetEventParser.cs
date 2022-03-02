@@ -2,12 +2,14 @@
 using System.Collections.Generic;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Combat.GadgetScript;
+using HeavyMetalMachines.Combat.GadgetScript.Block;
+using HeavyMetalMachines.Playback;
 using HeavyMetalMachines.Utils;
 using Pocketverse;
 
 namespace HeavyMetalMachines
 {
-	public class GadgetEventParser : KeyFrameParser
+	public class GadgetEventParser : KeyFrameParser, IGadgetEventDispatcher
 	{
 		public GadgetEventParser()
 		{
@@ -22,9 +24,10 @@ namespace HeavyMetalMachines
 			}
 		}
 
-		private void OnEventRemoved(IHMMEventContext ev)
+		private void OnEventRemoved(GadgetEventParser.EventContextHolder ev)
 		{
-			this._eventsGadgets.Remove(ev);
+			this._eventsGadgets.Remove(ev.Event);
+			GadgetEvent.Free((GadgetEvent)ev.Event);
 		}
 
 		public override void Process(BitStream stream)
@@ -45,10 +48,9 @@ namespace HeavyMetalMachines
 			}
 			IGadgetOwner component = @object.GetComponent<IGadgetOwner>();
 			IHMMGadgetContext gadgetContext = component.GetGadgetContext(num2);
-			GadgetEvent gadgetEvent = new GadgetEvent(0, gadgetContext);
-			gadgetEvent.ReadFromBitStream(stream);
-			gadgetContext.SetLastBodyId(gadgetEvent);
-			gadgetContext.TriggerEvent(gadgetEvent);
+			GadgetEvent instance = GadgetEvent.GetInstance(0, gadgetContext);
+			instance.ReadFromBitStream(stream);
+			gadgetContext.TriggerEvent(instance);
 		}
 
 		public override bool RewindProcess(IFrame frame)
@@ -59,68 +61,95 @@ namespace HeavyMetalMachines
 			Identifiable @object = GameHubObject.Hub.ObjectCollection.GetObject(id);
 			IGadgetOwner component = @object.GetComponent<IGadgetOwner>();
 			IHMMGadgetContext gadgetContext = component.GetGadgetContext(id2);
-			GadgetEvent gadgetEvent = new GadgetEvent(0, gadgetContext);
-			gadgetEvent.ReadFromBitStream(readData);
-			gadgetEvent.Undo();
+			GadgetEvent instance = GadgetEvent.GetInstance(0, gadgetContext);
+			instance.ReadFromBitStream(readData);
+			GadgetEventParser.Log.DebugFormat("Rewinding frame={0} previousFrameId={1} owner={2} gadget={3} root_block={4}", new object[]
+			{
+				frame.FrameId,
+				frame.PreviousFrameId,
+				component,
+				gadgetContext,
+				BaseBlock.GetBlock(instance.BlockIndex)
+			});
+			instance.Undo();
+			GadgetEvent.Free(instance);
 			return frame.PreviousFrameId >= 0;
-		}
-
-		public int NextId()
-		{
-			return GameHubObject.Hub.PlaybackManager.NextId();
 		}
 
 		public void SendEvent(IHMMGadgetContext gadgetContext, IHMMEventContext eventContext)
 		{
 			BitStream stream = base.GetStream();
 			this.WriteToBitStream(stream, gadgetContext, eventContext);
-			if (this._eventBuffer.AddMember(eventContext))
+			GadgetEventParser.EventContextHolder holder = new GadgetEventParser.EventContextHolder(eventContext);
+			if (this._eventBuffer.AddMember(holder))
 			{
 				this._eventsGadgets.Add(eventContext, gadgetContext);
 			}
-			GameHubObject.Hub.PlaybackManager.SendKeyFrame(this.Type, true, eventContext.Id, eventContext.PreviousEventId, stream.ByteArray);
+			this._dispatcher.SendFrame(this.Type.Convert(), true, eventContext.Id, eventContext.PreviousEventId, stream.ByteArray);
 		}
 
 		public void SendAllEvents(byte address)
 		{
 			for (int i = 0; i < this._eventBuffer.LiveHolders.Count; i++)
 			{
-				IHMMEventContext ihmmeventContext = this._eventBuffer.LiveHolders[i];
-				IHMMGadgetContext gadgetContext = this._eventsGadgets[ihmmeventContext];
+				GadgetEventParser.EventContextHolder eventContextHolder = this._eventBuffer.LiveHolders[i];
+				IHMMEventContext @event = eventContextHolder.Event;
+				IHMMGadgetContext gadgetContext = this._eventsGadgets[@event];
 				BitStream stream = base.GetStream();
-				this.WriteToBitStream(stream, gadgetContext, ihmmeventContext);
-				GameHubObject.Hub.PlaybackManager.SendFullKeyFrame(address, this.Type, ihmmeventContext.Id, ihmmeventContext.PreviousEventId, ihmmeventContext.CreationTime, stream.ByteArray);
+				this.WriteToBitStream(stream, gadgetContext, @event);
+				this._dispatcher.SendSnapshot(address, this.Type.Convert(), @event.Id, @event.PreviousEventId, @event.CreationTime, stream.ByteArray);
 				GadgetEventParser.Log.InfoFormat("Sending full frame Gadget BlockIndex = {0}", new object[]
 				{
-					ihmmeventContext.BlockIndex
+					@event.BlockIndex
 				});
 			}
 			for (int j = 0; j < GameHubObject.Hub.Players.PlayersAndBots.Count; j++)
 			{
 				CombatObject combat = CombatRef.GetCombat(GameHubObject.Hub.Players.PlayersAndBots[j].CharacterInstance);
-				CombatGadget[] array = new CombatGadget[combat.CustomGadgets.Values.Count];
-				combat.CustomGadgets.Values.CopyTo(array, 0);
-				for (int k = 0; k < array.Length; k++)
+				List<IHMMGadgetContext> customGadgets = combat.CustomGadgets;
+				for (int k = 0; k < customGadgets.Count; k++)
 				{
-					GadgetEvent gadgetEvent = new GadgetEvent(-1, array[k], array[k].GetAllUIParameters());
-					BitStream stream = base.GetStream();
-					this.WriteToBitStream(stream, array[k], gadgetEvent);
-					GameHubObject.Hub.PlaybackManager.SendFullKeyFrame(address, this.Type, gadgetEvent.Id, gadgetEvent.PreviousEventId, gadgetEvent.CreationTime, stream.ByteArray);
+					if (customGadgets[k] is CombatGadget)
+					{
+						GadgetEvent instance = GadgetEvent.GetInstance(-1, customGadgets[k], ((CombatGadget)customGadgets[k]).GetAllUIParameters());
+						BitStream stream = base.GetStream();
+						this.WriteToBitStream(stream, customGadgets[k], instance);
+						this._dispatcher.SendSnapshot(address, this.Type.Convert(), instance.Id, instance.PreviousEventId, instance.CreationTime, stream.ByteArray);
+					}
 				}
 			}
 		}
 
 		private void WriteToBitStream(BitStream stream, IHMMGadgetContext gadgetContext, IHMMEventContext eventContext)
 		{
-			stream.WriteInt(gadgetContext.OwnerId);
+			stream.WriteInt(gadgetContext.Owner.Identifiable.ObjId);
 			stream.WriteInt(gadgetContext.Id);
 			eventContext.WriteToBitStream(stream);
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(GadgetEventParser));
 
-		private NodeHolderLifeCycle<IHMMEventContext> _eventBuffer = new NodeHolderLifeCycle<IHMMEventContext>();
+		private NodeHolderLifeCycle<GadgetEventParser.EventContextHolder> _eventBuffer = new NodeHolderLifeCycle<GadgetEventParser.EventContextHolder>();
 
 		private Dictionary<IHMMEventContext, IHMMGadgetContext> _eventsGadgets = new Dictionary<IHMMEventContext, IHMMGadgetContext>();
+
+		private class EventContextHolder : INodeHolder
+		{
+			public EventContextHolder(IHMMEventContext evt)
+			{
+				this.Event = evt;
+				List<int> list;
+				List<int> list2;
+				evt.GetBodies(out list, out list2);
+				this.NodeIds = list.ToArray();
+				this.NodeRemovals = list2.ToArray();
+			}
+
+			public int[] NodeIds { get; private set; }
+
+			public int[] NodeRemovals { get; private set; }
+
+			public IHMMEventContext Event { get; private set; }
+		}
 	}
 }

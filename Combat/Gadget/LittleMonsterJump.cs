@@ -17,9 +17,9 @@ namespace HeavyMetalMachines.Combat.Gadget
 		public void OnDamageAreaCallback(DamageAreaCallback evt)
 		{
 			bool flag = evt.TargetGadgetSlot == base.Slot || evt.TargetGadgetSlot == GadgetSlot.None || evt.TargetGadgetSlot == GadgetSlot.Any;
-			if (this._multiJumpMaxDistance.Get() > 1.401298E-45f && evt.DamagedPlayers.Count > 0 && flag)
+			if (this._multiJumpMaxDistance.Get() > 1E-45f && evt.DamagedPlayers.Count > 0 && flag)
 			{
-				this._areaColliders.AddRange(Physics.OverlapSphere(evt.Origin, this._multiJumpMaxDistance.Get(), 1077058560));
+				this._areaColliders.AddRange(Physics.OverlapSphere(evt.Origin, this._multiJumpMaxDistance.Get(), 1077054464));
 				if (evt.DamagedPlayers.Find((CombatObject combat) => combat.Team != this.Combat.Team && !combat.Movement.HasLinkWith(this.Combat.Movement) && this._areaColliders.Contains(combat.GetComponent<Collider>())))
 				{
 					base.ExistingFiredEffectsAdd(this.FireGadget());

@@ -4,14 +4,20 @@ using System.Text;
 using HeavyMetalMachines.Announcer;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Event;
+using HeavyMetalMachines.Infra.Context;
+using HeavyMetalMachines.Input.NoInputDetection.Business;
 using HeavyMetalMachines.Match;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines
 {
-	public class AFKController : GameHubBehaviour, ISerializationCallbackReceiver, ClientReconnectMessage.IClientReconnectListener
+	public class AFKController : GameHubBehaviour, ISerializationCallbackReceiver, ClientReconnectMessage.IClientReconnectListener, IAFKManager
 	{
+		public List<AFKController.AFKEntry> Entries { get; private set; }
+
 		private void Start()
 		{
 			this.Entries = new List<AFKController.AFKEntry>();
@@ -21,6 +27,24 @@ namespace HeavyMetalMachines
 			this._afkTimeSeconds = GameHubBehaviour.Hub.Config.GetFloatValue(ConfigAccess.AFKLimit);
 			this._serverAfkTimeLimit = this._afkTimeSeconds + 10f;
 			this._updater.PeriodMillis = 1000;
+			this._noInputDetectedRpc = this._container.Resolve<INoInputDetectedRpc>();
+			ObservableExtensions.Subscribe<AFKController.AFKEntry>(Observable.Do<AFKController.AFKEntry>(Observable.Where<AFKController.AFKEntry>(Observable.Select<byte, AFKController.AFKEntry>(this._noInputDetectedRpc.OnPlayerInputDisconnection, new Func<byte, AFKController.AFKEntry>(this.ConvertToInputDisconnectedAFKEntry)), (AFKController.AFKEntry entry) => entry != null), new Action<AFKController.AFKEntry>(this.OnEnteredAFK)));
+		}
+
+		private AFKController.AFKEntry ConvertToInputDisconnectedAFKEntry(byte playerAddress)
+		{
+			AFKController.AFKEntry afkentry;
+			if (!this._entriesToCheck.TryGetValue(playerAddress, out afkentry))
+			{
+				return null;
+			}
+			afkentry.AfkReason = AFKController.AFKReason.INPUTDISCONNECTED;
+			return afkentry;
+		}
+
+		public bool CheckLeaver(PlayerData playerData)
+		{
+			return this.CheckLeaver(playerData.PlayerAddress, playerData.PlayerId, playerData.UserSF.PublisherUserId);
 		}
 
 		public bool CheckLeaver(byte pPlayerAdress, long playerId, string publisherUserId)
@@ -45,13 +69,14 @@ namespace HeavyMetalMachines
 				stringBuilder.AppendFormat(" PublisherUserId={0}", publisherUserId);
 				stringBuilder.AppendFormat(" PlayerId={0}", playerId);
 				stringBuilder.AppendFormat(" Reason={0}", afkentry.LeaverReason);
-				GameHubBehaviour.Hub.Swordfish.Log.BILogServerMsg(ServerBITags.PlayerAFK, stringBuilder.ToString(), false);
+				GameHubBehaviour.Hub.Swordfish.Log.BILogServerMsg(4, stringBuilder.ToString(), false);
 			}
 			return flag;
 		}
 
 		public void ResetValues()
 		{
+			AFKController.Log.Debug("ResetValues");
 			for (int i = 0; i < this.Entries.Count; i++)
 			{
 				AFKController.AFKEntry afkentry = this.Entries[i];
@@ -75,7 +100,7 @@ namespace HeavyMetalMachines
 
 		private void Update()
 		{
-			if (!GameHubBehaviour.Hub.Net.IsServer() || this._updater.ShouldHalt() || !GameHubBehaviour.Hub.Match.State.IsGame() || GameHubBehaviour.Hub.Match.State != MatchData.MatchState.MatchStarted || GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreBoard.State.BombDelivery || GameHubBehaviour.Hub.Match.LevelIsTutorial() || (PauseController.Instance != null && PauseController.Instance.IsGamePaused))
+			if (!GameHubBehaviour.Hub.Net.IsServer() || this._updater.ShouldHalt() || !GameHubBehaviour.Hub.Match.State.IsGame() || GameHubBehaviour.Hub.Match.State != MatchData.MatchState.MatchStarted || GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreboardState.BombDelivery || GameHubBehaviour.Hub.Match.LevelIsTutorial() || GameHubBehaviour.Hub.Match.Kind == 6 || (PauseController.Instance != null && PauseController.Instance.IsGamePaused))
 			{
 				return;
 			}
@@ -86,7 +111,7 @@ namespace HeavyMetalMachines
 				PlayerData player = value.Player;
 				if (player.Connected)
 				{
-					if (value.Combat.SpawnController.State != SpawnController.StateType.Unspawned)
+					if (value.Combat.SpawnController.State != SpawnStateKind.Unspawned)
 					{
 						if (value.IsAfk())
 						{
@@ -97,6 +122,7 @@ namespace HeavyMetalMachines
 							value.InputLastMatchTime += num;
 							if (value.InputLastMatchTime > this._inputLimitSeconds)
 							{
+								AFKController.Log.Debug("Time without input exceeded.");
 								value.AfkReason = AFKController.AFKReason.INPUT;
 								this.OnEnteredAFK(value);
 							}
@@ -117,6 +143,7 @@ namespace HeavyMetalMachines
 				{
 					if (!value.IsAfk())
 					{
+						AFKController.Log.Debug("Entering afk: disconnected");
 						value.AfkReason = AFKController.AFKReason.DISCONNECTION;
 						this.OnEnteredAFK(value);
 					}
@@ -126,6 +153,7 @@ namespace HeavyMetalMachines
 				{
 					if (value.DisconnectionTime > this._disconnectionLimitSeconds)
 					{
+						AFKController.Log.Debug("Disconnection time exceeded.");
 						value.LeaverReason = AFKController.AFKReason.DISCONNECTION;
 						this.OnEnteredLeaver(value);
 					}
@@ -140,6 +168,7 @@ namespace HeavyMetalMachines
 					}
 					else if (value.ModifierLastMatchTime > this._modifierLimitSeconds)
 					{
+						AFKController.Log.Debug("Time without modifier exceeded.");
 						value.LeaverReason = AFKController.AFKReason.MODIFIER;
 						this.OnEnteredLeaver(value);
 					}
@@ -160,6 +189,11 @@ namespace HeavyMetalMachines
 
 		private void OnExitAFK(AFKController.AFKEntry entry)
 		{
+			AFKController.Log.InfoFormat("Player={0} leaving afk reason={1}", new object[]
+			{
+				entry.PlayerAddress,
+				entry.AfkReason
+			});
 			entry.AfkReason = AFKController.AFKReason.NONE;
 			AnnouncerEvent content = new AnnouncerEvent
 			{
@@ -183,7 +217,6 @@ namespace HeavyMetalMachines
 				});
 				PlayerController bitComponent = characterInstance.GetBitComponent<PlayerController>();
 				bitComponent.ActivateBotController();
-				bitComponent.CarHub.botAIGoalManager.ReThinkState();
 			}
 			AnnouncerEvent content = new AnnouncerEvent
 			{
@@ -203,14 +236,14 @@ namespace HeavyMetalMachines
 			});
 			PlayerData player = entry.Player;
 			player.IsLeaver = true;
-			GameHubBehaviour.Hub.Players.UpdatePlayer(player.PlayerCarId);
+			this._playersDispatcher.UpdatePlayer(player.PlayerCarId);
 			string text = string.Empty;
 			text += string.Format("SwordfishSessionID={0}", Guid.Empty);
 			text += string.Format(" MatchID={0}", GameHubBehaviour.Hub.Swordfish.Connection.ServerMatchId);
 			text += string.Format(" SteamID={0}", player.UserSF.UniversalID);
 			text += string.Format(" EventAt={0}", DateTime.UtcNow);
 			text += string.Format(" CurrentPunishmentLevel={0}", player.Bag.LeaverStatus);
-			GameHubBehaviour.Hub.Swordfish.Log.BILogServerMsg(ServerBITags.GameServerPlayerPunished, text, false);
+			GameHubBehaviour.Hub.Swordfish.Log.BILogServerMsg(13, text, false);
 			AnnouncerEvent content = new AnnouncerEvent
 			{
 				AnnouncerEventKind = AnnouncerLog.AnnouncerEventKinds.LeaverGeneric,
@@ -230,11 +263,19 @@ namespace HeavyMetalMachines
 			afkentry = new AFKController.AFKEntry(connectionId);
 			this._entriesToCheck.Add(connectionId, afkentry);
 			this.Entries.Add(afkentry);
+			AFKController.Log.DebugFormat("Added new entry for {0}", new object[]
+			{
+				connectionId
+			});
 		}
 
 		public void OnClientReconnect(ClientReconnectMessage msg)
 		{
 			byte connectionId = msg.Session.ConnectionId;
+			AFKController.Log.DebugFormat("OnClient reconnected={0}", new object[]
+			{
+				connectionId
+			});
 			AFKController.AFKEntry afkentry;
 			if (!this._entriesToCheck.TryGetValue(connectionId, out afkentry))
 			{
@@ -283,7 +324,7 @@ namespace HeavyMetalMachines
 
 		public void InputChanged(PlayerData player)
 		{
-			if (!GameHubBehaviour.Hub.Match.State.IsGame() || GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreBoard.State.Replay || GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreBoard.State.PreReplay)
+			if (!GameHubBehaviour.Hub.Match.State.IsGame() || GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreboardState.Replay || GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreboardState.PreReplay)
 			{
 				return;
 			}
@@ -346,6 +387,14 @@ namespace HeavyMetalMachines
 
 		public static readonly BitLogger Log = new BitLogger(typeof(AFKController));
 
+		[Inject]
+		private IMatchPlayersDispatcher _playersDispatcher;
+
+		[Inject]
+		private DiContainer _container;
+
+		private INoInputDetectedRpc _noInputDetectedRpc;
+
 		public float _disconnectionLimitSeconds;
 
 		public float _modifierLimitSeconds;
@@ -355,8 +404,6 @@ namespace HeavyMetalMachines
 		public float _afkTimeSeconds;
 
 		public float _serverAfkTimeLimit;
-
-		public List<AFKController.AFKEntry> Entries;
 
 		private readonly Dictionary<byte, AFKController.AFKEntry> _entriesToCheck = new Dictionary<byte, AFKController.AFKEntry>();
 
@@ -368,7 +415,8 @@ namespace HeavyMetalMachines
 			DISCONNECTION,
 			INPUT,
 			MODIFIER,
-			AFKEXPIRATION
+			AFKEXPIRATION,
+			INPUTDISCONNECTED
 		}
 
 		[Serializable]
@@ -411,6 +459,10 @@ namespace HeavyMetalMachines
 				this.InputLastMatchTime = 0f;
 				this._player = GameHubBehaviour.Hub.Players.GetPlayerByAddress(this.PlayerAddress);
 				this._combat = this.Player.CharacterInstance.GetBitComponent<CombatObject>();
+				AFKController.Log.DebugFormat("Reseting for PlayerAddress: {0}", new object[]
+				{
+					this.PlayerAddress
+				});
 			}
 
 			public bool IsAfk()

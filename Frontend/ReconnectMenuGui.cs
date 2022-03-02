@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.Localization;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Frontend
@@ -21,7 +22,32 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
-		public void ShowButtons()
+		public void ShowReconnectDialog()
+		{
+			if (Platform.Current.IsConsole() && !GameHubBehaviour.Hub.User.Bag.CurrentIsNarrator)
+			{
+				this.ShowReconnectDialogConsole();
+				return;
+			}
+			this.ShowReconnectDialogNotConsole();
+		}
+
+		private void ShowReconnectDialogConsole()
+		{
+			string key = "HINT_RECONNECT_FEEDBACK";
+			string key2 = "TRY_AGAIN_RECONNECT_BUTTON";
+			Guid guid = Guid.NewGuid();
+			this.currentConfirmWindowProperties = new ConfirmWindowProperties
+			{
+				Guid = guid,
+				QuestionText = Language.Get(key, TranslationContext.WelcomeScreen),
+				OnOk = new Action(this.BackToGame),
+				OkButtonText = Language.Get(key2, TranslationContext.WelcomeScreen)
+			};
+			GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.OpenConfirmWindow(this.currentConfirmWindowProperties);
+		}
+
+		private void ShowReconnectDialogNotConsole()
 		{
 			string key;
 			string key2;
@@ -45,11 +71,11 @@ namespace HeavyMetalMachines.Frontend
 			this.currentConfirmWindowProperties = new ConfirmWindowProperties
 			{
 				Guid = guid,
-				QuestionText = string.Format(Language.Get(key, TranslationSheets.MainMenuGui), new object[0]),
+				QuestionText = Language.Get(key, TranslationContext.MainMenuGui),
 				OnConfirm = new Action(this.BackToGame),
 				OnRefuse = onRefuse,
-				ConfirmButtonText = Language.Get(key2, TranslationSheets.MainMenuGui),
-				RefuseButtonText = Language.Get(key3, TranslationSheets.MainMenuGui)
+				ConfirmButtonText = Language.Get(key2, TranslationContext.MainMenuGui),
+				RefuseButtonText = Language.Get(key3, TranslationContext.MainMenuGui)
 			};
 			GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.OpenConfirmWindow(this.currentConfirmWindowProperties);
 		}
@@ -62,7 +88,7 @@ namespace HeavyMetalMachines.Frontend
 			this.currentConfirmWindowProperties.Guid = guid;
 			this.currentConfirmWindowProperties.IsStackable = false;
 			this.currentConfirmWindowProperties.EnableLoadGameObject = true;
-			this.currentConfirmWindowProperties.QuestionText = Language.Get("RECONNECT_WAITING", TranslationSheets.MainMenuGui);
+			this.currentConfirmWindowProperties.QuestionText = Language.Get("RECONNECT_WAITING", TranslationContext.MainMenuGui);
 			GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.OpenConfirmWindow(this.currentConfirmWindowProperties);
 		}
 
@@ -77,7 +103,7 @@ namespace HeavyMetalMachines.Frontend
 		public void ExitGame()
 		{
 			this.HideConfirmWindow();
-			GameHubBehaviour.Hub.Quit();
+			GameHubBehaviour.Hub.Quit(11);
 		}
 
 		public void NarratorGoBackToMain()
@@ -98,8 +124,8 @@ namespace HeavyMetalMachines.Frontend
 			ConfirmWindowProperties properties = new ConfirmWindowProperties
 			{
 				Guid = confirmWindowGuid,
-				QuestionText = Language.Get("MatchFailedToConnectMatchEnded", TranslationSheets.MainMenuGui),
-				OkButtonText = Language.Get("Ok", TranslationSheets.GUI),
+				QuestionText = Language.Get("MatchFailedToConnectMatchEnded", TranslationContext.MainMenuGui),
+				OkButtonText = Language.Get("Ok", TranslationContext.GUI),
 				OnOk = delegate()
 				{
 					GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.HideConfirmWindow(confirmWindowGuid);

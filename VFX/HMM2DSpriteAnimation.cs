@@ -3,9 +3,9 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.VFX
 {
-	[Obsolete]
-	[ExecuteInEditMode]
 	[RequireComponent(typeof(UI2DSprite))]
+	[ExecuteInEditMode]
+	[Obsolete]
 	public class HMM2DSpriteAnimation : MonoBehaviour
 	{
 		protected void OnEnable()

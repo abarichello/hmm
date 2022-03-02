@@ -7,8 +7,8 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Tutorial.Behaviours
 {
-	[RemoteClass]
 	[RequireComponent(typeof(Identifiable))]
+	[RemoteClass]
 	public class UnspawnCountBehaviour : InGameTutorialBehaviourBase, IBitComponent
 	{
 		protected override void StartBehaviourOnServer()
@@ -31,17 +31,16 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 
 		private int GetCauserId(IEventContent data)
 		{
-			switch (this.UnspawnType)
+			UnspawnCountBehaviour.EUnspawnType unspawnType = this.UnspawnType;
+			if (unspawnType == UnspawnCountBehaviour.EUnspawnType.Pickup)
 			{
-			case UnspawnCountBehaviour.EUnspawnType.Creep:
-				return ((CreepRemoveEvent)data).CauserId;
-			case UnspawnCountBehaviour.EUnspawnType.Bot:
-				return ((BotAIEvent)data).CauserId;
-			case UnspawnCountBehaviour.EUnspawnType.Pickup:
 				return ((PickupRemoveEvent)data).Causer;
-			default:
+			}
+			if (unspawnType != UnspawnCountBehaviour.EUnspawnType.Bot)
+			{
 				return -1;
 			}
+			return ((BotAIEvent)data).CauserId;
 		}
 
 		[RemoteMethod]
@@ -60,16 +59,9 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 			UnspawnCountBehaviour.EUnspawnType unspawnType = this.UnspawnType;
 			if (unspawnType != UnspawnCountBehaviour.EUnspawnType.Pickup)
 			{
-				if (unspawnType != UnspawnCountBehaviour.EUnspawnType.Creep)
+				if (unspawnType == UnspawnCountBehaviour.EUnspawnType.Bot)
 				{
-					if (unspawnType == UnspawnCountBehaviour.EUnspawnType.Bot)
-					{
-						GameHubBehaviour.Hub.Events.Bots.ListenToObjectDeath += new BaseSpawnManager.PlayerUnspawnListener(this.ListenToUnspawn);
-					}
-				}
-				else
-				{
-					GameHubBehaviour.Hub.Events.Creeps.ListenToCreepUnspawn += new CreepSpawnManager.CreepUnspawnListener(this.ListenToUnspawn);
+					GameHubBehaviour.Hub.Events.Bots.ListenToObjectDeath += new BaseSpawnManager.PlayerUnspawnListener(this.ListenToUnspawn);
 				}
 			}
 			else
@@ -83,16 +75,9 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 			UnspawnCountBehaviour.EUnspawnType unspawnType = this.UnspawnType;
 			if (unspawnType != UnspawnCountBehaviour.EUnspawnType.Pickup)
 			{
-				if (unspawnType != UnspawnCountBehaviour.EUnspawnType.Creep)
+				if (unspawnType == UnspawnCountBehaviour.EUnspawnType.Bot)
 				{
-					if (unspawnType == UnspawnCountBehaviour.EUnspawnType.Bot)
-					{
-						GameHubBehaviour.Hub.Events.Bots.ListenToObjectDeath -= new BaseSpawnManager.PlayerUnspawnListener(this.ListenToUnspawn);
-					}
-				}
-				else
-				{
-					GameHubBehaviour.Hub.Events.Creeps.ListenToCreepUnspawn -= new CreepSpawnManager.CreepUnspawnListener(this.ListenToUnspawn);
+					GameHubBehaviour.Hub.Events.Bots.ListenToObjectDeath -= new BaseSpawnManager.PlayerUnspawnListener(this.ListenToUnspawn);
 				}
 			}
 			else
@@ -162,12 +147,8 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 			this._delayed = future;
 		}
 
-		public object Invoke(int classId, short methodId, object[] args)
+		public object Invoke(int classId, short methodId, object[] args, BitStream bitstream = null)
 		{
-			if (classId != 1015)
-			{
-				throw new Exception("Hierarchy in RemoteClass is not allowed!!! " + classId);
-			}
 			this._delayed = null;
 			if (methodId != 4)
 			{
@@ -183,7 +164,7 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 
 		private int _unspawnCount;
 
-		public const int StaticClassId = 1015;
+		public const int StaticClassId = 1016;
 
 		private Identifiable _identifiable;
 
@@ -197,7 +178,6 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 
 		public enum EUnspawnType
 		{
-			Creep,
 			Bot,
 			Pickup
 		}

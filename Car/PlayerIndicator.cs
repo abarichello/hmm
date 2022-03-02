@@ -78,13 +78,13 @@ namespace HeavyMetalMachines.Car
 			this._currentDriftAngle = angle;
 			this._driftIndicatorLeft.localRotation = Quaternion.AngleAxis(-angle, Vector3.up);
 			this._driftIndicatorRight.localRotation = Quaternion.AngleAxis(angle, Vector3.up);
-			float f = (-this._borderTransform.rotation.eulerAngles.y + angle) * 0.0174532924f;
-			this._auxAnglePosition.x = -Mathf.Sin(f);
-			this._auxAnglePosition.z = Mathf.Cos(f);
+			float num = (-this._borderTransform.rotation.eulerAngles.y + angle) * 0.017453292f;
+			this._auxAnglePosition.x = -Mathf.Sin(num);
+			this._auxAnglePosition.z = Mathf.Cos(num);
 			this._driftIndicatorLeft.position = this._borderTransform.position + this._auxAnglePosition * radius;
-			f = (-this._borderTransform.rotation.eulerAngles.y - angle) * 0.0174532924f;
-			this._auxAnglePosition.x = -Mathf.Sin(f);
-			this._auxAnglePosition.z = Mathf.Cos(f);
+			num = (-this._borderTransform.rotation.eulerAngles.y - angle) * 0.017453292f;
+			this._auxAnglePosition.x = -Mathf.Sin(num);
+			this._auxAnglePosition.z = Mathf.Cos(num);
 			this._driftIndicatorRight.position = this._borderTransform.position + this._auxAnglePosition * radius;
 		}
 

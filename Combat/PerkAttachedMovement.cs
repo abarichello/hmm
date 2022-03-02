@@ -21,13 +21,14 @@ namespace HeavyMetalMachines.Combat
 				this.ColliderCombatRef.Combat = this.TargetIdentifiable.GetBitComponent<CombatObject>();
 			}
 			Transform targetDummy = BasePerk.GetTargetDummy(this.TargetIdentifiable, this.dummyKind, this.customDummyName);
-			this.Effect.transform.parent = targetDummy;
-			this.Effect.transform.localPosition = this.LocalPosition;
+			Transform transform = this.Effect.transform;
+			transform.parent = targetDummy;
+			transform.localPosition = this.LocalPosition;
 		}
 
-		public override void PerkDestroyed(DestroyEffect destroyEffect)
+		public override void PerkDestroyed(DestroyEffectMessage destroyEffectMessage)
 		{
-			base.PerkDestroyed(destroyEffect);
+			base.PerkDestroyed(destroyEffectMessage);
 			if (this.ColliderCombatRef != null)
 			{
 				this.ColliderCombatRef.Combat = null;

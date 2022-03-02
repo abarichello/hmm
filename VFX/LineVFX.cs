@@ -13,7 +13,7 @@ namespace HeavyMetalMachines.VFX
 			{
 				this._line = base.gameObject.AddComponent<LineRenderer>();
 			}
-			this._materialInstance = UnityEngine.Object.Instantiate<Material>(this.material);
+			this._materialInstance = Object.Instantiate<Material>(this.material);
 			this._line.material = this._materialInstance;
 			this._line.SetVertexCount(2);
 			this._line.useWorldSpace = true;
@@ -62,7 +62,7 @@ namespace HeavyMetalMachines.VFX
 			{
 				return root;
 			}
-			Transform dummy = componentInChildren.GetDummy(dummyKind, customDummyName);
+			Transform dummy = componentInChildren.GetDummy(dummyKind, customDummyName, null);
 			return (!dummy) ? root : dummy;
 		}
 
@@ -80,12 +80,17 @@ namespace HeavyMetalMachines.VFX
 		{
 			this.CanCollectToCache = true;
 			this._active = false;
-			this._line.enabled = false;
+			if (null != this._line)
+			{
+				this._line.enabled = false;
+			}
 			this._transform = null;
 			this._owner = null;
 			this._target = null;
 			this.source = Vector3.zero;
 			this.target = Vector3.zero;
+			this.lastDistance = 0;
+			this.arcOffset = Vector3.zero;
 		}
 
 		protected virtual void LateUpdate()
@@ -103,6 +108,10 @@ namespace HeavyMetalMachines.VFX
 				this.currentMaterialYOffset = ((this.currentMaterialYOffset <= 1f) ? this.currentMaterialYOffset : 0f);
 			}
 			float magnitude = (this.target - this.source).magnitude;
+			if (this.arcOnReturn)
+			{
+				this.target += this.GetArcOffset();
+			}
 			if (this._line)
 			{
 				this._line.material.SetTextureScale("_MainTex", new Vector2(magnitude / this.tilingSize, this.materialYScale));
@@ -110,6 +119,36 @@ namespace HeavyMetalMachines.VFX
 				this._line.SetPosition(0, this.source);
 				this._line.SetPosition(1, this.target);
 			}
+			for (int i = 0; i < this.syncedObjectPosition.Length; i++)
+			{
+				this.syncedObjectPosition[i].transform.position = this.target;
+				this.syncedObjectPosition[i].transform.rotation = this.targetRotation;
+			}
+		}
+
+		public Vector3 GetArcOffset()
+		{
+			float magnitude = (this.target - this.source).magnitude;
+			if (Mathf.FloorToInt(magnitude) >= this.lastDistance)
+			{
+				this.lastDistance = Mathf.FloorToInt(magnitude);
+				this.arcOffset = Vector3.zero;
+			}
+			else
+			{
+				float num = magnitude / (float)this.lastDistance;
+				float num2;
+				if (num > this.highestPoint)
+				{
+					num2 = this.arcHeightCenter * (1f - num);
+				}
+				else
+				{
+					num2 = (this.arcHeightCenter - this.arcHeightEnd) * num + this.arcHeightEnd;
+				}
+				this.arcOffset = new Vector3(0f, num2, 0f);
+			}
+			return this.arcOffset;
 		}
 
 		protected virtual void UpdateSourceAndTarget()
@@ -120,6 +159,10 @@ namespace HeavyMetalMachines.VFX
 				if (this._target)
 				{
 					this.target = this._target.position;
+				}
+				if (this._target)
+				{
+					this.targetRotation = this._target.rotation;
 				}
 				if (this._owner)
 				{
@@ -143,6 +186,7 @@ namespace HeavyMetalMachines.VFX
 				}
 				this.source = base.transform.position;
 				this.target = this._target.position;
+				this.targetRotation = this._target.rotation;
 				break;
 			case LineVFX.ELineKind.OwnerToSelf:
 				if (!this._owner)
@@ -151,6 +195,7 @@ namespace HeavyMetalMachines.VFX
 				}
 				this.source = this._owner.position;
 				this.target = this._target.position;
+				this.targetRotation = this._target.rotation;
 				break;
 			}
 		}
@@ -185,6 +230,8 @@ namespace HeavyMetalMachines.VFX
 
 		protected Vector3 target;
 
+		protected Quaternion targetRotation;
+
 		protected float materialYScale;
 
 		protected float currentMaterialYOffset;
@@ -194,6 +241,20 @@ namespace HeavyMetalMachines.VFX
 		protected bool _active;
 
 		protected Material _materialInstance;
+
+		public bool arcOnReturn;
+
+		private int lastDistance;
+
+		public Vector3 arcOffset;
+
+		public float highestPoint = 0.5f;
+
+		public float arcHeightCenter;
+
+		public float arcHeightEnd;
+
+		public GameObject[] syncedObjectPosition;
 
 		public enum ELineKind
 		{

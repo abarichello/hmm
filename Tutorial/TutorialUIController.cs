@@ -3,13 +3,21 @@ using System.Collections;
 using System.Collections.Generic;
 using FMod;
 using HeavyMetalMachines.Frontend;
-using HeavyMetalMachines.Options;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Input;
+using HeavyMetalMachines.Localization;
+using HeavyMetalMachines.Presenting;
+using HeavyMetalMachines.Presenting.Unity;
 using HeavyMetalMachines.Tutorial.Behaviours;
 using HeavyMetalMachines.Tutorial.UnityUI;
 using HeavyMetalMachines.Utils;
 using HeavyMetalMachines.VFX;
 using Holoville.HOTween;
+using Hoplon.Input;
+using Hoplon.Input.Business;
+using Hoplon.Input.UiNavigation;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Tutorial
@@ -71,15 +79,7 @@ namespace HeavyMetalMachines.Tutorial
 			{
 				return;
 			}
-			if (GameHubBehaviour.Hub.Net.IsServer())
-			{
-				UnityEngine.Object.Destroy(base.gameObject);
-				return;
-			}
 			TutorialUIController._instance = this;
-			base.transform.parent = GameHubBehaviour.Hub.State.CurrentSceneStateData.StateGuiController.transform;
-			base.transform.localScale = Vector3.one;
-			base.transform.localPosition = Vector3.zero;
 		}
 
 		private void Start()
@@ -99,16 +99,13 @@ namespace HeavyMetalMachines.Tutorial
 				return;
 			}
 			this.SetupOverlay();
-			Vector3 size = new Vector3((float)Screen.width, (float)Screen.height, 1f);
+			Vector3 size;
+			size..ctor((float)Screen.width, (float)Screen.height, 1f);
 			TutorialUIController.screenCollider = base.gameObject.AddComponent<BoxCollider>();
 			TutorialUIController.screenCollider.size = size;
-			this.arrowPanel.SetActive(true);
-			this.tooltipAnchor.gameObject.SetActive(true);
 			this.tutorialGuyPanel.SetWindowVisibility(false);
 			this.ObjectivePanel.SetWindowVisibility(false);
 			this.BottomPanelComponent.Load();
-			this.HintPanelComponent.Load();
-			this.ObjectiveRightPanel.SetWindowVisibility(false);
 			this.InformativePanel.SetWindowVisibility(false);
 			TweenAlpha.Begin(this.ObjectivePanelButtonAFeedback.Glow.gameObject, 0f, 0f);
 			TweenAlpha.Begin(this.ObjectivePanelButtonWFeedback.Glow.gameObject, 0f, 0f);
@@ -123,7 +120,6 @@ namespace HeavyMetalMachines.Tutorial
 			this.ObjectivePanelButtonDriftFeedback.gameObject.SetActive(false);
 			this.ObjectivePanelButtonDriftFeedback.ProgressBar.value = 0f;
 			TweenAlpha.Begin(base.gameObject, 0f, 0f);
-			TweenAlpha.Begin(this.arrowPanel, 0f, 0f);
 			this._uiTablesToRefresh = base.GetComponentsInChildren<UITable>(true);
 			this.TryToInstallControlListeners();
 		}
@@ -164,7 +160,11 @@ namespace HeavyMetalMachines.Tutorial
 			{
 				yield break;
 			}
-			GameHubBehaviour.Hub.Swordfish.Log.BILogClientMsg(ClientBITags.TutorialStart, string.Format("Tutorial={0}", this._currentTutorialData.Name), false);
+			TutorialUIController.Log.DebugFormat("Tutorial started={0}", new object[]
+			{
+				this._currentTutorialData.Name
+			});
+			GameHubBehaviour.Hub.Swordfish.Log.BILogClientMsg(39, string.Format("Tutorial={0}", this._currentTutorialData.Name), false);
 			this.SetupTutorialDialog(onButtonEvent, targetGO);
 			yield break;
 		}
@@ -208,92 +208,30 @@ namespace HeavyMetalMachines.Tutorial
 			{
 				this.currentChildTarget = targetGO.transform;
 			}
-			this.arrowPanel.SetActive(this._currentTutorialData.EnableArrowPanel);
-			if (this._currentTutorialData.EnableArrowPanel)
-			{
-				this.tooltipLabel.text = Language.Get(this._currentTutorialData.Tip, "Tutorial");
-			}
 			Camera currentCamera = UICamera.currentCamera;
 			this.tutorialGuyPanel.gameObject.SetActive(this._currentTutorialData.dialogType == TutorialData.DialogTypes.TutorialGuy);
 			this.InformativePanel.gameObject.SetActive(this._currentTutorialData.dialogType == TutorialData.DialogTypes.Informative);
-			this.ObjectiveRightPanel.gameObject.SetActive(this._currentTutorialData.dialogType == TutorialData.DialogTypes.ObjectiveRight);
-			string text = (this._currentTutorialData.ControlAction1 == ControlAction.None) ? string.Empty : ControlOptions.GetNGUIIconOrTextLocalized(this._currentTutorialData.ControlAction1, ControlOptions.ControlActionInputType.Primary);
-			string text2 = (this._currentTutorialData.ControlAction2 == ControlAction.None) ? string.Empty : ControlOptions.GetNGUIIconOrTextLocalized(this._currentTutorialData.ControlAction2, ControlOptions.ControlActionInputType.Primary);
-			string text3 = (this._currentTutorialData.ControlAction3 == ControlAction.None) ? string.Empty : ControlOptions.GetNGUIIconOrTextLocalized(this._currentTutorialData.ControlAction3, ControlOptions.ControlActionInputType.Primary);
-			string text4 = (this._currentTutorialData.ControlAction4 == ControlAction.None) ? string.Empty : ControlOptions.GetNGUIIconOrTextLocalized(this._currentTutorialData.ControlAction4, ControlOptions.ControlActionInputType.Primary);
-			string text5 = (!string.IsNullOrEmpty(this._currentTutorialData.DirectControlJoyAction1) || this._currentTutorialData.ControlAction1 == ControlAction.None) ? this._currentTutorialData.DirectControlJoyAction1 : ControlOptions.GetNGUIIconOrTextLocalized(this._currentTutorialData.ControlAction1, ControlOptions.ControlActionInputType.Secondary);
-			string text6 = (!string.IsNullOrEmpty(this._currentTutorialData.DirectControlJoyAction2) || this._currentTutorialData.ControlAction2 == ControlAction.None) ? this._currentTutorialData.DirectControlJoyAction2 : ControlOptions.GetNGUIIconOrTextLocalized(this._currentTutorialData.ControlAction2, ControlOptions.ControlActionInputType.Secondary);
-			string text7 = (!string.IsNullOrEmpty(this._currentTutorialData.DirectControlJoyAction3) || this._currentTutorialData.ControlAction3 == ControlAction.None) ? this._currentTutorialData.DirectControlJoyAction3 : ControlOptions.GetNGUIIconOrTextLocalized(this._currentTutorialData.ControlAction3, ControlOptions.ControlActionInputType.Secondary);
-			string text8 = (!string.IsNullOrEmpty(this._currentTutorialData.DirectControlJoyAction4) || this._currentTutorialData.ControlAction4 == ControlAction.None) ? this._currentTutorialData.DirectControlJoyAction4 : ControlOptions.GetNGUIIconOrTextLocalized(this._currentTutorialData.ControlAction4, ControlOptions.ControlActionInputType.Secondary);
-			switch (this._currentTutorialData.dialogType)
+			TutorialData.DialogTypes dialogType = this._currentTutorialData.dialogType;
+			if (dialogType != TutorialData.DialogTypes.TutorialGuy)
 			{
-			case TutorialData.DialogTypes.TutorialGuy:
-				this._currentWindow = this.tutorialGuyPanel;
-				this.tutorialGuyLabel.text = string.Format(Language.Get(this._currentTutorialData.DescMouse, "Tutorial"), new object[]
+				if (dialogType != TutorialData.DialogTypes.Informative)
 				{
-					text,
-					text2,
-					text3,
-					text4
-				});
-				this.tutorialGuyOkButton.gameObject.SetActive(this._currentTutorialData.tutorialGuyLifetime <= 0f);
-				this.tutorialGuyOkButton.SetEnabledAndSelected();
-				break;
-			case TutorialData.DialogTypes.Informative:
-				this._currentWindow = this.InformativePanel;
-				this.InformativeOkButton.SetEnabledAndSelected();
-				this.InformativePanelTitle.text = Language.Get(this._currentTutorialData.Title, "Tutorial");
-				this.InformativeTexture.sprite2D = this._currentTutorialData.InformativeSprite;
-				this.InformativePanelDescMouse.text = string.Format(Language.Get(this._currentTutorialData.DescMouse, "Tutorial"), new object[]
-				{
-					text,
-					text2,
-					text3,
-					text4
-				});
-				this.InformativePanelDescJoy.text = string.Format(Language.Get(this._currentTutorialData.DescJoystick, "Tutorial"), new object[]
-				{
-					text5,
-					text6,
-					text7,
-					text8
-				});
-				this.InformativePanelDescWarn.transform.parent.gameObject.SetActive(!string.IsNullOrEmpty(this._currentTutorialData.DescWarning));
-				if (this.InformativePanelDescWarn.transform.parent.gameObject.activeSelf)
-				{
-					this.InformativePanelDescWarn.text = string.Format(Language.Get(this._currentTutorialData.DescWarning, "Tutorial"), new object[]
+					if (dialogType != TutorialData.DialogTypes.Objective)
 					{
-						text,
-						text2,
-						text3,
-						text4
-					});
+					}
 				}
-				this.InformativeMouseIcon.gameObject.SetActive(this._currentTutorialData.MouseAndJoystickIcons);
-				this.InformativeJoystickIcon.gameObject.SetActive(this._currentTutorialData.MouseAndJoystickIcons);
-				break;
-			case TutorialData.DialogTypes.ObjectiveRight:
-				this._currentWindow = this.ObjectiveRightPanel;
-				this.ObjectiveRightTitle.text = Language.Get(this._currentTutorialData.Title, "Tutorial");
-				this.ObjectiveRightDescMouse.text = string.Format(Language.Get(this._currentTutorialData.DescMouse, "Tutorial"), new object[]
+				else
 				{
-					text,
-					text2,
-					text3,
-					text4
-				});
-				this.ObjectiveRightDescJoy.text = string.Format(Language.Get(this._currentTutorialData.DescJoystick, "Tutorial"), new object[]
-				{
-					text5,
-					text6,
-					text7,
-					text8
-				});
-				this.parameterObjectiveLabelParameter = null;
-				this.ObjectiveRightCounterLabel.gameObject.SetActive(false);
-				this.ObjectiveRightMouseIcon.gameObject.SetActive(this._currentTutorialData.MouseAndJoystickIcons);
-				this.ObjectiveRightJoystickIcon.gameObject.SetActive(this._currentTutorialData.MouseAndJoystickIcons);
-				break;
+					this._currentWindow = this.InformativePanel;
+					this.SetupInformativeTutorialDialog();
+				}
+			}
+			else
+			{
+				this._currentWindow = this.tutorialGuyPanel;
+				this.tutorialGuyLabel.text = Language.Get(this._currentTutorialData.Descriptions[0].Draft, TranslationContext.Tutorial);
+				this.tutorialGuyOkButton.gameObject.SetActive(this._currentTutorialData.tutorialGuyLifetime <= 0f);
+				this.tutorialGuyOkButton.isEnabled = true;
 			}
 			for (int i = 0; i < this._uiTablesToRefresh.Length; i++)
 			{
@@ -303,6 +241,10 @@ namespace HeavyMetalMachines.Tutorial
 			if (this._currentWindow != null)
 			{
 				this._currentWindow.SetWindowVisibility(true);
+				if (this._currentTutorialData.dialogType == TutorialData.DialogTypes.TutorialGuy || this._currentTutorialData.dialogType == TutorialData.DialogTypes.Informative)
+				{
+					this._uiNavigationGroupHolder.AddGroup();
+				}
 				if (!this._currentTutorialData.IsObjective())
 				{
 					this.ShowOvelay(this.CurrentAnimationDuration(true));
@@ -318,46 +260,62 @@ namespace HeavyMetalMachines.Tutorial
 				this._currentOnDialogClosedDelegate.oneShot = true;
 			}
 			this._showDelay = this._currentTutorialData.ShowDelay;
-			TweenAlpha.Begin(this.arrowPanel, 0f, 0f);
 			if (this.currentChildTarget != null)
 			{
 				Bounds bounds = NGUIMath.CalculateAbsoluteWidgetBounds(this.currentChildTarget);
 				this.CurrentTutorialArea = new Rect(bounds.min.x, bounds.min.y, bounds.size.x, bounds.size.y);
-				this.tooltipAnchor.container = this.currentChildTarget.gameObject;
-				if (this.currentChildTarget.position.y > 0f)
-				{
-					this.tooltipAnchor.pixelOffset = new Vector2(this.tooltipAnchor.pixelOffset.x, -35f);
-					this.tooltipAnchor.side = UIAnchor.Side.Bottom;
-					if (this.arrow.transform.localPosition.y < 0f)
-					{
-						Vector3 localPosition = this.arrow.transform.localPosition;
-						localPosition.y *= -1f;
-						this.arrow.transform.localPosition = localPosition;
-					}
-					Quaternion localRotation = this.arrow.transform.localRotation;
-					localRotation.z = 0f;
-					this.arrow.transform.localRotation = localRotation;
-				}
-				else
-				{
-					this.tooltipAnchor.pixelOffset = new Vector2(this.tooltipAnchor.pixelOffset.x, 35f);
-					this.tooltipAnchor.side = UIAnchor.Side.Top;
-					if (this.arrow.transform.localPosition.y > 0f)
-					{
-						Vector3 localPosition2 = this.arrow.transform.localPosition;
-						localPosition2.y *= -1f;
-						this.arrow.transform.localPosition = localPosition2;
-					}
-					Quaternion localRotation2 = this.arrow.transform.localRotation;
-					localRotation2.z = 180f;
-					this.arrow.transform.localRotation = localRotation2;
-				}
 			}
 			if (this._currentTutorialData.dialogType == TutorialData.DialogTypes.TutorialGuy || this._currentTutorialData.dialogType == TutorialData.DialogTypes.Informative)
 			{
 				GameHubBehaviour.Hub.CursorManager.Push(true, CursorManager.CursorTypes.OptionsCursor);
 			}
 			this.UnderTutorial = true;
+			TutorialUIController.Log.Debug("XXX SetupTutorialDialog");
+		}
+
+		private void SetupInformativeTutorialDialog()
+		{
+			this.InformativeOkButton.isEnabled = true;
+			this.InformativePanelTitle.text = Language.Get(this._currentTutorialData.Title, TranslationContext.Tutorial);
+			this.InformativeTexture.sprite2D = this._currentTutorialData.InformativeSprite;
+			TutorialDataDescription[] descriptions = this._currentTutorialData.Descriptions;
+			int i = 0;
+			while (i < descriptions.Length && i < this.InformativePanelDescriptions.Length)
+			{
+				TutorialDataDescription tutorialDataDescription = descriptions[i];
+				this.InformativePanelDescriptions[i].DescriptionLabel.text = Language.Get(tutorialDataDescription.Draft, tutorialDataDescription.Sheet);
+				ISprite sprite = null;
+				string empty = string.Empty;
+				if (tutorialDataDescription.ControllerInputAction != -1)
+				{
+					if (this._inputGetActiveDevicePoller.GetActiveDevice() == 3 && tutorialDataDescription.ControllerInputAction == 4)
+					{
+						this._inputTranslation.TryToGetInputJoystickAssetOrFallbackToTranslation(22, ref sprite, ref empty);
+					}
+					else
+					{
+						this._inputTranslation.TryToGetInputActionActiveDeviceAssetOrFallbackToTranslation(tutorialDataDescription.ControllerInputAction, ref sprite, ref empty);
+					}
+				}
+				Sprite sprite2 = (sprite == null) ? null : (sprite as UnitySprite).GetSprite();
+				this.InformativePanelDescriptions[i].InputSprite.sprite2D = sprite2;
+				this.InformativePanelDescriptions[i].InputSprite.gameObject.SetActive(sprite2);
+				this.InformativePanelDescriptions[i].InputLabelGroupGameObject.gameObject.SetActive(!sprite2 && !string.IsNullOrEmpty(empty));
+				this.InformativePanelDescriptions[i].InputLabel.text = empty;
+				i++;
+			}
+			while (i < this.InformativePanelDescriptions.Length)
+			{
+				this.InformativePanelDescriptions[i].DescriptionLabel.text = string.Empty;
+				this.InformativePanelDescriptions[i].InputSprite.gameObject.SetActive(false);
+				this.InformativePanelDescriptions[i].InputLabelGroupGameObject.gameObject.SetActive(false);
+				i++;
+			}
+			this.InformativePanelDescWarn.transform.parent.gameObject.SetActive(!string.IsNullOrEmpty(this._currentTutorialData.DescWarning));
+			if (this.InformativePanelDescWarn.transform.parent.gameObject.activeSelf)
+			{
+				this.InformativePanelDescWarn.text = Language.Get(this._currentTutorialData.DescWarning, TranslationContext.Tutorial);
+			}
 		}
 
 		private void ResetDelayedDialog()
@@ -373,18 +331,7 @@ namespace HeavyMetalMachines.Tutorial
 			if (this._currentTutorialData != null)
 			{
 				TutorialData.DialogTypes dialogType = this._currentTutorialData.dialogType;
-				if (dialogType != TutorialData.DialogTypes.Objective)
-				{
-					if (dialogType == TutorialData.DialogTypes.ObjectiveRight)
-					{
-						this.ObjectiveRightCounterLabel.text = string.Format(this._objectiveParameterFormat, parameter);
-						if (!this.ObjectiveRightCounterLabel.gameObject.activeSelf)
-						{
-							this.ObjectiveRightCounterLabel.gameObject.SetActive(true);
-						}
-					}
-				}
-				else
+				if (dialogType == TutorialData.DialogTypes.Objective)
 				{
 					this.ObjectiveCounterLabel.text = string.Format(this._objectiveParameterFormat, parameter);
 					if (!this.ObjectiveCounterLabel.gameObject.activeSelf)
@@ -392,85 +339,6 @@ namespace HeavyMetalMachines.Tutorial
 						this.ObjectiveCounterLabel.gameObject.SetActive(true);
 					}
 				}
-			}
-		}
-
-		private void RefreshUIInputText()
-		{
-			if (this._currentTutorialData == null)
-			{
-				return;
-			}
-			string text = (this._currentTutorialData.ControlAction1 == ControlAction.None) ? string.Empty : ControlOptions.GetNGUIIconOrTextLocalized(this._currentTutorialData.ControlAction1, ControlOptions.ControlActionInputType.Primary);
-			string text2 = (this._currentTutorialData.ControlAction2 == ControlAction.None) ? string.Empty : ControlOptions.GetNGUIIconOrTextLocalized(this._currentTutorialData.ControlAction2, ControlOptions.ControlActionInputType.Primary);
-			string text3 = (this._currentTutorialData.ControlAction3 == ControlAction.None) ? string.Empty : ControlOptions.GetNGUIIconOrTextLocalized(this._currentTutorialData.ControlAction3, ControlOptions.ControlActionInputType.Primary);
-			string text4 = (this._currentTutorialData.ControlAction4 == ControlAction.None) ? string.Empty : ControlOptions.GetNGUIIconOrTextLocalized(this._currentTutorialData.ControlAction4, ControlOptions.ControlActionInputType.Primary);
-			string text5 = (this._currentTutorialData.ControlAction1 == ControlAction.None) ? string.Empty : ControlOptions.GetNGUIIconOrTextLocalized(this._currentTutorialData.ControlAction1, ControlOptions.ControlActionInputType.Secondary);
-			string text6 = (this._currentTutorialData.ControlAction2 == ControlAction.None) ? string.Empty : ControlOptions.GetNGUIIconOrTextLocalized(this._currentTutorialData.ControlAction2, ControlOptions.ControlActionInputType.Secondary);
-			string text7 = (this._currentTutorialData.ControlAction3 == ControlAction.None) ? string.Empty : ControlOptions.GetNGUIIconOrTextLocalized(this._currentTutorialData.ControlAction3, ControlOptions.ControlActionInputType.Secondary);
-			string text8 = (this._currentTutorialData.ControlAction4 == ControlAction.None) ? string.Empty : ControlOptions.GetNGUIIconOrTextLocalized(this._currentTutorialData.ControlAction4, ControlOptions.ControlActionInputType.Secondary);
-			switch (this._currentTutorialData.dialogType)
-			{
-			case TutorialData.DialogTypes.TutorialGuy:
-				this.tutorialGuyLabel.text = string.Format(Language.Get(this._currentTutorialData.DescMouse, "Tutorial"), new object[]
-				{
-					text,
-					text2,
-					text3,
-					text4
-				});
-				break;
-			case TutorialData.DialogTypes.Informative:
-				this.InformativePanelTitle.text = Language.Get(this._currentTutorialData.Title, "Tutorial");
-				this.InformativePanelDescMouse.text = string.Format(Language.Get(this._currentTutorialData.DescMouse, "Tutorial"), new object[]
-				{
-					text,
-					text2,
-					text3,
-					text4
-				});
-				this.InformativePanelDescJoy.text = string.Format(Language.Get(this._currentTutorialData.DescJoystick, "Tutorial"), new object[]
-				{
-					text5,
-					text6,
-					text7,
-					text8
-				});
-				break;
-			case TutorialData.DialogTypes.Objective:
-				this.ObjectiveTitle.text = Language.Get(this._currentTutorialData.Title, "Tutorial");
-				this.ObjectiveDescMouse.text = string.Format(Language.Get(this._currentTutorialData.DescMouse, "Tutorial"), new object[]
-				{
-					text,
-					text2,
-					text3,
-					text4
-				});
-				this.ObjectiveDescJoy.text = string.Format(Language.Get(this._currentTutorialData.DescJoystick, "Tutorial"), new object[]
-				{
-					text5,
-					text6,
-					text7,
-					text8
-				});
-				break;
-			case TutorialData.DialogTypes.ObjectiveRight:
-				this.ObjectiveRightTitle.text = Language.Get(this._currentTutorialData.Title, "Tutorial");
-				this.ObjectiveRightDescMouse.text = string.Format(Language.Get(this._currentTutorialData.DescMouse, "Tutorial"), new object[]
-				{
-					text,
-					text2,
-					text3,
-					text4
-				});
-				this.ObjectiveRightDescJoy.text = string.Format(Language.Get(this._currentTutorialData.DescJoystick, "Tutorial"), new object[]
-				{
-					text5,
-					text6,
-					text7,
-					text8
-				});
-				break;
 			}
 		}
 
@@ -570,7 +438,6 @@ namespace HeavyMetalMachines.Tutorial
 				return;
 			}
 			this.IsInTutorialTransition = true;
-			GameHubBehaviour.Hub.TutorialHub.TutorialControllerInstance.PassTutorial(tutorialStepName);
 			if (this._currentTutorialData != null && this._currentTutorialData.Name == tutorialStepName)
 			{
 				this.CloseTutorialDialog(null);
@@ -585,6 +452,7 @@ namespace HeavyMetalMachines.Tutorial
 			if (this._currentWindow != null && this._currentTutorialData != null)
 			{
 				this._currentWindow.SetWindowVisibility(false);
+				this._uiNavigationGroupHolder.RemoveGroup();
 				this._currentWindow.gameObject.SetActive(false);
 				if (this._currentTutorialData.dialogType == TutorialData.DialogTypes.TutorialGuy || this._currentTutorialData.dialogType == TutorialData.DialogTypes.Informative)
 				{
@@ -607,7 +475,12 @@ namespace HeavyMetalMachines.Tutorial
 			{
 				yield break;
 			}
+			TutorialUIController.Log.DebugFormat("XXX CloseTutorialDialog {0}", new object[]
+			{
+				this._currentWindow.name
+			});
 			this._currentWindow.SetWindowVisibility(false);
+			this._uiNavigationGroupHolder.RemoveGroup();
 			if (this._currentTutorialData.dialogType == TutorialData.DialogTypes.TutorialGuy || this._currentTutorialData.dialogType == TutorialData.DialogTypes.Informative)
 			{
 				GameHubBehaviour.Hub.CursorManager.Pop();
@@ -621,7 +494,6 @@ namespace HeavyMetalMachines.Tutorial
 				else
 				{
 					this.HideOvelay(this.CurrentAnimationDuration(false));
-					TweenAlpha.Begin(this.arrowPanel, this.CurrentAnimationDuration(false), 0f);
 					yield return new WaitForSeconds(this.CurrentAnimationDuration(false));
 					this.HidePanel();
 					if (this._tutorialSnapshotToken != null)
@@ -697,7 +569,6 @@ namespace HeavyMetalMachines.Tutorial
 		{
 			if (this.CurrentTutorialTrigger != null)
 			{
-				this.CurrentTutorialTrigger.FinishTutorial();
 				if (this._currentOnDialogClosedDelegate != null)
 				{
 					this._currentOnDialogClosedDelegate.Execute();
@@ -747,7 +618,7 @@ namespace HeavyMetalMachines.Tutorial
 
 		public IEnumerator EnableGlowFeedback(string glowFeedbackName, Vector3 position, float delay = 0f, float duration = 0.5f)
 		{
-			HeavyMetalMachines.Utils.Debug.Assert(!string.IsNullOrEmpty(glowFeedbackName), "Can't enable glow feedback with empty name!", HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+			Debug.Assert(!string.IsNullOrEmpty(glowFeedbackName), "Can't enable glow feedback with empty name!", Debug.TargetTeam.All);
 			IEnumerator enumerator = this.GlowUiPanel.transform.GetEnumerator();
 			try
 			{
@@ -808,12 +679,11 @@ namespace HeavyMetalMachines.Tutorial
 				{
 					if (GameHubBehaviour.Hub.State.Current.StateKind == GameState.GameStateKind.Game)
 					{
-						this.UninstallControlsListeners();
-						this.InstallControlsListeners();
+						this.InstallInputObservers();
 					}
 					else
 					{
-						this.UninstallControlsListeners();
+						this.UninstallInputObservers();
 					}
 				}
 			}
@@ -823,53 +693,55 @@ namespace HeavyMetalMachines.Tutorial
 			}
 		}
 
-		private void InstallControlsListeners()
+		private void InstallInputObservers()
 		{
-			ControlOptions controls = GameHubBehaviour.Hub.Options.Controls;
-			controls.OnKeyChangedCallback += this.OnKeyChangedCallback;
-			controls.OnResetDefaultCallback += this.OnResetDefaultCallback;
-			controls.OnResetPrimaryDefaultCallback += this.OnResetDefaultCallback;
-			controls.OnResetSecondaryDefaultCallback += this.OnResetDefaultCallback;
-		}
-
-		private void UninstallControlsListeners()
-		{
-			ControlOptions controls = GameHubBehaviour.Hub.Options.Controls;
-			controls.OnKeyChangedCallback -= this.OnKeyChangedCallback;
-			controls.OnResetDefaultCallback -= this.OnResetDefaultCallback;
-			controls.OnResetPrimaryDefaultCallback -= this.OnResetDefaultCallback;
-			controls.OnResetSecondaryDefaultCallback -= this.OnResetDefaultCallback;
-		}
-
-		private void OnResetDefaultCallback()
-		{
-			if (GameHubBehaviour.Hub != null && GameHubBehaviour.Hub.Match != null && GameHubBehaviour.Hub.Match.LevelIsTutorial())
+			this._inputBindNotifierDisposable = ObservableExtensions.Subscribe<int>(Observable.Do<int>(this._inputBindNotifier.ObserveBind(), delegate(int actionId)
 			{
-				this.RefreshUIInputText();
+				this.TryToRefreshUiInputText();
+			}));
+			this._inputBindResetDefaultNotifierDisposable = ObservableExtensions.Subscribe<Unit>(Observable.Do<Unit>(this._inputBindNotifier.ObserveResetDefault(), delegate(Unit _)
+			{
+				this.TryToRefreshUiInputText();
+			}));
+			this._activeDeviceChangeDisposable = ObservableExtensions.Subscribe<InputDevice>(Observable.Do<InputDevice>(this._inputActiveDeviceChangeNotifier.ObserveActiveDeviceChange(), delegate(InputDevice _)
+			{
+				this.TryToRefreshUiInputText();
+			}));
+		}
+
+		private void UninstallInputObservers()
+		{
+			this.TryToDispose(this._inputBindNotifierDisposable);
+			this.TryToDispose(this._inputBindResetDefaultNotifierDisposable);
+			this.TryToDispose(this._activeDeviceChangeDisposable);
+		}
+
+		private void TryToDispose(IDisposable disposable)
+		{
+			if (disposable != null)
+			{
+				disposable.Dispose();
 			}
 		}
 
-		private void OnKeyChangedCallback(ControlAction controlAction)
+		private void TryToRefreshUiInputText()
 		{
-			if (GameHubBehaviour.Hub != null && GameHubBehaviour.Hub.Match != null && GameHubBehaviour.Hub.Match.LevelIsTutorial())
+			if (GameHubBehaviour.Hub != null && GameHubBehaviour.Hub.Match != null && GameHubBehaviour.Hub.Match.LevelIsTutorial() && this._currentTutorialData != null && this._currentTutorialData.dialogType == TutorialData.DialogTypes.Informative)
 			{
-				this.RefreshUIInputText();
+				this.SetupInformativeTutorialDialog();
 			}
 		}
 
 		public void OnDisable()
 		{
-			UnityEngine.Debug.LogError("OnDisable");
 			if (!Application.isPlaying)
 			{
 				return;
 			}
-			UnityEngine.Debug.LogError("OnDisable after");
 			this.BottomPanelComponent.Unload();
-			this.HintPanelComponent.Unload();
 			if (GameHubBehaviour.Hub != null && GameHubBehaviour.Hub.Options != null && GameHubBehaviour.Hub.Options.Controls != null)
 			{
-				this.UninstallControlsListeners();
+				this.UninstallInputObservers();
 			}
 		}
 
@@ -880,6 +752,9 @@ namespace HeavyMetalMachines.Tutorial
 		private TutorialTrigger CurrentTutorialTrigger;
 
 		public bool UnderTutorial;
+
+		[SerializeField]
+		private UiNavigationGroupHolder _uiNavigationGroupHolder;
 
 		[ReadOnly]
 		public int NextTutorialDataId;
@@ -892,21 +767,9 @@ namespace HeavyMetalMachines.Tutorial
 
 		public UI2DSprite Overlay;
 
-		public GameObject arrowPanel;
-
-		public UISprite arrow;
-
-		public UIAnchor tooltipAnchor;
-
-		public UILabel tooltipLabel;
-
-		public UISprite tooltipBG;
-
 		public HudWindow ObjectivePanel;
 
 		public TutorialBottomComponent BottomPanelComponent;
-
-		public TutorialHintComponent HintPanelComponent;
 
 		public UILabel ObjectiveTitle;
 
@@ -919,20 +782,6 @@ namespace HeavyMetalMachines.Tutorial
 		public UI2DSprite ObjectiveMouseIcon;
 
 		public UI2DSprite ObjectiveJoystickIcon;
-
-		public HudWindow ObjectiveRightPanel;
-
-		public UILabel ObjectiveRightTitle;
-
-		public UILabel ObjectiveRightDescMouse;
-
-		public UILabel ObjectiveRightDescJoy;
-
-		public UILabel ObjectiveRightCounterLabel;
-
-		public UI2DSprite ObjectiveRightMouseIcon;
-
-		public UI2DSprite ObjectiveRightJoystickIcon;
 
 		[SerializeField]
 		private string _objectiveParameterFormat = "[{0}/{1}]";
@@ -953,33 +802,16 @@ namespace HeavyMetalMachines.Tutorial
 
 		public UI2DSprite InformativeTexture;
 
-		public UILabel InformativePanelDescMouse;
-
-		public UILabel InformativePanelDescJoy;
+		[SerializeField]
+		private TutorialUIController.DescriptionGuiComponents[] InformativePanelDescriptions;
 
 		public UILabel InformativePanelDescWarn;
-
-		public UI2DSprite InformativeMouseIcon;
-
-		public UI2DSprite InformativeJoystickIcon;
 
 		private UITable[] _uiTablesToRefresh;
 
 		public UIPanel GlowUiPanel;
 
-		public Animator MovieTextureGroup;
-
-		public UITexture MovieTexture;
-
-		public UITexture MovieTextureBg;
-
-		public Animator MovieButtonsGroup;
-
-		public UIButton MovieRewindButton;
-
-		public UIButton MovieNextButton;
-
-		public FMODAsset TutorialSnapshot;
+		public AudioEventAsset TutorialSnapshot;
 
 		private FMODAudioManager.FMODAudio _tutorialSnapshotToken;
 
@@ -1018,6 +850,24 @@ namespace HeavyMetalMachines.Tutorial
 
 		private bool _isInitialized;
 
+		[InjectOnClient]
+		private IInputTranslation _inputTranslation;
+
+		[InjectOnClient]
+		private IInputGetActiveDevicePoller _inputGetActiveDevicePoller;
+
+		[InjectOnClient]
+		private IInputBindNotifier _inputBindNotifier;
+
+		[InjectOnClient]
+		private IInputActiveDeviceChangeNotifier _inputActiveDeviceChangeNotifier;
+
+		private IDisposable _inputBindNotifierDisposable;
+
+		private IDisposable _inputBindResetDefaultNotifierDisposable;
+
+		private IDisposable _activeDeviceChangeDisposable;
+
 		private EventDelegate _delayedOnButtonEvent;
 
 		private GameObject _delayedTargetGO;
@@ -1044,5 +894,17 @@ namespace HeavyMetalMachines.Tutorial
 		private float _originalAlphaOverlay = -1f;
 
 		private GameObject _currentGlowFeedbackObj;
+
+		[Serializable]
+		private struct DescriptionGuiComponents
+		{
+			public UILabel DescriptionLabel;
+
+			public UI2DSprite InputSprite;
+
+			public GameObject InputLabelGroupGameObject;
+
+			public UILabel InputLabel;
+		}
 	}
 }

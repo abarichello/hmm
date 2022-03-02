@@ -17,13 +17,13 @@ namespace HeavyMetalMachines.Tutorial
 			}
 			TutorialBusinessStepName name = tutorialBusinessStep.Name;
 			string universalID = GameHubBehaviour.Hub.Players.Players[0].UserSF.UniversalID;
-			GameHubBehaviour.Hub.Swordfish.Log.BILogServerMsg(ServerBITags.GameServerTutorialBusinessStepStart, string.Format("Info={{\"StepName\":\"{0}\", \"StepNumber\":{1}, \"UserID\":\"{2}\", \"TutorialVersion\":\"{3}\", \"ReleaseVersion\":\"{4}\"}}", new object[]
+			GameHubBehaviour.Hub.Swordfish.Log.BILogServerMsg(9, string.Format("Info={{\"StepName\":\"{0}\", \"StepNumber\":{1}, \"UserID\":\"{2}\", \"TutorialVersion\":\"{3}\", \"ReleaseVersion\":\"{4}\"}}", new object[]
 			{
 				name,
 				(int)name,
 				universalID,
 				tutorialVersion,
-				"2.07.972"
+				"Release.15.00.250"
 			}), false);
 		}
 

@@ -21,7 +21,7 @@ namespace HeavyMetalMachines.Event
 			return this.EventKind != PlayerEvent.Kind.Respawn;
 		}
 
-		public void WriteToBitStream(Pocketverse.BitStream bs)
+		public void WriteToBitStream(BitStream bs)
 		{
 			bs.WriteCompressedInt(this.TargetId);
 			bs.WriteCompressedInt(this.CauserId);
@@ -35,7 +35,7 @@ namespace HeavyMetalMachines.Event
 			bs.WriteCompressedInt(this.Bounty);
 		}
 
-		public void ReadFromBitStream(Pocketverse.BitStream bs)
+		public void ReadFromBitStream(BitStream bs)
 		{
 			this.TargetId = bs.ReadCompressedInt();
 			this.CauserId = bs.ReadCompressedInt();

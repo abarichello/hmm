@@ -4,6 +4,7 @@ using HeavyMetalMachines.Options;
 using HeavyMetalMachines.Tutorial.InGame;
 using Pocketverse;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Tutorial
 {
@@ -16,7 +17,7 @@ namespace HeavyMetalMachines.Tutorial
 			{
 				if (TutorialStepsController._instance == null)
 				{
-					TutorialStepsController._instance = UnityEngine.Object.FindObjectOfType<TutorialStepsController>();
+					TutorialStepsController._instance = Object.FindObjectOfType<TutorialStepsController>();
 				}
 				return TutorialStepsController._instance;
 			}
@@ -101,6 +102,10 @@ namespace HeavyMetalMachines.Tutorial
 			{
 				return;
 			}
+			TutorialStepsController.Log.DebugFormat("OnStepCompletedOnServer currentStep:{0}", new object[]
+			{
+				this.CurrentStep
+			});
 			if (this.CurrentStep < this.inGameTutorialSteps.Count)
 			{
 				this.CurrentStep++;
@@ -110,6 +115,10 @@ namespace HeavyMetalMachines.Tutorial
 		private void Awake()
 		{
 			TutorialStepsController._instance = this;
+			if (GameHubBehaviour.Hub.Net.IsClient())
+			{
+				this._container.InstantiatePrefab(this._tutorialUiController, Vector3.zero, Quaternion.identity, GameHubBehaviour.Hub.State.CurrentSceneStateData.StateGuiController.transform);
+			}
 			ControlOptions.UnlockAllControlActions();
 		}
 
@@ -117,7 +126,8 @@ namespace HeavyMetalMachines.Tutorial
 		{
 			if (GameHubBehaviour.Hub.Net.IsServer())
 			{
-				GameHubBehaviour.Hub.Swordfish.Log.BILogServerMsg(ServerBITags.GameServerTutorialStart, string.Format("Tutorial={0} UserID={1}", "GameServer Tutorial START", GameHubBehaviour.Hub.Players.Players[0].UserSF.UniversalID), false);
+				TutorialStepsController.Log.Debug("ServerBITags.GameServerTutorialStart - " + string.Format("Tutorial={0} UserID={1}", "GameServer Tutorial START", GameHubBehaviour.Hub.Players.Players[0].UserSF.UniversalID));
+				GameHubBehaviour.Hub.Swordfish.Log.BILogServerMsg(5, string.Format("Tutorial={0} UserID={1}", "GameServer Tutorial START", GameHubBehaviour.Hub.Players.Players[0].UserSF.UniversalID), false);
 			}
 			for (int i = 0; i < this.inGameTutorialSteps.Count; i++)
 			{
@@ -149,36 +159,57 @@ namespace HeavyMetalMachines.Tutorial
 
 		private void InGameTutorialFinishedOnClient()
 		{
+			TutorialStepsController.Log.Debug("InGameTutorialFinishedOnClient");
 		}
 
 		public void BehaviourCompletedOnClient(InGameTutorialStep pTutorialBehaviours, int pBehaviourIndex)
 		{
-			int pStep = this.inGameTutorialSteps.IndexOf(pTutorialBehaviours);
+			int num = this.inGameTutorialSteps.IndexOf(pTutorialBehaviours);
+			TutorialStepsController.Log.DebugFormat("BehaviourCompletedOnClient: step={0}, behaviour={1}", new object[]
+			{
+				num,
+				pBehaviourIndex
+			});
 			if (GameHubBehaviour.Hub != null && !GameHubBehaviour.Hub.Net.isTest && !pTutorialBehaviours.IsOfflineStep)
 			{
-				this.DispatchReliable(new byte[0]).SyncBehaviourCompletedOnClient(pStep, pBehaviourIndex);
+				this.DispatchReliable(new byte[0]).SyncBehaviourCompletedOnClient(num, pBehaviourIndex);
 			}
 		}
 
 		[RemoteMethod]
 		private void SyncBehaviourCompletedOnClient(int pStep, int pBehaviourIndex)
 		{
+			TutorialStepsController.Log.DebugFormat("SyncBehaviourCompletedOnClient: step={0}, behaviour={1}", new object[]
+			{
+				pStep,
+				pBehaviourIndex
+			});
 			InGameTutorialStep inGameTutorialStep = this.inGameTutorialSteps[pStep];
 			inGameTutorialStep.CompleteBehaviour(pBehaviourIndex);
 		}
 
 		public void BehaviourCompletedOnServer(InGameTutorialStep pTutorialBehaviours, int pBehaviourIndex)
 		{
-			int pStep = this.inGameTutorialSteps.IndexOf(pTutorialBehaviours);
+			int num = this.inGameTutorialSteps.IndexOf(pTutorialBehaviours);
+			TutorialStepsController.Log.DebugFormat("BehaviourCompletedOnServer: step={0}, behaviour={1}", new object[]
+			{
+				num,
+				pBehaviourIndex
+			});
 			if (GameHubBehaviour.Hub != null)
 			{
-				this.DispatchReliable(GameHubBehaviour.Hub.SendAll).SyncBehaviourCompletedOnServer(pStep, pBehaviourIndex);
+				this.DispatchReliable(GameHubBehaviour.Hub.SendAll).SyncBehaviourCompletedOnServer(num, pBehaviourIndex);
 			}
 		}
 
 		[RemoteMethod]
 		private void SyncBehaviourCompletedOnServer(int pStep, int pBehaviourIndex)
 		{
+			TutorialStepsController.Log.DebugFormat("SyncBehaviourCompletedOnServer: step={0}, behaviour={1}", new object[]
+			{
+				pStep,
+				pBehaviourIndex
+			});
 			InGameTutorialStep inGameTutorialStep = this.inGameTutorialSteps[pStep];
 			if (pStep != this.CurrentStep)
 			{
@@ -296,32 +327,28 @@ namespace HeavyMetalMachines.Tutorial
 			this._delayed = future;
 		}
 
-		public object Invoke(int classId, short methodId, object[] args)
+		public object Invoke(int classId, short methodId, object[] args, BitStream bitstream = null)
 		{
-			if (classId != 1009)
-			{
-				throw new Exception("Hierarchy in RemoteClass is not allowed!!! " + classId);
-			}
 			this._delayed = null;
 			switch (methodId)
 			{
-			case 8:
+			case 9:
 				this.StepChangedOnServer((int)args[0]);
 				return null;
 			default:
-				if (methodId != 2)
+				if (methodId != 3)
 				{
 					throw new ScriptMethodNotFoundException(classId, (int)methodId);
 				}
 				this.ForceStep((int)args[0]);
 				return null;
-			case 11:
+			case 12:
 				this.SyncBehaviourCompletedOnClient((int)args[0], (int)args[1]);
 				return null;
-			case 13:
+			case 14:
 				this.SyncBehaviourCompletedOnServer((int)args[0], (int)args[1]);
 				return null;
-			case 14:
+			case 15:
 				this.SetPlayerInputsActive((bool)args[0]);
 				return null;
 			}
@@ -343,9 +370,15 @@ namespace HeavyMetalMachines.Tutorial
 		[SerializeField]
 		public string VersionHash;
 
+		[SerializeField]
+		private TutorialUIController _tutorialUiController;
+
+		[Inject]
+		private DiContainer _container;
+
 		private int _currentStep = -1;
 
-		public const int StaticClassId = 1009;
+		public const int StaticClassId = 1010;
 
 		private Identifiable _identifiable;
 

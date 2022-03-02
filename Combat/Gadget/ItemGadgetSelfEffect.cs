@@ -71,7 +71,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			}
 		}
 
-		protected override void InnerOnDestroyEffect(DestroyEffect evt)
+		protected override void InnerOnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (evt.RemoveData.TargetEventId != this._currentEffectId)
 			{

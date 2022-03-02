@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using Pocketverse;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Utils
 {
@@ -95,12 +96,12 @@ namespace HeavyMetalMachines.Utils
 			}
 		}
 
-		public static int InverseSortByName<T>(T a, T b) where T : UnityEngine.Object
+		public static int InverseSortByName<T>(T a, T b) where T : Object
 		{
 			return -string.CompareOrdinal(a.name, b.name);
 		}
 
-		public static int SortByName<T>(T a, T b) where T : UnityEngine.Object
+		public static int SortByName<T>(T a, T b) where T : Object
 		{
 			return string.CompareOrdinal(a.name, b.name);
 		}
@@ -120,6 +121,15 @@ namespace HeavyMetalMachines.Utils
 			for (int i = 0; i < quantity; i++)
 			{
 				GUIUtils.GridPoolInstantiate(grid, reference);
+			}
+			grid.Reposition();
+		}
+
+		public static void CreateGridPoolInjected(UIGrid grid, GameObject reference, int quantity, DiContainer container)
+		{
+			for (int i = 0; i < quantity; i++)
+			{
+				GUIUtils.GridPoolInstantiateInjected(grid, reference, container);
 			}
 			grid.Reposition();
 		}
@@ -157,9 +167,16 @@ namespace HeavyMetalMachines.Utils
 
 		private static void GridPoolInstantiate(UIGrid grid, Transform reference)
 		{
-			Transform transform = UnityEngine.Object.Instantiate<Transform>(reference, Vector3.zero, Quaternion.identity);
+			Transform transform = Object.Instantiate<Transform>(reference, Vector3.zero, Quaternion.identity);
 			transform.parent = grid.transform;
 			transform.localScale = reference.localScale;
+		}
+
+		private static void GridPoolInstantiateInjected(UIGrid grid, GameObject reference, DiContainer container)
+		{
+			Transform transform = container.InstantiatePrefab(reference).transform;
+			transform.parent = grid.transform;
+			transform.localScale = reference.transform.localScale;
 		}
 
 		public static IEnumerator HackScrollReposition(UIScrollView scrollView, UIScrollBar scrollBar, UIGrid grid)
@@ -202,8 +219,10 @@ namespace HeavyMetalMachines.Utils
 			{
 				return;
 			}
-			foreach (object obj in animation)
+			IEnumerator animationEnumerator = GUIUtils.GetAnimationEnumerator(animation);
+			while (animationEnumerator.MoveNext())
 			{
+				object obj = animationEnumerator.Current;
 				AnimationState animationState = (AnimationState)obj;
 				if (reverse)
 				{
@@ -226,14 +245,28 @@ namespace HeavyMetalMachines.Utils
 			}
 		}
 
+		private static IEnumerator GetAnimationEnumerator(Animation animation)
+		{
+			IEnumerator enumerator;
+			if (!GUIUtils.CachedAnimationsEnumerators.TryGetValue(animation.GetHashCode(), out enumerator))
+			{
+				enumerator = animation.GetEnumerator();
+				GUIUtils.CachedAnimationsEnumerators.Add(animation.GetHashCode(), enumerator);
+			}
+			enumerator.Reset();
+			return enumerator;
+		}
+
 		public static void AnimationSetFirstFrame(Animation animation)
 		{
 			if (animation == null)
 			{
 				return;
 			}
-			foreach (object obj in animation)
+			IEnumerator animationEnumerator = GUIUtils.GetAnimationEnumerator(animation);
+			while (animationEnumerator.MoveNext())
 			{
+				object obj = animationEnumerator.Current;
 				AnimationState animationState = (AnimationState)obj;
 				animationState.speed = -1f;
 				animationState.time = 0f;
@@ -247,8 +280,10 @@ namespace HeavyMetalMachines.Utils
 			{
 				return;
 			}
-			foreach (object obj in animation)
+			IEnumerator animationEnumerator = GUIUtils.GetAnimationEnumerator(animation);
+			while (animationEnumerator.MoveNext())
 			{
+				object obj = animationEnumerator.Current;
 				AnimationState animationState = (AnimationState)obj;
 				animationState.time = 0f;
 				animationState.enabled = true;
@@ -265,8 +300,10 @@ namespace HeavyMetalMachines.Utils
 				GUIUtils.Log.FatalFormat("animation null on AnimationSetLastFrame", new object[0]);
 				return;
 			}
-			foreach (object obj in animation)
+			IEnumerator animationEnumerator = GUIUtils.GetAnimationEnumerator(animation);
+			while (animationEnumerator.MoveNext())
 			{
+				object obj = animationEnumerator.Current;
 				AnimationState animationState = (AnimationState)obj;
 				animationState.speed = 1f;
 				animationState.time = animationState.length;
@@ -284,7 +321,7 @@ namespace HeavyMetalMachines.Utils
 				}
 				yield break;
 			}
-			string urlRandomNum = "?" + UnityEngine.Random.Range(1, 9999);
+			string urlRandomNum = "?" + Random.Range(1, 9999);
 			WWW www = new WWW(url + urlRandomNum);
 			yield return www;
 			if (string.IsNullOrEmpty(www.error))
@@ -323,7 +360,9 @@ namespace HeavyMetalMachines.Utils
 			yield break;
 		}
 
-		public static readonly BitLogger Log = new BitLogger(typeof(GUIUtils));
+		private static readonly BitLogger Log = new BitLogger(typeof(GUIUtils));
+
+		private static readonly Dictionary<int, IEnumerator> CachedAnimationsEnumerators = new Dictionary<int, IEnumerator>(2048);
 
 		public delegate void GridPoolAsyncCompleteCallback();
 	}

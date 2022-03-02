@@ -6,6 +6,18 @@ namespace HeavyMetalMachines.UpdateStream
 {
 	public class StateUpdateSteram : GameHubObject
 	{
+		public IStateContent GetObject(byte classId, int objId)
+		{
+			ContentKey key = new ContentKey
+			{
+				ClassId = classId,
+				ObjId = objId
+			};
+			IStateContent result;
+			this._objects.TryGetValue(key, out result);
+			return result;
+		}
+
 		public void AddObject(IStateContent obj)
 		{
 			if (obj == null)

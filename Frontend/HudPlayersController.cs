@@ -1,10 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using HeavyMetalMachines.Arena;
 using HeavyMetalMachines.Bank;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Players.Presenting;
 using Pocketverse;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
@@ -28,8 +31,8 @@ namespace HeavyMetalMachines.Frontend
 
 		private void ApplyArenaConfig()
 		{
-			GameArenaInfo gameArenaInfo = GameHubBehaviour.Hub.ArenaConfig.Arenas[GameHubBehaviour.Hub.Match.ArenaIndex];
-			this._allyTeamOnRightSide = (GameHubBehaviour.Hub.Players.CurrentPlayerTeam == gameArenaInfo.TugOfWarFlipTeam);
+			IGameArenaInfo currentArena = GameHubBehaviour.Hub.ArenaConfig.GetCurrentArena();
+			this._allyTeamOnRightSide = (GameHubBehaviour.Hub.Players.CurrentPlayerTeam == currentArena.TugOfWarFlipTeam);
 			if (this._allyTeamOnRightSide)
 			{
 				this._allyComponents = new HudPlayersController.HudPlayersTeamComponents
@@ -79,7 +82,8 @@ namespace HeavyMetalMachines.Frontend
 
 		private void BuildCompleteAllPlayers(List<PlayerData> playerDatas)
 		{
-			HudUtils.PlayerDataComparer comparer = new HudUtils.PlayerDataComparer(GameHubBehaviour.Hub, HudUtils.PlayerDataComparer.PlayerDataComparerType.InstanceId);
+			int instanceId = GameHubBehaviour.Hub.Players.CurrentPlayerData.PlayerCarId.GetInstanceId();
+			HudUtils.PlayerDataComparer comparer = new HudUtils.PlayerDataComparer(instanceId, HudUtils.PlayerDataComparer.PlayerDataComparerType.InstanceId);
 			playerDatas.Sort(comparer);
 			int num = (!GameHubBehaviour.Hub.User.IsNarrator) ? GameHubBehaviour.Hub.Players.CurrentPlayerData.CharacterInstance.ObjId : -1;
 			for (int i = 0; i < playerDatas.Count; i++)
@@ -118,33 +122,36 @@ namespace HeavyMetalMachines.Frontend
 
 		private void BuildPlayerStats(PlayerData playerdata, bool isAlly)
 		{
-			HudPlayersObject hudPlayersObject = UnityEngine.Object.Instantiate<HudPlayersObject>(this.PlayerObjectReference, Vector3.zero, Quaternion.identity);
-			Transform transform;
+			Transform transform = (!isAlly) ? this._enemyComponents.Grid.transform : this._allyComponents.Grid.transform;
+			GameObject gameObject = this._container.InstantiatePrefab(this.PlayerObjectReference, Vector3.zero, Quaternion.identity, transform);
+			HudPlayersObject component = gameObject.GetComponent<HudPlayersObject>();
 			if (isAlly)
 			{
-				transform = this._allyComponents.Grid.transform;
-				hudPlayersObject.Thumb.transform.rotation = this._allyComponents.IconRotation;
-				hudPlayersObject.SetBotControlledTeamIconColor(this.AllyColor);
+				component.Thumb.transform.rotation = this._allyComponents.IconRotation;
+				component.SetBotControlledTeamIconColor(this.AllyColor);
 			}
 			else
 			{
-				transform = this._enemyComponents.Grid.transform;
-				hudPlayersObject.Thumb.transform.rotation = this._enemyComponents.IconRotation;
-				hudPlayersObject.SetBotControlledTeamIconColor(this.EnemyColor);
+				component.Thumb.transform.rotation = this._enemyComponents.IconRotation;
+				component.SetBotControlledTeamIconColor(this.EnemyColor);
 			}
-			hudPlayersObject.transform.parent = transform;
-			hudPlayersObject.transform.localScale = transform.localScale;
-			hudPlayersObject.Setup(playerdata.CharacterInstance.GetBitComponent<PlayerStats>(), playerdata.CharacterInstance.GetBitComponent<CombatObject>(), playerdata.CharacterInstance.GetBitComponent<SpawnController>(), playerdata.UserId);
-			hudPlayersObject.PlayerNameLabel.text = playerdata.Name;
-			hudPlayersObject.HidePlayerNameLabel();
+			component.transform.parent = transform;
+			component.transform.localScale = transform.localScale;
+			component.Setup(playerdata.CharacterInstance.GetBitComponent<PlayerStats>(), playerdata.CharacterInstance.GetBitComponent<CombatObject>(), playerdata.CharacterInstance.GetBitComponent<SpawnController>(), playerdata.UserId);
+			IGetDisplayableNickName getDisplayableNickName = this._container.Resolve<IGetDisplayableNickName>();
+			component.PlayerNameLabel.text = ((!playerdata.IsBot) ? getDisplayableNickName.GetFormattedNickNameWithPlayerTag(playerdata.PlayerId, playerdata.Name, new long?(playerdata.PlayerTag)) : playerdata.Name);
+			component.HidePlayerNameLabel();
 			string playerIconName = HudUtils.GetPlayerIconName(GameHubBehaviour.Hub, playerdata.Character.CharacterItemTypeGuid, HudUtils.PlayerIconSize.Size64);
-			hudPlayersObject.Thumb.SpriteName = playerIconName;
-			hudPlayersObject.ThumbGrey.enabled = false;
+			component.Thumb.SpriteName = playerIconName;
+			component.ThumbGrey.enabled = false;
 			bool isCurrentPlayer = GameHubBehaviour.Hub.Players.CurrentPlayerData.PlayerId == playerdata.PlayerId;
 			bool isRightSide = isAlly == this._allyTeamOnRightSide;
-			hudPlayersObject.SetTeamColor(isCurrentPlayer, isAlly, isRightSide);
-			hudPlayersObject.gameObject.SetActive(true);
+			component.SetTeamColor(isCurrentPlayer, isAlly, isRightSide);
+			component.gameObject.SetActive(true);
 		}
+
+		[Inject]
+		private DiContainer _container;
 
 		public HudPlayersObject PlayerObjectReference;
 

@@ -106,8 +106,8 @@ namespace HeavyMetalMachines.VFX
 					float num = this.TotalDuration - 2f * this.BarDelay;
 					float num2 = Mathf.Clamp01((this._accTime - this.BarDelay) / num);
 					float num3 = this._barIncreaseDecreaseCurve.Evaluate(num2);
-					float x = num3 * this._maxSize;
-					this.HorizontalBar.transform.localScale = new Vector3(x, this.HorizontalBar.transform.localScale.y, this.HorizontalBar.transform.localScale.z);
+					float num4 = num3 * this._maxSize;
+					this.HorizontalBar.transform.localScale = new Vector3(num4, this.HorizontalBar.transform.localScale.y, this.HorizontalBar.transform.localScale.z);
 					this.HorizontalBar.transform.position = Vector3.Lerp(this._from, this._to, num2);
 					this.CheckLastPingAnimation();
 				}

@@ -19,23 +19,25 @@ namespace HeavyMetalMachines.Render
 		{
 			int num = (int)((Time.time - this.startTime) * (float)fps);
 			num %= colCount + rowCount;
-			float x = 1f / (float)colCount;
-			float y = 1f / (float)rowCount;
-			Vector2 value = new Vector2(x, y);
-			int num2 = num % colCount;
-			int num3 = num / colCount;
-			float x2 = (float)num2 * value.x;
-			float y2 = 1f - value.y - (float)num3 * value.y;
-			Vector2 value2 = new Vector2(x2, y2);
-			this.materialInstance.SetTextureOffset("_MainTex", value2);
-			this.materialInstance.SetTextureScale("_MainTex", value);
+			float num2 = 1f / (float)colCount;
+			float num3 = 1f / (float)rowCount;
+			Vector2 vector;
+			vector..ctor(num2, num3);
+			int num4 = num % colCount;
+			int num5 = num / colCount;
+			float num6 = (float)num4 * vector.x;
+			float num7 = 1f - vector.y - (float)num5 * vector.y;
+			Vector2 vector2;
+			vector2..ctor(num6, num7);
+			this.materialInstance.SetTextureOffset("_MainTex", vector2);
+			this.materialInstance.SetTextureScale("_MainTex", vector);
 		}
 
 		private void OnEnable()
 		{
 			if (this.material != null)
 			{
-				this.materialInstance = UnityEngine.Object.Instantiate<Material>(this.material);
+				this.materialInstance = Object.Instantiate<Material>(this.material);
 			}
 			this.UpdateDecal();
 		}
@@ -44,7 +46,7 @@ namespace HeavyMetalMachines.Render
 		{
 			if (this.materialInstance != null)
 			{
-				UnityEngine.Object.Destroy(this.materialInstance);
+				Object.Destroy(this.materialInstance);
 			}
 		}
 
@@ -105,8 +107,9 @@ namespace HeavyMetalMachines.Render
 			else
 			{
 				this.Reset();
-				MeshRenderer[] array2 = UnityEngine.Object.FindObjectsOfType(typeof(MeshRenderer)) as MeshRenderer[];
-				Bounds bounds = new Bounds(base.transform.position, new Vector3(this.size * this.horizontalRatio, this.size, this.size));
+				MeshRenderer[] array2 = Object.FindObjectsOfType(typeof(MeshRenderer)) as MeshRenderer[];
+				Bounds bounds;
+				bounds..ctor(base.transform.position, new Vector3(this.size * this.horizontalRatio, this.size, this.size));
 				if (array2 != null)
 				{
 					foreach (MeshRenderer meshRenderer in array2)
@@ -132,7 +135,8 @@ namespace HeavyMetalMachines.Render
 			Gizmos.matrix = base.transform.localToWorldMatrix;
 			Gizmos.DrawRay(Vector3.zero, -Vector3.up * this.size);
 			Gizmos.color = this.CubeColor;
-			Vector3 vector = new Vector3(this.size * this.horizontalRatio, this.size, this.size);
+			Vector3 vector;
+			vector..ctor(this.size * this.horizontalRatio, this.size, this.size);
 			Gizmos.DrawCube(Vector3.zero, vector);
 		}
 
@@ -232,13 +236,13 @@ namespace HeavyMetalMachines.Render
 				array5[0] = this.meshNormals[triangles[i]];
 				array5[1] = this.meshNormals[triangles[i + 1]];
 				array5[2] = this.meshNormals[triangles[i + 2]];
-				Vector3 lhs = array4[1] - array4[0];
-				Vector3 rhs = array4[2] - array4[1];
+				Vector3 vector = array4[1] - array4[0];
+				Vector3 vector2 = array4[2] - array4[1];
 				float num2 = Mathf.Max(Vector3.SqrMagnitude(array4[1] - array4[0]), Vector3.SqrMagnitude(array4[2] - array4[1]));
 				float num3 = num + num2;
 				if (Vector3.SqrMagnitude(array4[0] - this.P) <= num3 || Vector3.SqrMagnitude(array4[1] - this.P) <= num3 || Vector3.SqrMagnitude(array4[2] - this.P) <= num3)
 				{
-					Vector3 normalized = Vector3.Cross(lhs, rhs).normalized;
+					Vector3 normalized = Vector3.Cross(vector, vector2).normalized;
 					if (Vector3.Dot(decalNormal, normalized) >= this.maxDecalAngle)
 					{
 						int num4 = this.ClipTriangle(array4, ref array, ref array5, ref array2, ref this.tangent, ref array3);
@@ -318,18 +322,18 @@ namespace HeavyMetalMachines.Render
 					if (!array[num3])
 					{
 						Vector3 vector = vertices[num3];
-						Vector3 a = vertices[j];
-						Vector3 a2 = normals[num3];
-						Vector3 a3 = normals[j];
-						Vector3 a4 = tangents[num3];
-						Vector3 a5 = tangents[j];
-						Vector3 vector2 = a - vector;
+						Vector3 vector2 = vertices[j];
+						Vector3 vector3 = normals[num3];
+						Vector3 vector4 = normals[j];
+						Vector3 vector5 = tangents[num3];
+						Vector3 vector6 = tangents[j];
+						Vector3 vector7 = vector2 - vector;
 						float num4;
-						plane.Raycast(new Ray(vector - this.P, vector2.normalized), out num4);
-						num4 /= vector2.magnitude;
-						verticesOutput[num2] = vector * (1f - num4) + a * num4;
-						normalsOutput[num2] = a2 * (1f - num4) + a3 * num4;
-						tangentsOutput[num2] = a4 * (1f - num4) + a5 * num4;
+						plane.Raycast(new Ray(vector - this.P, vector7.normalized), ref num4);
+						num4 /= vector7.magnitude;
+						verticesOutput[num2] = vector * (1f - num4) + vector2 * num4;
+						normalsOutput[num2] = vector3 * (1f - num4) + vector4 * num4;
+						tangentsOutput[num2] = vector5 * (1f - num4) + vector6 * num4;
 						verticesOutput[num2] += normalsOutput[num2] * this.decalOffset;
 						num2++;
 					}
@@ -338,19 +342,19 @@ namespace HeavyMetalMachines.Render
 				{
 					if (array[num3])
 					{
-						Vector3 vector3 = vertices[j];
-						Vector3 a6 = vertices[num3];
-						Vector3 a7 = normals[j];
-						Vector3 a8 = normals[num3];
-						Vector3 a9 = tangents[num3];
-						Vector3 a10 = tangents[j];
-						Vector3 vector4 = a6 - vector3;
+						Vector3 vector8 = vertices[j];
+						Vector3 vector9 = vertices[num3];
+						Vector3 vector10 = normals[j];
+						Vector3 vector11 = normals[num3];
+						Vector3 vector12 = tangents[num3];
+						Vector3 vector13 = tangents[j];
+						Vector3 vector14 = vector9 - vector8;
 						float num5;
-						plane.Raycast(new Ray(vector3 - this.P, vector4.normalized), out num5);
-						num5 /= vector4.magnitude;
-						verticesOutput[num2] = vector3 * (1f - num5) + a6 * num5;
-						normalsOutput[num2] = a7 * (1f - num5) + a8 * num5;
-						tangentsOutput[num2] = a9 * (1f - num5) + a10 * num5;
+						plane.Raycast(new Ray(vector8 - this.P, vector14.normalized), ref num5);
+						num5 /= vector14.magnitude;
+						verticesOutput[num2] = vector8 * (1f - num5) + vector9 * num5;
+						normalsOutput[num2] = vector10 * (1f - num5) + vector11 * num5;
+						tangentsOutput[num2] = vector12 * (1f - num5) + vector13 * num5;
 						verticesOutput[num2] += normalsOutput[num2] * this.decalOffset;
 						num2++;
 					}

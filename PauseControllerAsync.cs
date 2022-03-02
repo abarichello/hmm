@@ -12,14 +12,14 @@ namespace HeavyMetalMachines
 		public IFuture TogglePauseServer()
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1027, 4, new object[0]);
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1028, 7, new object[0]);
 			return future;
 		}
 
 		public IFuture TriggerPauseNotification(int kind, float delay)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1027, 10, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1028, 16, new object[]
 			{
 				kind,
 				delay
@@ -27,13 +27,16 @@ namespace HeavyMetalMachines
 			return future;
 		}
 
-		public IFuture ChangePauseStateOnClient(int newState, long playerId)
+		public IFuture ChangePauseStateOnClient(int newState, long playerId, int timeRemaining, int timeoutMillis, int activations)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1027, 14, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1028, 20, new object[]
 			{
 				newState,
-				playerId
+				playerId,
+				timeRemaining,
+				timeoutMillis,
+				activations
 			});
 			return future;
 		}

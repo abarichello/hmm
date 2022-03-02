@@ -2,7 +2,7 @@
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkChangeLayer : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkChangeLayer : BasePerk, DestroyEffectMessage.IDestroyEffectListener, CombatLayer.ILayerChanger
 	{
 		public override void PerkInitialized()
 		{
@@ -14,7 +14,7 @@ namespace HeavyMetalMachines.Combat
 			this._target.Layer.ChangeLayer(this.TargetLayer, this);
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (!this._target)
 			{

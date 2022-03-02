@@ -13,7 +13,7 @@ namespace HeavyMetalMachines.Audio
 			}
 		}
 
-		public FMODVoiceOverAsset VoiceLine;
+		public AudioEventAsset VoiceLine;
 
 		public bool PlayOnTutorial;
 	}

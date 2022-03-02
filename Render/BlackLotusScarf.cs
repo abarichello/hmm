@@ -11,7 +11,7 @@ namespace HeavyMetalMachines.Render
 	{
 		private void Awake()
 		{
-			if (GameHubBehaviour.Hub.Net.IsServer())
+			if (GameHubBehaviour.Hub != null && GameHubBehaviour.Hub.Net.IsServer())
 			{
 				base.enabled = false;
 			}
@@ -23,16 +23,19 @@ namespace HeavyMetalMachines.Render
 			this._combat = base.GetComponentInParent<CombatObject>();
 			if (this._combat == null || this._combat.GadgetStates == null)
 			{
-				base.enabled = false;
-				return;
+				this._combatTransform = base.transform.parent;
 			}
-			this.gadgetState = this._combat.GadgetStates.GetGadgetState(this.linkSpecialToGadget);
+			else
+			{
+				this._combatTransform = this._combat.Transform;
+				this.gadgetState = this._combat.GadgetStates.GetGadgetState(this.linkSpecialToGadget);
+			}
 			this.BuildScarf();
 		}
 
 		private void Start()
 		{
-			this._material = ((this._combat.Team != GameHubBehaviour.Hub.Players.CurrentPlayerTeam) ? this.EnemyMaterial : this.TeamMaterial);
+			this._material = ((!(GameHubBehaviour.Hub == null) && this._combat.Team != GameHubBehaviour.Hub.Players.CurrentPlayerTeam) ? this.EnemyMaterial : this.TeamMaterial);
 		}
 
 		private void BuildScarf()
@@ -78,81 +81,81 @@ namespace HeavyMetalMachines.Render
 
 		private void LateUpdate()
 		{
-			this.velocity = Mathf.Min(Vector3.Distance(this.lastPosition, this._combat.Transform.position) / Time.deltaTime, 1f);
+			this.velocity = Mathf.Min(Vector3.Distance(this.lastPosition, this._combatTransform.position) / Time.deltaTime, 1f);
 			if (this.gadgetState != null)
 			{
 				this.specialAvailable = (this.gadgetState.GadgetState == GadgetState.Ready);
 			}
 			this.points[0].position = base.transform.position;
-			Vector3 vector = this._combat.Transform.TransformDirection(this.planeNormal.normalized);
-			this.plane.SetNormalAndPosition(vector, this._combat.Transform.position + this.planeOffset);
-			float d = this.scarfWidth * 0.5f;
+			Vector3 vector = this._combatTransform.TransformDirection(this.planeNormal.normalized);
+			this.plane.SetNormalAndPosition(vector, this._combatTransform.position + this.planeOffset);
+			float num = this.scarfWidth * 0.5f;
 			for (int i = 0; i < this.numPoints; i++)
 			{
-				Vector3 vector2;
+				Vector3 vector3;
 				if (i > 0)
 				{
 					BlackLotusScarf.scarfPoint[] array = this.points;
-					int num = i;
-					array[num].velocity.y = array[num].velocity.y + this.gravity;
-					BlackLotusScarf.scarfPoint[] array2 = this.points;
 					int num2 = i;
-					array2[num2].position = array2[num2].position + this.points[i].velocity * Time.deltaTime;
-					float num3 = 3f;
+					array[num2].velocity.y = array[num2].velocity.y + this.gravity;
+					BlackLotusScarf.scarfPoint[] array2 = this.points;
+					int num3 = i;
+					array2[num3].position = array2[num3].position + this.points[i].velocity * Time.deltaTime;
+					float num4 = 3f;
 					if (!this.plane.GetSide(this.points[i].position))
 					{
-						float num4 = Mathf.Abs(Vector3.Project(this.points[i].position - this._combat.Transform.position, this._combat.Transform.forward).magnitude);
-						float num5 = Mathf.Abs(Vector3.Project(this.points[i].position - this._combat.Transform.position, this._combat.Transform.right).magnitude);
-						if (num4 < this.planeSize.y && num5 < this.planeSize.x && this.points[i].position.y > this._combat.Transform.position.y)
+						float num5 = Mathf.Abs(Vector3.Project(this.points[i].position - this._combatTransform.position, this._combatTransform.forward).magnitude);
+						float num6 = Mathf.Abs(Vector3.Project(this.points[i].position - this._combatTransform.position, this._combatTransform.right).magnitude);
+						if (num5 < this.planeSize.y && num6 < this.planeSize.x && this.points[i].position.y > this._combatTransform.position.y)
 						{
 							BlackLotusScarf.scarfPoint[] array3 = this.points;
-							int num6 = i;
-							array3[num6].position = array3[num6].position - this.plane.GetDistanceToPoint(this.points[i].position) * vector;
-							num3 = 3f;
+							int num7 = i;
+							array3[num7].position = array3[num7].position - this.plane.GetDistanceToPoint(this.points[i].position) * vector;
+							num4 = 3f;
 						}
 					}
 					BlackLotusScarf.scarfPoint[] array4 = this.points;
-					int num7 = i;
-					array4[num7].velocity = array4[num7].velocity * Mathf.Max(1f - Time.deltaTime * num3, 0f);
-					Vector3 a = this.points[i].position - this.points[i - 1].position;
-					float num8 = Mathf.Max(a.magnitude, 0.1f);
+					int num8 = i;
+					array4[num8].velocity = array4[num8].velocity * Mathf.Max(1f - Time.deltaTime * num4, 0f);
+					Vector3 vector2 = this.points[i].position - this.points[i - 1].position;
+					float num9 = Mathf.Max(vector2.magnitude, 0.1f);
 					Vector3 position = this.points[i].position;
-					vector2 = a / num8;
-					if (num8 > this.stepSize)
+					vector3 = vector2 / num9;
+					if (num9 > this.stepSize)
 					{
-						this.points[i].position = this.points[i - 1].position + vector2 * this.stepSize;
+						this.points[i].position = this.points[i - 1].position + vector3 * this.stepSize;
 					}
 					BlackLotusScarf.scarfPoint[] array5 = this.points;
-					int num9 = i;
-					array5[num9].velocity = array5[num9].velocity + (this.points[i].position - position) / Time.deltaTime * 0.1f;
-					float num10 = 1f - this.velocity;
-					float d2 = this.windForce * (1f + Mathf.PerlinNoise(Time.time * this.shakingSpeed + (float)i, 0f)) * num10;
+					int num10 = i;
+					array5[num10].velocity = array5[num10].velocity + (this.points[i].position - position) / Time.deltaTime * 0.1f;
+					float num11 = 1f - this.velocity;
+					float num12 = this.windForce * (1f + Mathf.PerlinNoise(Time.time * this.shakingSpeed + (float)i, 0f)) * num11;
 					BlackLotusScarf.scarfPoint[] array6 = this.points;
-					int num11 = i;
-					array6[num11].velocity = array6[num11].velocity + d2 * -this._combat.Transform.forward / Time.deltaTime * 0.1f;
-					float x = Time.time * this.ampTime + (float)i * this.amp;
+					int num13 = i;
+					array6[num13].velocity = array6[num13].velocity + num12 * -this._combatTransform.forward / Time.deltaTime * 0.1f;
+					float num14 = Time.time * this.ampTime + (float)i * this.amp;
 					BlackLotusScarf.scarfPoint[] array7 = this.points;
-					int num12 = i;
-					array7[num12].velocity = array7[num12].velocity + this._combat.Transform.right * (Mathf.PerlinNoise(x, 0f) - 0.5f) * this.shaking * ((float)i / (float)this.numPoints) * 2f * num10;
+					int num15 = i;
+					array7[num15].velocity = array7[num15].velocity + this._combatTransform.right * (Mathf.PerlinNoise(num14, 0f) - 0.5f) * this.shaking * ((float)i / (float)this.numPoints) * 2f * num11;
 				}
 				else
 				{
-					vector2 = (this.points[1].position - this.points[0].position).normalized;
+					vector3 = (this.points[1].position - this.points[0].position).normalized;
 				}
-				Vector3 a2 = Vector3.Normalize(Vector3.Cross(vector2, Vector3.up)) * d;
-				float d3 = 1f + (float)i / (float)this.numPoints;
-				this.vertices[i * 2] = this.points[i].position - a2 * 0.25f * d3;
-				this.vertices[i * 2 + 1] = this.points[i].position + a2 * 0.25f * d3;
+				Vector3 vector4 = Vector3.Normalize(Vector3.Cross(vector3, Vector3.up)) * num;
+				float num16 = 1f + (float)i / (float)this.numPoints;
+				this.vertices[i * 2] = this.points[i].position - vector4 * 0.25f * num16;
+				this.vertices[i * 2 + 1] = this.points[i].position + vector4 * 0.25f * num16;
 			}
 			this.mesh.vertices = this.vertices;
-			this.mesh.SetIndices(this.indices, MeshTopology.Triangles, 0);
+			this.mesh.SetIndices(this.indices, 0, 0);
 			this.mesh.RecalculateNormals();
 			this.mesh.RecalculateBounds();
 			this.mesh.tangents = this.tangents;
 			this.materialPropertyBlock.SetFloat(this._specialPropertyId, (float)((!this.specialAvailable) ? 0 : 1));
 			this.materialPropertyBlock.SetFloat(this._velocityPropertyId, (this.velocity + 1f) * 0.5f);
 			Graphics.DrawMesh(this.mesh, Matrix4x4.identity, this._material, base.gameObject.layer, null, 0, this.materialPropertyBlock);
-			this.lastPosition = this._combat.Transform.position;
+			this.lastPosition = this._combatTransform.position;
 		}
 
 		private void OnDrawGizmos()
@@ -166,7 +169,7 @@ namespace HeavyMetalMachines.Render
 				Gizmos.color = Color.white;
 				if (!this.plane.GetSide(this.points[i].position))
 				{
-					float num = Mathf.Abs(Vector3.Project(this.points[i].position - this._combat.Transform.position, -this._combat.Transform.right).magnitude);
+					float num = Mathf.Abs(Vector3.Project(this.points[i].position - this._combatTransform.position, -this._combatTransform.right).magnitude);
 					if (num > this.planeSize.x + 0.2f)
 					{
 						Gizmos.color = Color.blue;
@@ -183,7 +186,7 @@ namespace HeavyMetalMachines.Render
 					Gizmos.DrawLine(this.points[i].position, this.points[i - 1].position);
 				}
 			}
-			Matrix4x4 matrix = Matrix4x4.TRS(this._combat.Transform.position + this.planeOffset, this._combat.Transform.rotation * Quaternion.LookRotation(this.planeNormal), Vector3.one);
+			Matrix4x4 matrix = Matrix4x4.TRS(this._combatTransform.position + this.planeOffset, this._combatTransform.rotation * Quaternion.LookRotation(this.planeNormal), Vector3.one);
 			Gizmos.matrix = matrix;
 			Gizmos.DrawWireCube(Vector3.zero, new Vector3(this.planeSize.x * 2f, this.planeSize.y * 2f, 0.1f));
 		}
@@ -248,6 +251,8 @@ namespace HeavyMetalMachines.Render
 		public float textureSpacing;
 
 		private Vector2[] uvs;
+
+		private Transform _combatTransform;
 
 		private CombatObject _combat;
 

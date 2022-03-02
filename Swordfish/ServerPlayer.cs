@@ -2,8 +2,9 @@
 using ClientAPI;
 using ClientAPI.Objects;
 using ClientAPI.Utils;
+using HeavyMetalMachines.DataTransferObjects.Player;
+using HeavyMetalMachines.DataTransferObjects.Result;
 using HeavyMetalMachines.Match;
-using HeavyMetalMachines.Swordfish.Player;
 using HeavyMetalMachines.Utils;
 using Pocketverse;
 using Swordfish.Common.exceptions;
@@ -12,16 +13,16 @@ namespace HeavyMetalMachines.Swordfish
 {
 	public class ServerPlayer : GameHubObject
 	{
-		public static void GetServerPlayerDatas(string[] userIds, SwordfishClientApi.ParameterizedCallback<string> onSuccess, SwordfishClientApi.ErrorCallback onError)
+		public static void GetServerStartData(string[] userIds, SwordfishClientApi.ParameterizedCallback<string> onSuccess, SwordfishClientApi.ErrorCallback onError)
 		{
-			string args = Json.ToJSON(userIds);
-			GameHubObject.Hub.ClientApi.customws.ExecuteCustomWSWithReturn(null, "GetServerPlayerDatas", args, onSuccess, onError);
+			string text = Json.ToJSON(userIds);
+			GameHubObject.Hub.ClientApi.customws.ExecuteCustomWSWithReturn(null, "GetServerStartData", text, onSuccess, onError);
 		}
 
 		public static void GetServerPlayerItems(long playerId, SwordfishClientApi.ParameterizedCallback<string> onSuccess, SwordfishClientApi.ErrorCallback onError)
 		{
-			string args = Json.ToJSON(playerId);
-			GameHubObject.Hub.ClientApi.customws.ExecuteCustomWSWithReturn(null, "GetServerPlayerItems", args, onSuccess, onError);
+			string text = Json.ToJSON(playerId);
+			GameHubObject.Hub.ClientApi.customws.ExecuteCustomWSWithReturn(null, "GetServerPlayerItems", text, onSuccess, onError);
 		}
 
 		public static void GetPlayer(long playerId, SwordfishClientApi.ParameterizedCallback<Player> onPlayerTaken, SwordfishClientApi.ErrorCallback onPlayerError)
@@ -31,12 +32,23 @@ namespace HeavyMetalMachines.Swordfish
 
 		public static void SavePlayer(Player player, SwordfishClientApi.Callback onSave, SwordfishClientApi.ErrorCallback onError)
 		{
+			ServerPlayer.Log.DebugFormat("SavePlayer={0} playerBag={1}", new object[]
+			{
+				player.Id,
+				player.Bag
+			});
 			GameHubObject.Hub.ClientApi.player.UpdatePlayer(null, player, onSave, onError);
 		}
 
 		private static void SaveBag(long playerId, PlayerBag pbag, long bagversion, SwordfishClientApi.ParameterizedCallback<long> onSave, SwordfishClientApi.ErrorCallback onError)
 		{
 			string text = (string)pbag;
+			ServerPlayer.Log.DebugFormat("SaveBag PlayerId = {0} Bag = {1} BagVersion = {2}", new object[]
+			{
+				playerId,
+				pbag,
+				bagversion
+			});
 			BagWrapper bagWrapper = new BagWrapper(playerId, text, bagversion);
 			GameHubObject.Hub.ClientApi.player.UpdatePlayerBag(playerId, bagWrapper, onSave, onError);
 		}
@@ -61,6 +73,11 @@ namespace HeavyMetalMachines.Swordfish
 		{
 			public ServerClearBagAndRewardOperation(PlayerData playerData, Action<NetResult> callback) : base(callback)
 			{
+				AsyncOperation.Log.DebugFormat("[Progression] [PlayerId={0}] Clearing Match for player Data={1}", new object[]
+				{
+					playerData.PlayerId,
+					playerData
+				});
 				this.Result = new NetResult
 				{
 					Success = false
@@ -97,6 +114,10 @@ namespace HeavyMetalMachines.Swordfish
 			{
 				if (bag.CurrentPort != GameHubObject.Hub.Server.ServerPort || string.Compare(bag.CurrentServerIp, GameHubObject.Hub.Swordfish.Connection.GetIp()) != 0)
 				{
+					AsyncOperation.Log.DebugFormat("Player={0} no longer connected to this server, no changes needeed to player bag.", new object[]
+					{
+						this._playerData.PlayerId
+					});
 					return false;
 				}
 				bag.CurrentGroupId = null;
@@ -104,6 +125,10 @@ namespace HeavyMetalMachines.Swordfish
 				bag.CurrentServerIp = null;
 				bag.CurrentPort = 0;
 				bag.CurrentIsNarrator = false;
+				AsyncOperation.Log.DebugFormat("Player={0} bag match info cleared.", new object[]
+				{
+					this._playerData.PlayerId
+				});
 				return true;
 			}
 
@@ -115,6 +140,11 @@ namespace HeavyMetalMachines.Swordfish
 					return;
 				}
 				this._player = player;
+				AsyncOperation.Log.DebugFormat("[Progression] [PlayerId={0}] PlayerTaken bag={1}", new object[]
+				{
+					this._player.Id,
+					this._player.Bag
+				});
 				PlayerBag playerBag = (PlayerBag)this._player.Bag;
 				this.SendFinishedManyMatchesEvent(playerBag.EndMatchPresenceCounter, this._player.Id);
 				this.ClearServer(ref playerBag);
@@ -211,8 +241,12 @@ namespace HeavyMetalMachines.Swordfish
 					base.OnError(state, new NullReferenceException("Server returned null player."));
 					return;
 				}
-				if (GameHubObject.Hub.Match.LevelIsTutorial())
+				if (GameHubObject.Hub.Match.Kind == 2 || GameHubObject.Hub.Match.Kind == 6)
 				{
+					AsyncOperation.Log.DebugFormat("OnPlayerTaken from SetServerOperation: PlayerId: {0}, PlayerBag not changed since it is tutorial or training", new object[]
+					{
+						obj.Id
+					});
 					return;
 				}
 				PlayerBag playerBag = (PlayerBag)obj.Bag;
@@ -221,6 +255,11 @@ namespace HeavyMetalMachines.Swordfish
 				playerBag.CurrentMatchId = this.MatchId;
 				playerBag.CurrentGroupId = this.GroupId;
 				playerBag.CurrentIsNarrator = this.IsNarrator;
+				AsyncOperation.Log.DebugFormat("OnPlayerTaken from SetServerOperation: PlayerId: {0}, PlayerBag: {1}", new object[]
+				{
+					obj.Id,
+					playerBag
+				});
 				ServerPlayer.SaveBag(this.PlayerId, playerBag, obj.BagVersion, new SwordfishClientApi.ParameterizedCallback<long>(base.OnSuccess), new SwordfishClientApi.ErrorCallback(this.ConcurrentBagUpdateOnPlayerTaken));
 			}
 

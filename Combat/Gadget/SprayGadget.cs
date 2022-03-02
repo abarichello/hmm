@@ -31,6 +31,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 
 		private int FireSpray()
 		{
+			base.ServerInformListenToGadgetUse();
 			EffectEvent effectEvent = base.GetEffectEvent(this.MyInfo.Effect);
 			effectEvent.MoveSpeed = this._moveSpeed.Get();
 			effectEvent.Range = this.GetRange();

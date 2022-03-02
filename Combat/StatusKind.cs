@@ -33,6 +33,8 @@ namespace HeavyMetalMachines.Combat
 		DamageDisarmed = 16777216,
 		HealingDisarmed = 33554432,
 		SpeedBoostDisarmed = 67108864,
-		TeleportDisarmed = 134217728
+		TeleportDisarmed = 134217728,
+		NewStatusModifier = 268435456,
+		OnDropper = 536870912
 	}
 }

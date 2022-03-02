@@ -2,20 +2,33 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using HeavyMetalMachines.Arena;
 using HeavyMetalMachines.BI;
+using HeavyMetalMachines.BI.GameServer;
 using HeavyMetalMachines.Event;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.Match;
-using HeavyMetalMachines.Swordfish.Logs;
 using Pocketverse;
 using Pocketverse.MuralContext;
+using UniRx;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.SceneManagement;
+using Zenject;
 
 namespace HeavyMetalMachines.Combat
 {
 	[RemoteClass]
-	public class BombManager : GameHubBehaviour, ICleanupListener, IBitComponent
+	public class BombManager : GameHubBehaviour, ICleanupListener, IBombManager, IBitComponent
 	{
+		public BombRulesInfo BombRules
+		{
+			get
+			{
+				return this.Rules;
+			}
+		}
+
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<Identifiable> ServerOnBombCarrierIdentifiableChanged;
 
@@ -26,7 +39,7 @@ namespace HeavyMetalMachines.Combat
 				BombScoreController result;
 				if ((result = this._scoreController) == null)
 				{
-					result = (this._scoreController = new BombScoreController(this));
+					result = (this._scoreController = new BombScoreController(this, this._bombDispatcher, this._scoreboardDispatcher));
 				}
 				return result;
 			}
@@ -53,7 +66,7 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
-		public BombScoreBoard.State CurrentBombGameState
+		public BombScoreboardState CurrentBombGameState
 		{
 			get
 			{
@@ -93,7 +106,7 @@ namespace HeavyMetalMachines.Combat
 		public event Action<PickupRemoveEvent> ListenToBombUnspawn;
 
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		public event Action<BombScoreBoard.State> ListenToPhaseChange;
+		public event Action<BombScoreboardState> ListenToPhaseChange;
 
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action ListenToMatchUpdate;
@@ -134,20 +147,28 @@ namespace HeavyMetalMachines.Combat
 			this._timeScaleInitial = Time.timeScale;
 			GameHubBehaviour.Hub.Events.Players.ListenToAllPlayersSpawned += this.OnAllPlayersSpawned;
 			GameHubBehaviour.Hub.Events.Bots.ListenToAllPlayersSpawned += this.OnAllBotsSpawned;
-			SceneManager.sceneLoaded += this.OnSceneLoaded;
+			SceneManager.sceneLoaded += new UnityAction<Scene, LoadSceneMode>(this.OnSceneLoaded);
 			this.waitForBombExplodeInSeconds = new WaitForSeconds((float)this.ActiveBomb.GetBombInfo().ExplodeInSeconds);
+			this.carrierObservation = new Subject<Unit>();
 		}
 
 		private void OnSceneLoaded(Scene scene, LoadSceneMode sceneMode)
 		{
+			if (scene.name.Equals("UI_ADD_Inventory") || scene.name.Equals("UI_ADD_RadialMenu"))
+			{
+				return;
+			}
 			this.ScoreController.OnLevelLoaded();
 			if (GameHubBehaviour.Hub.Match.ArenaIndex > -1)
 			{
-				GameArenaInfo gameArenaInfo = GameHubBehaviour.Hub.ArenaConfig.Arenas[GameHubBehaviour.Hub.Match.ArenaIndex];
-				this.Rules.ShopPhaseSeconds = (float)gameArenaInfo.ShopPhaseSeconds;
-				this.Rules.ReplayDelaySeconds = (float)gameArenaInfo.ReplayDelaySeconds;
+				IGameArenaInfo arenaByIndex = GameHubBehaviour.Hub.ArenaConfig.GetArenaByIndex(GameHubBehaviour.Hub.Match.ArenaIndex);
+				this.Rules.ShopPhaseSeconds = (float)arenaByIndex.ShopPhaseSeconds;
+				this.Rules.ReplayDelaySeconds = (float)arenaByIndex.ReplayDelaySeconds;
 			}
-			this.ResetScoreBoard();
+			if (GameHubBehaviour.Hub.State.Current.StateKind != GameState.GameStateKind.Game)
+			{
+				this.ResetScoreBoard();
+			}
 		}
 
 		private void OnDestroy()
@@ -168,7 +189,7 @@ namespace HeavyMetalMachines.Combat
 			this.ListenToBombAlmostDeliveredTriggerExit = null;
 			GameHubBehaviour.Hub.Events.Players.ListenToAllPlayersSpawned -= this.OnAllPlayersSpawned;
 			GameHubBehaviour.Hub.Events.Bots.ListenToAllPlayersSpawned -= this.OnAllBotsSpawned;
-			SceneManager.sceneLoaded -= this.OnSceneLoaded;
+			SceneManager.sceneLoaded -= new UnityAction<Scene, LoadSceneMode>(this.OnSceneLoaded);
 		}
 
 		private void OnAllPlayersSpawned()
@@ -211,7 +232,7 @@ namespace HeavyMetalMachines.Combat
 		{
 			this.ScoreBoard.BombScoreRed = 0;
 			this.ScoreBoard.BombScoreBlue = 0;
-			this.ScoreBoard.CurrentState = BombScoreBoard.State.Warmup;
+			this.ScoreBoard.CurrentState = BombScoreboardState.Warmup;
 			this.ScoreBoard.Timeout = 0L;
 			this.ScoreBoard.ResetRounds();
 			GameHubBehaviour.Hub.Global.LockAllPlayers = true;
@@ -219,7 +240,7 @@ namespace HeavyMetalMachines.Combat
 
 		public void WarmupAlmostDone()
 		{
-			this.ScoreBoard.CurrentState = BombScoreBoard.State.PreBomb;
+			this.ScoreBoard.CurrentState = BombScoreboardState.PreBomb;
 			if (this.ListenToPhaseChange != null)
 			{
 				this.ListenToPhaseChange(this.ScoreBoard.CurrentState);
@@ -235,6 +256,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				this.ListenToBombCarrierChanged(combatObject);
 			}
+			this.carrierObservation.OnNext(Unit.Default);
 			if (this.ServerOnBombCarrierIdentifiableChanged != null)
 			{
 				this.ServerOnBombCarrierIdentifiableChanged(objectForId);
@@ -248,7 +270,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				return false;
 			}
-			BombVisualController instance = BombVisualController.GetInstance(false);
+			BombVisualController instance = BombVisualController.GetInstance();
 			bombPosition = instance.transform.position;
 			return true;
 		}
@@ -259,7 +281,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				return null;
 			}
-			BombVisualController instance = BombVisualController.GetInstance(false);
+			BombVisualController instance = BombVisualController.GetInstance();
 			return instance.transform;
 		}
 
@@ -331,6 +353,7 @@ namespace HeavyMetalMachines.Combat
 		{
 			this.IsDisputeStarted = true;
 			this._timeDisputeStarted = GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
+			BombManager.Log.Debug("Bomb dispute started.");
 			if (this.OnDisputeStarted != null)
 			{
 				this.OnDisputeStarted();
@@ -342,10 +365,14 @@ namespace HeavyMetalMachines.Combat
 		{
 			this.IsDisputeStarted = false;
 			this._timeDisputeStopped = GameHubBehaviour.Hub.GameTime.GetSynchTime();
-			TeamKind obj = (TeamKind)teamKind;
+			TeamKind teamKind2 = (TeamKind)teamKind;
+			BombManager.Log.DebugFormat("Bomb dispute finished. Winner: {0}.", new object[]
+			{
+				teamKind2
+			});
 			if (this.OnDisputeFinished != null)
 			{
-				this.OnDisputeFinished(obj);
+				this.OnDisputeFinished(teamKind2);
 			}
 		}
 
@@ -464,7 +491,7 @@ namespace HeavyMetalMachines.Combat
 			Identifiable @object = GameHubBehaviour.Hub.ObjectCollection.GetObject(data.Causer);
 			if (@object != null)
 			{
-				this.OnBombDropped(@object.ObjId, data.Reason);
+				this.DropBomb(@object.ObjId, data.Reason);
 			}
 			this.ActiveBomb.State = BombInstance.BombState.Idle;
 			if (this.ListenToBombDelivery != null)
@@ -488,7 +515,7 @@ namespace HeavyMetalMachines.Combat
 			this.ActiveBomb.DetonatorCauserId = bombDetonator.Id.ObjId;
 			TeamKind team = data.PickerTeam;
 			yield return this.waitForBombExplodeInSeconds;
-			PlaybackManager.BombDetonation.Send(team, bombDetonator.Id.ObjId);
+			this._detonationDispatcher.Send(team, bombDetonator.Id.ObjId, PlaybackManager.BombInstance.LastId);
 			this.ExplodeBomb(team, bombDetonator.transform.position);
 			this.TimeToAnnouncer = 0L;
 			yield return this.waitDotThreeSeconds;
@@ -511,14 +538,23 @@ namespace HeavyMetalMachines.Combat
 					float sqrMagnitude = (playerData.CharacterInstance.transform.position - detonatorPosition).sqrMagnitude;
 					if (sqrMagnitude <= num)
 					{
-						playerData.CharacterInstance.GetBitComponent<CombatController>().ForceDeath();
+						CombatController bitComponent = playerData.CharacterInstance.GetBitComponent<CombatController>();
+						if (bitComponent.Combat.IsAlive())
+						{
+							BombManager.Log.DebugFormat("Destroyed by real FakeDeath id={0}", new object[]
+							{
+								playerData.CharacterInstance.ObjId
+							});
+							bitComponent.ForceDeath();
+						}
 					}
 				}
 			}
 		}
 
-		public void DetonateBomb(TeamKind damagedTeam, int pickupInstanceId, int deliveryScore)
+		public void DetonateBomb(TeamKind damagedTeam, int pickupInstanceId)
 		{
+			int deliveryScore = (damagedTeam != TeamKind.Red) ? this.ScoreBoard.BombScoreRed : this.ScoreBoard.BombScoreBlue;
 			base.StartCoroutine(this.InnerDetonateClient(damagedTeam, pickupInstanceId, deliveryScore));
 		}
 
@@ -561,24 +597,37 @@ namespace HeavyMetalMachines.Combat
 
 		public void OnPickupCreated(PickupDropEvent data, BombPickup bombPickup, int eventId)
 		{
+			BombManager.Log.DebugFormat("OnPickupCreated Id={0}", new object[]
+			{
+				bombPickup.Id.ObjId
+			});
 			this._disabledTeams.Clear();
 			this._disabledObjects.Clear();
+			BombVisualController bombVisualController;
 			if (GameHubBehaviour.Hub.Net.IsServer())
 			{
 				this.CancelDispute();
 				this.ActiveBomb.eventId = eventId;
-				PlaybackManager.BombInstance.Update(bombPickup.Id.ObjId, SpawnReason.Pickup);
+				this._bombDispatcher.Update(bombPickup.Id.ObjId, this.ActiveBomb, SpawnReason.Pickup);
 				this.OnBombCarrierChanged(bombPickup.Id.ObjId);
+				bombVisualController = BombVisualController.GetInstance();
+				if (bombVisualController == null)
+				{
+					bombVisualController = BombVisualController.CreateInstance();
+				}
+			}
+			else
+			{
+				bombVisualController = BombVisualController.CreateInstance();
 			}
 			this.ActiveBomb.IsSpawned = true;
-			bombPickup.GetComponent<CombatObject>().CreepTeam = this.Rules.BombInfo.Team;
-			BombVisualController instance = BombVisualController.GetInstance(true);
-			instance.transform.parent = bombPickup.transform;
-			instance.transform.localPosition = Vector3.zero;
-			instance.SetCombatObject(bombPickup.transform);
+			bombPickup.GetComponent<CombatObject>().OwnerTeam = this.Rules.BombInfo.Team;
+			bombVisualController.transform.parent = bombPickup.transform;
+			bombVisualController.transform.localPosition = Vector3.zero;
+			bombVisualController.SetCombatObject(bombPickup.transform);
 			if (GameHubBehaviour.Hub.Net.IsServer() && !GameHubBehaviour.Hub.Net.IsTest())
 			{
-				instance.enabled = false;
+				bombVisualController.enabled = false;
 			}
 			if (this.ListenToClientBombCreation != null)
 			{
@@ -595,7 +644,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				return;
 			}
-			if (!this.SlowMotionEnabled && this.ScoreBoard.CurrentState != BombScoreBoard.State.BombDelivery)
+			if (!this.SlowMotionEnabled && this.ScoreBoard.CurrentState != BombScoreboardState.BombDelivery)
 			{
 				BombManager.Log.Warn("Trying to activate slow motion outside of BombDelivery");
 				return;
@@ -610,6 +659,10 @@ namespace HeavyMetalMachines.Combat
 		private void SlowMotionCallback(bool enable)
 		{
 			this.SlowMotionEnabled = enable;
+			BombManager.Log.DebugFormat("SlowMotion: {0}", new object[]
+			{
+				enable
+			});
 			if (this.OnSlowMotionToggled != null)
 			{
 				this.OnSlowMotionToggled(enable);
@@ -657,7 +710,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				return;
 			}
-			BombScoreBoard.State currentState = this.ScoreBoard.CurrentState;
+			BombScoreboardState currentState = this.ScoreBoard.CurrentState;
 			int playbackTime = GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
 			this.ScoreController.RunUpdate(playbackTime);
 			if (currentState != this.ScoreBoard.CurrentState && this.ListenToPhaseChange != null)
@@ -692,7 +745,7 @@ namespace HeavyMetalMachines.Combat
 				CombatObject combatObject = CombatObject.GetCombatObject(lastCarrier);
 				if (combatObject != null && combatObject.Stats != null)
 				{
-					combatObject.Stats.BombGadgetPowerShotScoreCount++;
+					combatObject.Stats.IncreaseBombGadgetPowerShotScoreCount(1);
 				}
 			}
 			Vector3 position = bombPickup.transform.position;
@@ -701,7 +754,7 @@ namespace HeavyMetalMachines.Combat
 			if (num == -1)
 			{
 				List<PlayerData> list = (teamKind != TeamKind.Blue) ? GameHubBehaviour.Hub.Players.RedTeamPlayersAndBots : GameHubBehaviour.Hub.Players.BlueTeamPlayersAndBots;
-				num = list[UnityEngine.Random.Range(0, list.Count)].CharacterInstance.ObjId;
+				num = list[Random.Range(0, list.Count)].CharacterInstance.ObjId;
 			}
 			activeBomb.DetonatorCauserId = num;
 			SpawnReason reason = SpawnReason.TriggerDrop;
@@ -745,7 +798,7 @@ namespace HeavyMetalMachines.Combat
 		{
 			CombatObject combatObjectForId = this.GetCombatObjectForId(bombInstance.DetonatorCauserId);
 			ModifierData[] datas = ModifierData.CreateData(bombInstance.GetBombInfo().Modifiers);
-			Collider[] array = Physics.OverlapSphere(this.BombMovement.transform.position, (float)bombInstance.GetBombInfo().ExplosionRadius, 1077058560);
+			Collider[] array = Physics.OverlapSphere(this.BombMovement.transform.position, (float)bombInstance.GetBombInfo().ExplosionRadius, 1077054464);
 			if (array == null || array.Length == 0)
 			{
 				return;
@@ -775,17 +828,25 @@ namespace HeavyMetalMachines.Combat
 			Identifiable @object = GameHubBehaviour.Hub.ObjectCollection.GetObject(id);
 			if (@object == null)
 			{
+				BombManager.Log.DebugFormat("Identifiable not found. Won't enable overtime effects. Id: {0}", new object[]
+				{
+					id
+				});
 				return;
 			}
 			BombTargetTrigger component = @object.GetComponent<BombTargetTrigger>();
 			if (component == null)
 			{
+				BombManager.Log.DebugFormat("BombTargetTrigger not found in Identifiable. Won't enable overtime effects. Id: {0}", new object[]
+				{
+					id
+				});
 				return;
 			}
 			component.EnableOvertimeEffects();
 		}
 
-		public void OnBombDropped(int causerId, SpawnReason reason)
+		public void DropBomb(int causerId, SpawnReason reason)
 		{
 			if (this.ListenToBombDrop != null)
 			{
@@ -797,9 +858,10 @@ namespace HeavyMetalMachines.Combat
 			}
 			this.ActiveBomb.BombCarriersIds.Remove(causerId);
 			this.ActiveBomb.TeamOwner = this.TeamCarryingBomb();
+			this.BombMovement.Combat.OwnerTeam = this.GetBombCombatTeamOwner();
 			if (GameHubBehaviour.Hub.Net.IsServer())
 			{
-				PlaybackManager.BombInstance.Update(causerId, reason);
+				this._bombDispatcher.Update(causerId, this.ActiveBomb, reason);
 				MatchLogWriter.BombDropped(causerId, reason, this.BombMovement.Combat.Transform.position);
 				float num = this.BombMovement.GetSpeedAngleToX();
 				if (this.LastDropData.Populated)
@@ -825,22 +887,32 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
+		private TeamKind GetBombCombatTeamOwner()
+		{
+			TeamKind teamOwner = this.ActiveBomb.TeamOwner;
+			if (teamOwner == TeamKind.Zero)
+			{
+				return TeamKind.Neutral;
+			}
+			return teamOwner;
+		}
+
 		private GameServerBombEvent.EventKind ConvertKind(SpawnReason reason)
 		{
 			switch (reason)
 			{
 			case SpawnReason.TriggerDrop:
-				return GameServerBombEvent.EventKind.TriggerDrop;
+				return 7;
 			case SpawnReason.InputDrop:
 				if (this.LastDropData.PowerShot)
 				{
-					return GameServerBombEvent.EventKind.PowerShot;
+					return 4;
 				}
-				return GameServerBombEvent.EventKind.InputDrop;
+				return 3;
 			default:
 				if (reason == SpawnReason.Death)
 				{
-					return GameServerBombEvent.EventKind.Death;
+					return 5;
 				}
 				if (reason != SpawnReason.BrokenLink)
 				{
@@ -848,26 +920,26 @@ namespace HeavyMetalMachines.Combat
 					{
 						reason
 					});
-					return GameServerBombEvent.EventKind.None;
+					return 0;
 				}
-				return GameServerBombEvent.EventKind.BrokenLink;
+				return 6;
 			case SpawnReason.ScoreRed:
-				return GameServerBombEvent.EventKind.ScoreRed;
+				return 8;
 			case SpawnReason.ScoreBlu:
-				return GameServerBombEvent.EventKind.ScoreBlue;
+				return 9;
 			}
 		}
 
 		public void OnSpinningBegins(int causer)
 		{
 			this.ActiveBomb.State = BombInstance.BombState.Spinning;
-			PlaybackManager.BombInstance.Update(causer, SpawnReason.StateChange);
+			this._bombDispatcher.Update(causer, this.ActiveBomb, SpawnReason.StateChange);
 		}
 
 		public void OnSpinningEnd(int causer)
 		{
 			this.ActiveBomb.State = ((!this.IsSomeoneCarryingBomb()) ? BombInstance.BombState.Idle : BombInstance.BombState.Carried);
-			PlaybackManager.BombInstance.Update(causer, SpawnReason.StateChange);
+			this._bombDispatcher.Update(causer, this.ActiveBomb, SpawnReason.StateChange);
 		}
 
 		public void OnMeteorEnded(EffectRemoveEvent evt)
@@ -877,7 +949,7 @@ namespace HeavyMetalMachines.Combat
 				return;
 			}
 			this.ActiveBomb.State = BombInstance.BombState.Idle;
-			PlaybackManager.BombInstance.Update(evt.TargetEventId, SpawnReason.StateChange);
+			this._bombDispatcher.Update(evt.TargetEventId, this.ActiveBomb, SpawnReason.StateChange);
 		}
 
 		public void CallListenToBombAlmostDeliveredTriggerEnter(TeamKind trackTeamKind)
@@ -965,16 +1037,16 @@ namespace HeavyMetalMachines.Combat
 			this.ActiveBomb.LastCarriersByTeam[combat.Team] = (this.ActiveBomb.LastCarrier = combat.Id.ObjId);
 			this.ActiveBomb.TeamOwner = this.TeamCarryingBomb();
 			this.ActiveBomb.State = BombInstance.BombState.Carried;
-			PlaybackManager.BombInstance.Update(combat.Id.ObjId, SpawnReason.Grabbed);
+			this.BombMovement.Combat.OwnerTeam = this.GetBombCombatTeamOwner();
+			this._bombDispatcher.Update(combat.Id.ObjId, this.ActiveBomb, SpawnReason.Grabbed);
 			this.OnBombCarrierChanged(combat.Id.ObjId);
 			BombManager.Log.InfoFormat("BombPicked Player={0} MatchTime={1}", new object[]
 			{
 				combat.Id.ObjId,
 				(float)GameHubBehaviour.Hub.GameTime.GetPlaybackTime() / 1000f
 			});
-			BombMatchBI.BombTaken(combat.Id.ObjId);
 			MatchLogWriter.BombCollected(combat.Id.ObjId);
-			MatchLogWriter.BombEvent(combat.Id.ObjId, GameServerBombEvent.EventKind.Grabbed, 0f, combat.Transform.position, this.BombMovement.GetSpeedAngleToX(), meteor);
+			MatchLogWriter.BombEvent(combat.Id.ObjId, 2, 0f, combat.Transform.position, this.BombMovement.GetSpeedAngleToX(), meteor);
 		}
 
 		public void OnBombUnspawned(PickupRemoveEvent data, BombPickup bombPickup)
@@ -984,12 +1056,38 @@ namespace HeavyMetalMachines.Combat
 			{
 				this.ListenToBombUnspawn(data);
 			}
-			BombVisualController instance = BombVisualController.GetInstance(false);
+			BombVisualController instance = BombVisualController.GetInstance();
 			if (instance)
 			{
 				instance.transform.parent = null;
 				instance.SetCombatObject(null);
 			}
+		}
+
+		public void UpdateBombInstance(BitStream stream)
+		{
+			this.ActiveBomb.ReadFromBitStream(stream);
+			int num = stream.ReadCompressedInt();
+			SpawnReason spawnReason = (SpawnReason)stream.ReadCompressedInt();
+			this.MatchUpdated();
+			if (spawnReason != SpawnReason.TriggerDrop && spawnReason != SpawnReason.InputDrop)
+			{
+				switch (spawnReason)
+				{
+				case SpawnReason.Grabbed:
+					this.OnBombCarrierChanged(num);
+					return;
+				default:
+					if (spawnReason != SpawnReason.Death)
+					{
+						return;
+					}
+					break;
+				case SpawnReason.BrokenLink:
+					break;
+				}
+			}
+			this.DropBomb(num, spawnReason);
 		}
 
 		public void OvertimeStarted()
@@ -1000,9 +1098,31 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
+		public IObservable<Unit> OnBombCarrierChanged()
+		{
+			return this.carrierObservation;
+		}
+
+		public IObservable<BombScoreboardState> OnGamePhaseChanged()
+		{
+			return Observable.FromEvent<BombScoreboardState>(delegate(Action<BombScoreboardState> handler)
+			{
+				this.ListenToPhaseChange += handler;
+			}, delegate(Action<BombScoreboardState> handler)
+			{
+				this.ListenToPhaseChange -= handler;
+			});
+		}
+
+		public int GetLastCarrierObjId()
+		{
+			return (this.ActiveBomb.BombCarriersIds.Count <= 0) ? -1 : this.ActiveBomb.BombCarriersIds[0];
+		}
+
 		public void OnCleanup(CleanupMessage msg)
 		{
 			this.ActiveBomb.IsSpawned = false;
+			BombVisualController.DestroyInstance();
 		}
 
 		private int OID
@@ -1066,12 +1186,8 @@ namespace HeavyMetalMachines.Combat
 			this._delayed = future;
 		}
 
-		public object Invoke(int classId, short methodId, object[] args)
+		public object Invoke(int classId, short methodId, object[] args, BitStream bitstream = null)
 		{
-			if (classId != 1029)
-			{
-				throw new Exception("Hierarchy in RemoteClass is not allowed!!! " + classId);
-			}
 			this._delayed = null;
 			switch (methodId)
 			{
@@ -1129,9 +1245,24 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
+		private const string InventorySceneName = "UI_ADD_Inventory";
+
+		private const string RadialMenuSceneName = "UI_ADD_RadialMenu";
+
 		public static readonly BitLogger Log = new BitLogger(typeof(BombManager));
 
 		public BombRulesInfo Rules;
+
+		[Inject]
+		private IBombDetonationDispatcher _detonationDispatcher;
+
+		[Inject]
+		private IBombInstanceDispatcher _bombDispatcher;
+
+		[Inject]
+		private IScoreboardDispatcher _scoreboardDispatcher;
+
+		private Subject<Unit> carrierObservation;
 
 		private BombScoreController _scoreController;
 
@@ -1175,7 +1306,7 @@ namespace HeavyMetalMachines.Combat
 
 		public BombManager.DropData LastDropData;
 
-		public const int StaticClassId = 1029;
+		public const int StaticClassId = 1030;
 
 		private Identifiable _identifiable;
 

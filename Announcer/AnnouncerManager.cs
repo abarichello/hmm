@@ -8,14 +8,20 @@ using HeavyMetalMachines.Bank;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Event;
 using HeavyMetalMachines.Frontend;
+using HeavyMetalMachines.Infra.Context;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Localization;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Players.Presenting;
 using Pocketverse;
 using Pocketverse.MuralContext;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Announcer
 {
-	public class AnnouncerManager : GameHubBehaviour, ICleanupListener
+	public class AnnouncerManager : GameHubBehaviour, ICleanupListener, IAnnouncerService
 	{
 		private void OnDestroy()
 		{
@@ -35,12 +41,17 @@ namespace HeavyMetalMachines.Announcer
 
 		private void ListenToBombDelivery(int causerid, TeamKind scoredTeam, Vector3 deliveryPosition)
 		{
-			if (GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreBoard.State.BombDelivery)
+			if (GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreboardState.BombDelivery)
 			{
 				return;
 			}
 			CombatObject combat = CombatRef.GetCombat(causerid);
 			ScrapInfo[] scrapPerBombDelivery = GameHubBehaviour.Hub.ScrapLevel.ScrapPerBombDelivery;
+			AnnouncerManager.Log.DebugFormat("BombDelivery event received - ScrapPerBombDelivery.Length[{0}], Round[{1}]", new object[]
+			{
+				scrapPerBombDelivery.Length,
+				GameHubBehaviour.Hub.BombManager.ScoreBoard.Round
+			});
 			int mainReward = 0;
 			if (scrapPerBombDelivery.Length > 0)
 			{
@@ -53,7 +64,7 @@ namespace HeavyMetalMachines.Announcer
 				Killer = combat.Id.ObjId,
 				MainReward = mainReward
 			};
-			this.TriggerAnnounce(new AnnouncerManager.QueuedAnnouncerLog(announcerEvent, this.Announcerinfo.GetAnnouncerLog(announcerEvent.AnnouncerEventKind)));
+			this.TriggerAnnounce(new QueuedAnnouncerLog(announcerEvent, this.Announcerinfo.GetAnnouncerLog(announcerEvent.AnnouncerEventKind)));
 		}
 
 		public bool IsHudBusy
@@ -78,15 +89,26 @@ namespace HeavyMetalMachines.Announcer
 			{
 				return;
 			}
-			string arg = string.Empty;
+			string text = string.Empty;
 			if (announce.AssistPlayers != null)
 			{
 				for (int i = 0; i < announce.AssistPlayers.Count; i++)
 				{
 					int num = announce.AssistPlayers[i];
-					arg = arg + num + ",";
+					text = text + num + ",";
 				}
 			}
+			AnnouncerManager.Log.DebugFormat("AnnouncerManager.Trigger - AnnouncerEventKind[{0}], Killer:[{1}], Victim[{2}], MainReward[{3}], AssistReward[{4}], AssistPlayers[{5}], LastKillStreak[{6}] Spree [{7}]", new object[]
+			{
+				announce.AnnouncerEventKind,
+				announce.Killer,
+				announce.Victim,
+				announce.MainReward,
+				announce.AssistReward,
+				text,
+				announce.LastKillStreak,
+				announce.CurrentKillingSpree
+			});
 			if (this.CheckAnnounceIgnore(announce))
 			{
 				return;
@@ -145,17 +167,17 @@ namespace HeavyMetalMachines.Announcer
 				}
 				break;
 			}
-			this.TriggerAnnounce(new AnnouncerManager.QueuedAnnouncerLog(announceevent, this.Announcerinfo.GetAnnouncerLog(announceevent.AnnouncerEventKind)));
+			this.TriggerAnnounce(new QueuedAnnouncerLog(announceevent, this.Announcerinfo.GetAnnouncerLog(announceevent.AnnouncerEventKind)));
 		}
 
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		public event Action<AnnouncerManager.QueuedAnnouncerLog> ListenToEvent;
+		public event Action<QueuedAnnouncerLog> ListenToEvent;
 
-		private void TriggerAnnounce(AnnouncerManager.QueuedAnnouncerLog enqueuedAnnounce)
+		private void TriggerAnnounce(QueuedAnnouncerLog enqueuedAnnounce)
 		{
 			this._lastTopLogTime = (long)GameHubBehaviour.Hub.GameTime.GetSynchTime();
 			AnnouncerLog announcerLog = this.Announcerinfo.GetAnnouncerLog(enqueuedAnnounce.AnnouncerEvent.AnnouncerEventKind);
-			if (announcerLog.Audio != null && announcerLog.clientOnlyAudio && !SpectatorController.IsSpectating && GameHubBehaviour.Hub.Players.CurrentPlayerData.CharacterInstance.ObjId == enqueuedAnnounce.AnnouncerEvent.Killer)
+			if (announcerLog.Audio != null && !SpectatorController.IsSpectating && announcerLog.clientOnlyAudio && GameHubBehaviour.Hub.Players.CurrentPlayerData.CharacterInstance.ObjId == enqueuedAnnounce.AnnouncerEvent.Killer)
 			{
 				FMODAudioManager.PlayOneShotAt(announcerLog.Audio, Vector3.zero, 0);
 			}
@@ -167,33 +189,33 @@ namespace HeavyMetalMachines.Announcer
 			case AnnouncerLog.AnnouncerEventKinds.LeaverModifierWarning:
 				break;
 			default:
-				if (logAnnouncerEventKind != AnnouncerLog.AnnouncerEventKinds.PlayerReconnected && logAnnouncerEventKind != AnnouncerLog.AnnouncerEventKinds.PlayerDisconnected && logAnnouncerEventKind != AnnouncerLog.AnnouncerEventKinds.AFKGeneric)
+				if (logAnnouncerEventKind != AnnouncerLog.AnnouncerEventKinds.PlayerReconnected && logAnnouncerEventKind != AnnouncerLog.AnnouncerEventKinds.PlayerDisconnected && logAnnouncerEventKind != AnnouncerLog.AnnouncerEventKinds.AFKGeneric && logAnnouncerEventKind != AnnouncerLog.AnnouncerEventKinds.SpectatorConnected)
 				{
-					goto IL_DC;
+					goto IL_E4;
 				}
 				break;
 			}
 			this.TriggerLogText(enqueuedAnnounce);
-			IL_DC:
+			IL_E4:
 			if (this.ListenToEvent != null)
 			{
 				this.ListenToEvent(enqueuedAnnounce);
 			}
 		}
 
-		private void TriggerLogText(AnnouncerManager.QueuedAnnouncerLog enqueuedAnnounce)
+		private void TriggerLogText(QueuedAnnouncerLog enqueuedAnnounce)
 		{
 			AnnouncerEvent announcerEvent = enqueuedAnnounce.AnnouncerEvent;
 			AnnouncerLog announcerLog = enqueuedAnnounce.AnnouncerLog;
-			string text = announcerLog.LocalizedText;
+			string logText = announcerLog.LocalizedText;
 			AnnouncerLog.AnnouncerEventKinds announcerEventKind = announcerEvent.AnnouncerEventKind;
-			string text2 = string.Empty;
+			string text = string.Empty;
 			if (enqueuedAnnounce.AnnouncerEvent.AssistPlayers != null && enqueuedAnnounce.AnnouncerEvent.AssistPlayers.Count > 0)
 			{
-				text2 += this.GetColoredPlayerName(announcerEvent.AssistPlayers[0]);
+				text += this.GetColoredPlayerName(announcerEvent.AssistPlayers[0]);
 				for (int i = 1; i < announcerEvent.AssistPlayers.Count; i++)
 				{
-					text2 = text2 + ", " + this.GetColoredPlayerName(announcerEvent.AssistPlayers[i]);
+					text = text + ", " + this.GetColoredPlayerName(announcerEvent.AssistPlayers[i]);
 				}
 			}
 			switch (announcerEventKind)
@@ -201,49 +223,72 @@ namespace HeavyMetalMachines.Announcer
 			case AnnouncerLog.AnnouncerEventKinds.PlayerKilledByPlayer:
 			case AnnouncerLog.AnnouncerEventKinds.PlayerEndedAKillStreak:
 			case AnnouncerLog.AnnouncerEventKinds.PlayerEndedAKillStreakWithAssists:
-				text = string.Format(text, this.GetColoredPlayerName(announcerEvent.Killer), this.GetColoredPlayerName(announcerEvent.Victim), announcerEvent.MainReward);
-				goto IL_235;
+				logText = Language.Format(logText, new object[]
+				{
+					this.GetColoredPlayerName(announcerEvent.Killer),
+					this.GetColoredPlayerName(announcerEvent.Victim),
+					announcerEvent.MainReward
+				});
+				goto IL_328;
 			case AnnouncerLog.AnnouncerEventKinds.PlayerKilledByPlayerWithAssists:
-				text = string.Format(text, new object[]
+				logText = Language.Format(logText, new object[]
 				{
 					this.GetColoredPlayerName(announcerEvent.Killer),
 					this.GetColoredPlayerName(announcerEvent.Victim),
 					announcerEvent.MainReward,
-					text2
+					text
 				});
-				goto IL_235;
+				goto IL_328;
 			case AnnouncerLog.AnnouncerEventKinds.PlayerKilledByEnvironment:
-				text = string.Format(text, this.GetColoredPlayerName(announcerEvent.Victim), this.GetColoredTeamName(announcerEvent.KillerTeam), announcerEvent.MainReward);
-				goto IL_235;
+				logText = Language.Format(logText, new object[]
+				{
+					this.GetColoredPlayerName(announcerEvent.Victim),
+					this.GetColoredTeamName(announcerEvent.KillerTeam),
+					announcerEvent.MainReward
+				});
+				goto IL_328;
 			case AnnouncerLog.AnnouncerEventKinds.PlayerKilledByEnvironmentWithAssists:
-				text = string.Format(text, new object[]
+				logText = Language.Format(logText, new object[]
 				{
 					this.GetColoredPlayerName(announcerEvent.Victim),
 					this.GetColoredTeamName(announcerEvent.KillerTeam),
 					announcerEvent.MainReward,
-					text2
+					text
 				});
-				goto IL_235;
+				goto IL_328;
 			case AnnouncerLog.AnnouncerEventKinds.AFKGeneric:
 			case AnnouncerLog.AnnouncerEventKinds.AFKEnd:
-				text = string.Format(text, this.GetColoredPlayerName(announcerEvent.Killer));
-				goto IL_235;
+				logText = Language.Format(logText, new object[]
+				{
+					this.GetColoredPlayerName(announcerEvent.Killer)
+				});
+				goto IL_328;
 			default:
 				if (announcerEventKind != AnnouncerLog.AnnouncerEventKinds.PlayerReconnected && announcerEventKind != AnnouncerLog.AnnouncerEventKinds.PlayerDisconnected)
 				{
-					goto IL_235;
+					goto IL_328;
 				}
 				break;
 			case AnnouncerLog.AnnouncerEventKinds.BombDelivery:
 			case AnnouncerLog.AnnouncerEventKinds.LeaverModifierWarning:
 				break;
 			case AnnouncerLog.AnnouncerEventKinds.LeaverGeneric:
-				base.StartCoroutine(this.TriggerLogTextAsyncWaitCombatObject(text, announcerEvent.Killer));
+				base.StartCoroutine(this.TriggerLogTextAsyncWaitCombatObject((GameHubBehaviour.Hub.Match.Kind != 4) ? logText : Language.Get("LEAVER_GENERIC_ON_CUSTOM", TranslationContext.Announcer), announcerEvent.Killer));
+				return;
+			case AnnouncerLog.AnnouncerEventKinds.SpectatorConnected:
+				DisposableExtensions.AddTo<IDisposable>(ObservableExtensions.Subscribe<string>(Observable.Do<string>(Observable.Select<string, string>(this.GetSpectatorName(announcerEvent.Killer), (string playerName) => Language.Format(logText, new object[]
+				{
+					playerName
+				})), new Action<string>(this.TriggerLogTextSend))), this);
 				return;
 			}
-			text = string.Format(text, this.GetColoredPlayerName(announcerEvent.Killer), announcerEvent.MainReward);
-			IL_235:
-			this.TriggerLogTextSend(text);
+			logText = Language.Format(logText, new object[]
+			{
+				this.GetColoredPlayerName(announcerEvent.Killer),
+				announcerEvent.MainReward
+			});
+			IL_328:
+			this.TriggerLogTextSend(logText);
 		}
 
 		private void TriggerLogTextSend(string logText)
@@ -274,10 +319,14 @@ namespace HeavyMetalMachines.Announcer
 			string playerName = string.Empty;
 			if (combatObject != null)
 			{
-				playerChatColorHex = HudUtils.RGBToHex(GUIColorsInfo.GetChatColor((long)playerId, combatObject.Team));
-				playerName = combatObject.Player.Name;
+				playerChatColorHex = HudUtils.RGBToHex(GUIColorsInfo.GetChatColor((long)playerId, combatObject.Team, false));
+				playerName = this._diContainer.Resolve<IGetDisplayableNickName>().GetFormattedNickNameWithPlayerTag(combatObject.Player.PlayerId, combatObject.Player.Name, new long?(combatObject.Player.PlayerTag));
 			}
-			logText = string.Format(logText, playerChatColorHex, playerName);
+			logText = Language.Format(logText, new object[]
+			{
+				playerChatColorHex,
+				playerName
+			});
 			this.TriggerLogTextSend(logText);
 			yield break;
 		}
@@ -317,11 +366,23 @@ namespace HeavyMetalMachines.Announcer
 			CombatObject combatObject = CombatObject.GetCombatObject(playerID);
 			if (combatObject)
 			{
-				Color chatColor = GUIColorsInfo.GetChatColor((long)playerID, combatObject.Team);
+				Color chatColor = GUIColorsInfo.GetChatColor((long)playerID, combatObject.Team, false);
 				string arg = HudUtils.RGBToHex(chatColor);
-				return string.Format("[{0}]{1}[-]", arg, combatObject.Player.Name);
+				string formattedNickNameWithPlayerTag = this._diContainer.Resolve<IGetDisplayableNickName>().GetFormattedNickNameWithPlayerTag(combatObject.Player.PlayerId, combatObject.Player.Name, new long?(combatObject.Player.PlayerTag));
+				return string.Format("[{0}]{1}[-]", arg, formattedNickNameWithPlayerTag);
 			}
 			return " ";
+		}
+
+		public IObservable<string> GetSpectatorName(int spectatorAddress)
+		{
+			PlayerData anyByAddress = GameHubBehaviour.Hub.Players.GetAnyByAddress((byte)spectatorAddress);
+			return this._diContainer.Resolve<IGetDisplayableNickName>().GetLatestFormattedNickName(new DisplayableNicknameParameters
+			{
+				PlayerId = anyByAddress.PlayerId,
+				PlayerName = anyByAddress.Name,
+				UniversalId = anyByAddress.UserId
+			});
 		}
 
 		public Color GetColorByPlayerId(int playerID)
@@ -344,7 +405,7 @@ namespace HeavyMetalMachines.Announcer
 					"[",
 					text,
 					"]",
-					Language.Get("TEAM_NAME_RAIO", TranslationSheets.Announcer),
+					Language.Get("TEAM_NAME_RAIO", TranslationContext.Announcer),
 					"[-]"
 				});
 			}
@@ -359,7 +420,7 @@ namespace HeavyMetalMachines.Announcer
 				"[",
 				text2,
 				"]",
-				Language.Get("TEAM_NAME_FOGO", TranslationSheets.Announcer),
+				Language.Get("TEAM_NAME_FOGO", TranslationContext.Announcer),
 				"[-]"
 			});
 		}
@@ -376,7 +437,7 @@ namespace HeavyMetalMachines.Announcer
 					"[",
 					text,
 					"]",
-					Language.Get("TEAM_NAME_FOGO", TranslationSheets.Announcer),
+					Language.Get("TEAM_NAME_FOGO", TranslationContext.Announcer),
 					"[-]"
 				});
 			}
@@ -388,12 +449,12 @@ namespace HeavyMetalMachines.Announcer
 					"[",
 					text2,
 					"]",
-					Language.Get("TEAM_NAME_RAIO", TranslationSheets.Announcer),
+					Language.Get("TEAM_NAME_RAIO", TranslationContext.Announcer),
 					"[-]"
 				});
 			}
 			case TeamKind.Neutral:
-				return Language.Get("TEAM_NAME_NEUTRAL", TranslationSheets.Announcer);
+				return Language.Get("TEAM_NAME_NEUTRAL", TranslationContext.Announcer);
 			default:
 				AnnouncerManager.Log.Error("GRACHA - " + StackTraceUtility.ExtractStackTrace());
 				return "ERROR - " + team;
@@ -420,6 +481,9 @@ namespace HeavyMetalMachines.Announcer
 
 		private readonly List<string> _logList = new List<string>();
 
+		[InjectOnClient]
+		private DiContainer _diContainer;
+
 		private bool _hasNewLog;
 
 		private bool _audioPlaying;
@@ -427,19 +491,5 @@ namespace HeavyMetalMachines.Announcer
 		private long _lastTopLogTime;
 
 		private bool _isHudBusy;
-
-		[Serializable]
-		public class QueuedAnnouncerLog
-		{
-			public QueuedAnnouncerLog(AnnouncerEvent announcerEvent, AnnouncerLog announcerLog)
-			{
-				this.AnnouncerEvent = announcerEvent;
-				this.AnnouncerLog = announcerLog;
-			}
-
-			public readonly AnnouncerEvent AnnouncerEvent;
-
-			public readonly AnnouncerLog AnnouncerLog;
-		}
 	}
 }

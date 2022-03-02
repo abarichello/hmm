@@ -2,6 +2,7 @@
 using FMod;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Event;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.Match;
 using HeavyMetalMachines.Utils;
 using Pocketverse;
@@ -15,7 +16,7 @@ namespace HeavyMetalMachines.Frontend
 		{
 			if (GameHubBehaviour.Hub.Net.IsServer())
 			{
-				UnityEngine.Object.Destroy(this);
+				Object.Destroy(this);
 				return;
 			}
 			this.AnimationQueue = new AnimationQueue();
@@ -57,8 +58,12 @@ namespace HeavyMetalMachines.Frontend
 			this.StopPreRespawnCountdownAudio();
 		}
 
-		private void Update()
+		protected virtual void Update()
 		{
+			if (Time.frameCount % 2 == 0)
+			{
+				return;
+			}
 			if (!this.Configured || this.BombAlreadyDelivered || this.GameOver)
 			{
 				return;
@@ -73,12 +78,14 @@ namespace HeavyMetalMachines.Frontend
 			}
 			this.UpdateTimers();
 			this.UpdateAudio();
-			this.DeathTimerNumberCountdown.text = this._remainingDeadTimeSeconds.ToString();
+			int num = Mathf.Clamp(this._remainingDeadTimeSeconds, 0, 59);
+			this.DeathTimerNumberCountdown.text = HudRespawnController.CachedCountDown[num];
 			if (this.ShouldSetRespawningTime && this.RespawningTime >= 0f && this.DeathTimeMillis <= 0f)
 			{
 				this._previousRespawningTimeSeconds = this._remainingRespawningTimeSeconds;
 				this._remainingRespawningTimeSeconds = (int)(this.RespawningTime * HudUtils.MillisToSeconds);
-				this.RespawningNumberCountdown.text = this._remainingRespawningTimeSeconds.ToString();
+				num = Mathf.Clamp(this._remainingRespawningTimeSeconds, 0, 59);
+				this.RespawningNumberCountdown.text = HudRespawnController.CachedCountDown[num];
 				if (this.RespawningTime > 0f && (int)this.RespawningTime - 200 != this.LastRespawningTime)
 				{
 					this.RespawningNumberAnimation.Play(this.RespawningNumberAnimationClipName);
@@ -136,7 +143,7 @@ namespace HeavyMetalMachines.Frontend
 				GameHubBehaviour.Hub.Events.Players.ListenToObjectRespawning += this.OnPlayerRespawning;
 				GameHubBehaviour.Hub.Events.Players.ListenToObjectSpawn += this.OnPlayerSpawn;
 			}
-			this.BombAlreadyDelivered = (GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreBoard.State.BombDelivery);
+			this.BombAlreadyDelivered = (GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreboardState.BombDelivery);
 		}
 
 		private void OnGameOver(MatchData.MatchState matchwinner)
@@ -162,11 +169,11 @@ namespace HeavyMetalMachines.Frontend
 		{
 			if (isVisible)
 			{
-				this.NguiWidgetAlpha.alpha = 1f;
+				this.NguiWidgetAlpha.Alpha = 1f;
 			}
 			else
 			{
-				this.NguiWidgetAlpha.alpha = 0f;
+				this.NguiWidgetAlpha.Alpha = 0f;
 			}
 		}
 
@@ -279,9 +286,9 @@ namespace HeavyMetalMachines.Frontend
 			this.StopPreRespawnCountdownAudio();
 		}
 
-		private void OnPhaseChanged(BombScoreBoard.State state)
+		private void OnPhaseChanged(BombScoreboardState state)
 		{
-			if (state == BombScoreBoard.State.BombDelivery)
+			if (state == BombScoreboardState.BombDelivery)
 			{
 				this.BombAlreadyDelivered = false;
 			}
@@ -291,6 +298,70 @@ namespace HeavyMetalMachines.Frontend
 		{
 			return false;
 		}
+
+		private static readonly string[] CachedCountDown = new string[]
+		{
+			"0",
+			"1",
+			"2",
+			"3",
+			"4",
+			"5",
+			"6",
+			"7",
+			"8",
+			"9",
+			"10",
+			"11",
+			"12",
+			"13",
+			"14",
+			"15",
+			"16",
+			"17",
+			"18",
+			"19",
+			"20",
+			"21",
+			"22",
+			"23",
+			"24",
+			"25",
+			"26",
+			"27",
+			"28",
+			"29",
+			"30",
+			"31",
+			"32",
+			"33",
+			"34",
+			"35",
+			"36",
+			"37",
+			"38",
+			"39",
+			"40",
+			"41",
+			"42",
+			"43",
+			"44",
+			"45",
+			"46",
+			"47",
+			"48",
+			"49",
+			"50",
+			"51",
+			"52",
+			"53",
+			"54",
+			"55",
+			"56",
+			"57",
+			"58",
+			"59"
+		};
 
 		public bool AutoConfigure;
 
@@ -308,10 +379,10 @@ namespace HeavyMetalMachines.Frontend
 
 		[Header("Audio")]
 		[SerializeField]
-		private FMODAsset _preRespawnCountdownAsset;
+		private AudioEventAsset _preRespawnCountdownAsset;
 
 		[SerializeField]
-		private FMODAsset _respawnCounterAsset;
+		private AudioEventAsset _respawnCounterAsset;
 
 		[SerializeField]
 		private int _preRespawnCountdownAudioTime = 3;

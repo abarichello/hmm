@@ -2,7 +2,8 @@
 using System.Collections.Generic;
 using Assets.ClientApiObjects.Components;
 using Assets.ClientApiObjects.Specializations;
-using Commons.Swordfish.Battlepass;
+using HeavyMetalMachines.DataTransferObjects.Battlepass;
+using HeavyMetalMachines.DataTransferObjects.Progression;
 
 namespace HeavyMetalMachines.Battlepass
 {
@@ -61,7 +62,7 @@ namespace HeavyMetalMachines.Battlepass
 		{
 			public bool UserHasPremium;
 
-			public int LevelPriceValue;
+			public Guid ItemTypeId;
 
 			public List<BattlepassViewData.BattlepassViewDataSlotItem> FreeSeasonItems;
 
@@ -97,7 +98,7 @@ namespace HeavyMetalMachines.Battlepass
 
 			public string ArtPreviewBackGroundAssetName;
 
-			public SkinPrefabItemTypeComponent.SkinCustomizations SkinCustomizations;
+			public SkinPrefabItemTypeComponent SkinPrefabComponent;
 		}
 	}
 }

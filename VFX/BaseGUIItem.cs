@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.VFX
 {
@@ -16,8 +18,8 @@ namespace HeavyMetalMachines.VFX
 
 		public T CreateNewGuiItem(U referenceObject, bool setActive = true, Transform overrideParent = null)
 		{
-			Transform parent = overrideParent ?? base.transform.parent;
-			T result = (T)((object)UnityEngine.Object.Instantiate<BaseGUIItem<T, U>>(this, parent, false));
+			Transform parentTransform = overrideParent ?? base.transform.parent;
+			T result = this._diContainer.InstantiatePrefabForComponent<T>(this, parentTransform);
 			result.gameObject.name = base.gameObject.name;
 			result.SetProperties(referenceObject);
 			if (setActive)
@@ -85,5 +87,8 @@ namespace HeavyMetalMachines.VFX
 
 		[Space(5f)]
 		private U _referenceObject;
+
+		[InjectOnClient]
+		private DiContainer _diContainer;
 	}
 }

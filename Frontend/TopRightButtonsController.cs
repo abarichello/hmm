@@ -1,26 +1,27 @@
 ﻿using System;
-using System.Diagnostics;
-using Assets.Standard_Assets.Scripts.HMM.PlotKids.CustomMatch;
-using Assets.Standard_Assets.Scripts.HMM.PlotKids.Infra;
 using Assets.Standard_Assets.Scripts.Infra.GUI.Hints;
-using HeavyMetalMachines.Utils;
+using HeavyMetalMachines.BI;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Input;
+using HeavyMetalMachines.MainMenuPresenting;
+using HeavyMetalMachines.Presenting;
+using HeavyMetalMachines.Presenting.Unity;
+using HeavyMetalMachines.Social.Friends.Presenting.FriendsList;
 using HeavyMetalMachines.VFX;
 using HeavyMetalMachines.VFX.PlotKids;
+using Hoplon.Input;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
 	public class TopRightButtonsController : GameHubBehaviour
 	{
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		public event TopRightButtonsController.TopRightOpenNewsDelegate TryOpenNewsCallback;
-
-		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		public event TopRightButtonsController.TopRightCloseNewsDelegate CloseNewsCallback;
-
 		protected void OnEnable()
 		{
+			this._disposables = new CompositeDisposable();
 			GameHubBehaviour.Hub.State.ListenToStateChanged += this.ListenToStateChanged;
 			ChatUiFeedbackDispatcher.EvtPendingMsgCountUpdated += this.onPendingMsgCountUpdated;
 			HudWindowManager.Instance.OnNewWindowAdded += this.HudWindowManagerOnNewWindowAdded;
@@ -45,15 +46,39 @@ namespace HeavyMetalMachines.Frontend
 				HudWindowManager.Instance.OnNewWindowAdded -= this.HudWindowManagerOnNewWindowAdded;
 				HudWindowManager.Instance.OnWindowRemoved -= this.HudWindowManagerOnWindowRemoved;
 			}
+			this._disposables.Dispose();
 		}
 
-		private void ListenToStateChanged(GameState pChangedstate)
+		private void ListenToStateChanged(GameState changedstate)
 		{
-			this._currentChangedstate = pChangedstate;
+			this._currentChangedstate = changedstate;
 			GameState.GameStateKind stateKind = this._currentChangedstate.StateKind;
 			if (stateKind == GameState.GameStateKind.Game || stateKind == GameState.GameStateKind.Pick)
 			{
 				this.TopPlayTween.gameObject.SetActive(false);
+			}
+			if (stateKind == GameState.GameStateKind.MainMenu)
+			{
+				this.ObserveInputChange();
+			}
+			else
+			{
+				this.DisposeInputChange();
+			}
+		}
+
+		private void ObserveInputChange()
+		{
+			this.DisposeInputChange();
+			this._inputChangeDisposable = ObservableExtensions.Subscribe<InputDevice>(Observable.Do<InputDevice>(this._activeDeviceChangeNotifier.GetAndObserveActiveDeviceChange(), new Action<InputDevice>(this.UpdateButtonsShortcut)));
+		}
+
+		private void DisposeInputChange()
+		{
+			if (this._inputChangeDisposable != null)
+			{
+				this._inputChangeDisposable.Dispose();
+				this._inputChangeDisposable = null;
 			}
 		}
 
@@ -61,23 +86,6 @@ namespace HeavyMetalMachines.Frontend
 		{
 			this.TopPlayTween.tweenGroup = 1;
 			this.TopPlayTween.Play();
-		}
-
-		public void QuitApplication()
-		{
-			GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.OpenCloseGameConfirmWindow(delegate
-			{
-				try
-				{
-					if (!GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish, false))
-					{
-						GameHubBehaviour.Hub.Swordfish.Msg.Cleanup();
-					}
-				}
-				catch (Exception ex)
-				{
-				}
-			});
 		}
 
 		public void ShowInviteToGroupPendingEffect()
@@ -100,7 +108,69 @@ namespace HeavyMetalMachines.Frontend
 
 		public void onButtonClick_OpenSocialPanel()
 		{
-			SingletonMonoBehaviour<PanelController>.Instance.ShowModalWindow<SocialModalGUI>();
+			this.OpenSocialPresenter();
+			this._buttonBILogger.LogButtonClick(ButtonName.SocialPanel);
+		}
+
+		private void OpenSocialPresenter()
+		{
+			if (this._friendsListPresenter == null)
+			{
+				this._friendsListPresenter = this._diContainer.Resolve<IFriendsListPresenter>();
+				IDisposable disposable = ObservableExtensions.Subscribe<Unit>(this.ShowSocialPresenter());
+				this._disposables.Add(disposable);
+			}
+			else
+			{
+				IDisposable disposable2 = ObservableExtensions.Subscribe<Unit>(this.ShowSocialPresenter());
+				this._disposables.Add(disposable2);
+			}
+		}
+
+		private IObservable<Unit> ShowSocialPresenter()
+		{
+			return Observable.Defer<Unit>(delegate()
+			{
+				if (this._friendsListPresenter.IsVisible)
+				{
+					return Observable.ReturnUnit();
+				}
+				this.ChatButtonGameObject.GetComponent<BoxCollider>().enabled = false;
+				ObservableExtensions.Subscribe<Unit>(this._friendsListPresenter.ObserveHide(), delegate(Unit _)
+				{
+					this.TryCloseSocialPanel();
+				});
+				return Observable.Do<Unit>(this._friendsListPresenter.Show(), delegate(Unit _)
+				{
+					SingletonMonoBehaviour<PanelController>.Instance.ShowModalWindow<SocialModalGUI>();
+				});
+			});
+		}
+
+		private void UpdateButtonsShortcut(InputDevice device)
+		{
+			if (device == 3)
+			{
+				this._socialShortcutImage.gameObject.SetActive(true);
+				this._optionsShortcutImage.gameObject.SetActive(true);
+				int inputAction = 50;
+				this.UpdateButtonShortcutImage(inputAction, this._optionsShortcutImage);
+				inputAction = 19;
+				this.UpdateButtonShortcutImage(inputAction, this._socialShortcutImage);
+				return;
+			}
+			this._socialShortcutImage.gameObject.SetActive(false);
+			this._optionsShortcutImage.gameObject.SetActive(false);
+		}
+
+		private void UpdateButtonShortcutImage(int inputAction, UI2DSprite sprite)
+		{
+			ISprite sprite2;
+			string text;
+			if (this._inputTranslation.TryToGetInputActionJoystickAssetOrFallbackToTranslation(inputAction, ref sprite2, ref text))
+			{
+				sprite.sprite2D = (sprite2 as UnitySprite).GetSprite();
+			}
 		}
 
 		public void onButtonClick_CloseSocialPanel()
@@ -108,14 +178,27 @@ namespace HeavyMetalMachines.Frontend
 			this.TryCloseSocialPanel();
 		}
 
+		private void CloseSocialPresenter()
+		{
+			if (this._friendsListPresenter == null)
+			{
+				return;
+			}
+			if (!this._friendsListPresenter.IsVisible)
+			{
+				return;
+			}
+			ObservableExtensions.Subscribe<Unit>(this._friendsListPresenter.Hide());
+		}
+
 		private void HudWindowManagerOnNewWindowAdded(IHudWindow hudWindow)
 		{
 			if (hudWindow is SocialModalGUI)
 			{
+				this.OpenSocialPresenter();
 				this.ChatToggleGameObject.SetActive(true);
 				this.SetButtonEnabled(false, this.ChatButtonGameObject);
 				this.SetButtonEnabled(true, this.ChatToggleGameObject);
-				this.TryCloseNews();
 			}
 		}
 
@@ -125,77 +208,15 @@ namespace HeavyMetalMachines.Frontend
 			{
 				this.TryCloseSocialPanel();
 			}
-			else if (hudWindow is MainMenuNewsModalWindow)
-			{
-				this.TryToSetNewsButtonEnabled(true);
-			}
 		}
 
 		private void TryCloseSocialPanel()
 		{
+			this.CloseSocialPresenter();
 			SingletonMonoBehaviour<PanelController>.Instance.TryCloseModalWindow<SocialModalGUI>();
 			this.ChatToggleGameObject.SetActive(false);
 			this.SetButtonEnabled(true, this.ChatButtonGameObject);
 			this.SetButtonEnabled(false, this.ChatToggleGameObject);
-		}
-
-		public void onButtonClick_OpenHelpWindow()
-		{
-			OpenUrlUtils.OpenSteamUrl(GameHubBehaviour.Hub, ConfigAccess.SFHelpUrl, string.Format("?lang={0}", Language.CurrentLanguage()), OpenUrlUtils.HardcodedWidth, (int)((float)Screen.height / 100f * 90f), "Heavy Metal Machines");
-			if (!GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish))
-			{
-				GameHubBehaviour.Hub.Swordfish.Log.BILogClient(ClientBITags.HelpSiteOpenFromTop, true);
-			}
-		}
-
-		public void onButtonClick_OpenNews()
-		{
-			this.TryOpenNews(false);
-		}
-
-		private void TryOpenNews(bool isAutoOpen)
-		{
-			if (this.TryOpenNewsCallback != null)
-			{
-				if (this.TryOpenNewsCallback(isAutoOpen))
-				{
-					this.NewsToggleGameObject.SetActive(true);
-					this.SetButtonEnabled(false, this.NewsButtonGameObject);
-					this.SetButtonEnabled(true, this.NewsToggleGameObject);
-					SingletonMonoBehaviour<PanelController>.Instance.TryCloseModalWindow<SocialModalGUI>();
-				}
-				else
-				{
-					this.NewsToggleGameObject.SetActive(false);
-					this.SetButtonEnabled(true, this.NewsButtonGameObject);
-					this.SetButtonEnabled(false, this.NewsToggleGameObject);
-				}
-			}
-		}
-
-		public void onButtonClick_CloseNews()
-		{
-			this.TryCloseNews();
-		}
-
-		public void TryCloseNews()
-		{
-			if (this.CloseNewsCallback != null)
-			{
-				this.CloseNewsCallback();
-			}
-		}
-
-		public void TryToSetNewsButtonEnabled(bool isEnabled)
-		{
-			bool isUserInLobby = ManagerController.Get<MatchManager>().IsUserInLobby;
-			if (isUserInLobby)
-			{
-				isEnabled = false;
-			}
-			this.NewsToggleGameObject.SetActive(false);
-			this.SetButtonEnabled(isEnabled, this.NewsButtonGameObject);
-			this.SetButtonEnabled(!isEnabled, this.NewsToggleGameObject);
 		}
 
 		private void SetButtonEnabled(bool isEnabled, GameObject buttonGameObject)
@@ -211,34 +232,21 @@ namespace HeavyMetalMachines.Frontend
 		public void onButtonClick_OpenEscMenu()
 		{
 			GameHubBehaviour.Hub.GuiScripts.Esc.ToggleVisibility();
+			this._buttonBILogger.LogButtonClick(ButtonName.EscMenu);
 		}
 
 		private void EscOnOnVisibilityChange(bool visible)
 		{
-			this.TryCloseNews();
 			this.TryCloseSocialPanel();
 		}
 
 		public void TryCloseAll()
 		{
-			this.TryCloseNews();
-			this.NewsToggleGameObject.SetActive(false);
-			this.SetButtonEnabled(true, this.NewsButtonGameObject);
-			this.SetButtonEnabled(false, this.NewsToggleGameObject);
 			this.TryCloseSocialPanel();
 		}
 
-		public void TryOpenNewsOnLobbyReturn()
-		{
-			if (this.ChatToggleGameObject.activeSelf)
-			{
-				return;
-			}
-			if (!this.NewsToggleGameObject.activeSelf)
-			{
-				this.TryOpenNews(true);
-			}
-		}
+		[InjectOnClient]
+		private IMainMenuGuiProvider _mainMenuGuiProvider;
 
 		protected static readonly BitLogger Log = new BitLogger(typeof(TopRightButtonsController));
 
@@ -261,13 +269,6 @@ namespace HeavyMetalMachines.Frontend
 
 		public GameObject unReadChatMessagesCountGroup;
 
-		[Header("[News]")]
-		[SerializeField]
-		protected GameObject NewsButtonGameObject;
-
-		[SerializeField]
-		protected GameObject NewsToggleGameObject;
-
 		[Header("[Chat]")]
 		[SerializeField]
 		protected GameObject ChatButtonGameObject;
@@ -275,12 +276,35 @@ namespace HeavyMetalMachines.Frontend
 		[SerializeField]
 		protected GameObject ChatToggleGameObject;
 
+		[SerializeField]
+		private UI2DSprite _socialShortcutImage;
+
+		[SerializeField]
+		private UI2DSprite _optionsShortcutImage;
+
+		[Inject]
+		private IClientButtonBILogger _buttonBILogger;
+
 		private MainMenu MainMenu;
 
 		private GameState _currentChangedstate;
 
-		public delegate bool TopRightOpenNewsDelegate(bool isAutoOpen);
+		[InjectOnClient]
+		private readonly DiContainer _diContainer;
 
-		public delegate void TopRightCloseNewsDelegate();
+		[InjectOnClient]
+		private readonly IConfigLoader _configLoader;
+
+		[InjectOnClient]
+		private readonly IInputActiveDeviceChangeNotifier _activeDeviceChangeNotifier;
+
+		[InjectOnClient]
+		private readonly IInputTranslation _inputTranslation;
+
+		private IFriendsListPresenter _friendsListPresenter;
+
+		private CompositeDisposable _disposables;
+
+		private IDisposable _inputChangeDisposable;
 	}
 }

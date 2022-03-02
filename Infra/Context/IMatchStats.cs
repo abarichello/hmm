@@ -1,5 +1,5 @@
 ﻿using System;
-using HeavyMetalMachines.Swordfish.Player;
+using HeavyMetalMachines.DataTransferObjects.Player;
 
 namespace HeavyMetalMachines.Infra.Context
 {

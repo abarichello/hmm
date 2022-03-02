@@ -1,34 +1,90 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using Assets.ClientApiObjects;
 using Assets.ClientApiObjects.Components;
+using Assets.ClientApiObjects.Components.API;
 using Assets.Standard_Assets.Scripts.HMM.Customization;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids;
 using ClientAPI.Objects;
 using FMod;
-using HeavyMetalMachines.Audio;
 using HeavyMetalMachines.Audio.Music;
-using HeavyMetalMachines.Character;
+using HeavyMetalMachines.Characters;
 using HeavyMetalMachines.Combat;
-using HeavyMetalMachines.Combat.Gadget;
+using HeavyMetalMachines.CompetitiveMode.Players;
+using HeavyMetalMachines.GameCamera;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Localization;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Options.Presenting;
+using HeavyMetalMachines.ParentalControl.Restrictions;
+using HeavyMetalMachines.Players.Presenting;
 using HeavyMetalMachines.Utils;
 using HeavyMetalMachines.VFX;
+using Hoplon.Input;
+using Hoplon.Input.UiNavigation;
+using Hoplon.Input.UiNavigation.AxisSelector;
 using ModelViewer;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
 	public class PickModeGUI : StateGuiController, ConfirmPickCallback.IConfirmPickCallbackListener
 	{
+		public List<int> LockedInCompetitiveCharacterIds { get; set; }
+
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
+		public event Action OnPickModeEnd;
+
+		private UiNavigationGroupHolder UiNavigationGroupHolder
+		{
+			get
+			{
+				return this._uiNavigationGroupHolder;
+			}
+		}
+
+		private IUiNavigationRebuilder UiNavigationAxisSelectorRebuilder
+		{
+			get
+			{
+				return this._uiNavigationAxisSelector;
+			}
+		}
+
+		private IUiNavigationAxisSelectorTransformHandler UiNavigationAxisSelectorTransformHandler
+		{
+			get
+			{
+				return this._uiNavigationAxisSelector;
+			}
+		}
+
+		public void InitializeModelViewer()
+		{
+			PickModeGUI.Log.Info("[TestModelViewer][InitializeModelViewer]");
+			if (this._carModelViewer.IsSceneLoaded())
+			{
+				string id = GameHubBehaviour.Hub.ClientApi.hubClient.Id;
+				string msg = string.Format("SteamId={0}", id);
+				GameHubBehaviour.Hub.Swordfish.Log.BILogClientMatchMsg(86, msg, true);
+			}
+			this._carModelViewer.Reset();
+		}
+
 		private void Awake()
 		{
+			PickModeGUI.Log.Info("[TestModelViewer][Awake]");
+			this.InitializeModelViewer();
 			if (GameHubBehaviour.Hub)
 			{
 				string arenaDraftName = GameHubBehaviour.Hub.ArenaConfig.GetArenaDraftName(GameHubBehaviour.Hub.Match.ArenaIndex);
-				this.ArenaTitleLabel.text = Language.Get(arenaDraftName, TranslationSheets.MainMenuGui);
+				this.ArenaTitleLabel.text = Language.Get(arenaDraftName, TranslationContext.MainMenuGui);
+				this.BackgroundSprite.SpriteName = GameHubBehaviour.Hub.ArenaConfig.GetPickImageName(GameHubBehaviour.Hub.Match.ArenaIndex);
 				this._pickMode = (GameHubBehaviour.Hub.State.Current as PickModeSetup);
 				for (int i = 0; i < GameHubBehaviour.Hub.Players.PlayersAndBots.Count; i++)
 				{
@@ -46,17 +102,25 @@ namespace HeavyMetalMachines.Frontend
 						this._enemyCount++;
 					}
 				}
+				if (GameHubBehaviour.Hub.Match.Kind == 6)
+				{
+					this.SetupTrainingHint();
+					this._timerLabelEnabled = false;
+				}
+				else
+				{
+					this._timerLabelEnabled = true;
+					this.DisableTrainingHint();
+				}
 			}
 			this.SkinMenuNavigator.Config(GameHubBehaviour.Hub);
 			this.SkinMenuNavigator.ListenToSkinSelectionChanged += this.SkinSelectionChanged;
 			this._charactersConfigDic = new Dictionary<int, CharacterConfig>();
 			this._playerSelection = new Dictionary<int, PlayerSelectionConfig>();
 			this.ConfigTopPanelPlayerSelection();
-			this.PopulateCharacterGrid();
 			this.PickStateFeedback.OnPickCharacterStateStarted();
 			this.PlayAnimations(this.OnPickCharacterStarted);
 			this.SetupTeamInfo();
-			this.PlayIntroPickScreenAudio();
 			if (GameHubBehaviour.Hub.GuiScripts)
 			{
 				GameHubBehaviour.Hub.GuiScripts.DriverHelper.SetWindowVisibility(false);
@@ -72,25 +136,87 @@ namespace HeavyMetalMachines.Frontend
 			this._screenAspectRatio = (float)Screen.width / (float)Screen.height;
 			this._halfTooltipWidth = this.PickdModeStatusInfo.GetTooltipWidth() * 0.5f * this._uiRootScale;
 			this.PickdModeStatusInfo.gameObject.SetActive(true);
-			this.PickdModeStatusInfo.SetVisibility(false);
+			this.PickdModeStatusInfo.Initialize();
 			BaseModelViewer carModelViewer = this._carModelViewer;
 			carModelViewer.OnModelLoadedCallback = (Action)Delegate.Combine(carModelViewer.OnModelLoadedCallback, new Action(this.ModelViewLoaded));
+			ObservableExtensions.Subscribe<Unit>(this._updateCurrentMatchPlayersCompetitiveState.Update());
+			this.UiNavigationGroupHolder.AddGroup();
+			ObservableExtensions.Subscribe<Unit>(this.UiNavigationGroupHolder.ObserveInputCancelDown(), delegate(Unit _)
+			{
+				this._optionsPresenter.Show();
+			});
+			this.PlayIntroPickScreenAudio();
+		}
+
+		private void TryEnableTimerLabel()
+		{
+			bool active = !SpectatorController.IsSpectating;
+			this.TimerLabel.gameObject.SetActive(active);
+		}
+
+		private void DisableTrainingHint()
+		{
+			this.TryEnableTimerLabel();
+			this.InfinityTimerSprite.gameObject.SetActive(false);
+			this._trainingTitle.gameObject.SetActive(false);
+			this._trainingDescription.gameObject.SetActive(false);
+			this._trainingIcon.gameObject.SetActive(false);
+		}
+
+		private void SetupTrainingHint()
+		{
+			this.TimerLabel.gameObject.SetActive(false);
+			this.InfinityTimerSprite.gameObject.SetActive(true);
+			this._trainingTitle.gameObject.SetActive(true);
+			this._trainingDescription.gameObject.SetActive(true);
+			this._trainingIcon.gameObject.SetActive(true);
+			IGameModeItemTypeComponent currentArenaMode = GameHubBehaviour.Hub.ArenaConfig.GetCurrentArenaMode();
+			this._trainingTitle.text = Language.Get(currentArenaMode.GameModeNameDraft, TranslationContext.TrainingMode);
+			this._trainingDescription.text = Language.Get(currentArenaMode.GameModeDescriptionDraft, TranslationContext.TrainingMode);
+			this._trainingIcon.SpriteName = currentArenaMode.IconName;
+		}
+
+		private void EnableTimerCounterAndDisableInfinityTimer()
+		{
+			this.TryEnableTimerLabel();
+			this.InfinityTimerSprite.gameObject.SetActive(false);
+		}
+
+		public bool IsPickConfirmedByServer()
+		{
+			return this._pickConfirmedByServer;
 		}
 
 		private void Update()
 		{
-			this.UpdateTimer();
+			if (this._timerLabelEnabled)
+			{
+				this.UpdateTimer();
+			}
+			else if (this._pickMode.CountdownStarted)
+			{
+				this.DisableSkinChange();
+				this.StartCountdownAnnouncerAudio();
+			}
+		}
+
+		private void StartCountdownAnnouncerAudio()
+		{
+			if (!this._countdownAudioPlayed)
+			{
+				this._countdownAudioPlayed = true;
+				GameHubBehaviour.Hub.AnnouncerAudio.Play(3);
+			}
 		}
 
 		private void OnDestroy()
 		{
 			GameHubBehaviour.Hub.GuiScripts.Loading.OnHidingAnimationCompleted -= this.Loading_OnHidingAnimationCompleted;
-			this.HideTooltip();
-			this.CharacterDescription.OnDisable();
 			this.BackgroundSprite.ClearSprite();
 			this.SkinMenuNavigator.ListenToSkinSelectionChanged -= this.SkinSelectionChanged;
 			BaseModelViewer carModelViewer = this._carModelViewer;
 			carModelViewer.OnModelLoadedCallback = (Action)Delegate.Remove(carModelViewer.OnModelLoadedCallback, new Action(this.ModelViewLoaded));
+			this.UiNavigationGroupHolder.RemoveGroup();
 		}
 
 		private void SetupRandomCharacterConfig()
@@ -101,26 +227,31 @@ namespace HeavyMetalMachines.Frontend
 			}
 			GameObject gameObject = this.InstantiateCharacterGridIcon(this.CarriersGridList, true);
 			CharacterConfig component = gameObject.GetComponent<CharacterConfig>();
-			component.CharInfo = null;
-			component.PickModeGUI = this;
+			component.CharItemType = null;
 			this.MapCharacterToDictionary(-1, component);
 		}
 
-		private void SetupCharacterConfig(UIGrid chosenGrid, HeavyMetalMachines.Character.CharacterInfo info)
+		private void SetupCharacterConfig(UIGrid chosenGrid, IItemType charItemType)
 		{
+			CharacterItemTypeComponent component = charItemType.GetComponent<CharacterItemTypeComponent>();
 			bool isRotationActive = true;
-			bool characterIsOwned = GameHubBehaviour.Hub.User.Inventory.HasItemOfType(info.CharacterItemTypeGuid) || SpectatorController.IsSpectating;
-			bool characterIsInRotation = GameHubBehaviour.Hub.Characters.IsCharacterUnderRotationForPlayer(info.CharacterId, GameHubBehaviour.Hub.User.Bag);
-			bool canBePicked = info.CanBePicked;
+			bool characterIsOwned = GameHubBehaviour.Hub.User.Inventory.HasItemOfType(charItemType.Id) || SpectatorController.IsSpectating;
 			GameObject gameObject = this.InstantiateCharacterGridIcon(chosenGrid, false);
-			CharacterConfig component = gameObject.GetComponent<CharacterConfig>();
-			component.name = string.Format("[{0}]{1}", info.Dificult, info.Asset);
-			component.CharInfo = info;
-			component.PickModeGUI = this;
-			component.IconRef.SpriteName = HudUtils.GetPlayerIconName(GameHubBehaviour.Hub, info.CharacterItemTypeGuid, HudUtils.PlayerIconSize.Size64);
-			component.UIeventTrigger.onClick[0].parameters[0].value = info.CharacterId;
-			this.SetInitialCharacterSelection(component, characterIsOwned, isRotationActive, characterIsInRotation, canBePicked);
-			this.MapCharacterToDictionary(info.CharacterId, component);
+			CharacterConfig component2 = gameObject.GetComponent<CharacterConfig>();
+			component2.name = string.Format("[{0}]{1}", component.Difficulty, component.AssetPrefix);
+			component2.CharItemType = charItemType;
+			int characterId = component.CharacterId;
+			component2.IconRef.SpriteName = HudUtils.GetPlayerIconName(GameHubBehaviour.Hub, charItemType.Id, HudUtils.PlayerIconSize.Size64);
+			component2.UIeventTrigger.onClick[0].parameters[0].value = characterId;
+			bool characterIsInRotation = GameHubBehaviour.Hub.Characters.IsCharacterUnderRotationForPlayer(characterId, GameHubBehaviour.Hub.User.Bag);
+			bool canBePicked = component.CanBePicked;
+			if (this.LockedInCompetitiveCharacterIds == null)
+			{
+				this.LockedInCompetitiveCharacterIds = new List<int>(0);
+			}
+			bool lockedInCompetitive = this.LockedInCompetitiveCharacterIds.Contains(component.CharacterId);
+			this.SetInitialCharacterSelection(component2, characterIsOwned, isRotationActive, characterIsInRotation, canBePicked, lockedInCompetitive);
+			this.MapCharacterToDictionary(characterId, component2);
 		}
 
 		private void MapCharacterToDictionary(int characterId, CharacterConfig characterConfig)
@@ -128,10 +259,9 @@ namespace HeavyMetalMachines.Frontend
 			this._charactersConfigDic.Add(characterId, characterConfig);
 		}
 
-		private void PopulateCharacterGrid()
+		public void PopulateCharacterGrid()
 		{
-			HeavyMetalMachines.Character.CharacterInfo[] allAvailableCharacterInfos = GameHubBehaviour.Hub.InventoryColletion.GetAllAvailableCharacterInfos();
-			this._keyNavigations = new List<UIKeyNavigation>();
+			IItemType[] allAvailableCharactersItemTypes = GameHubBehaviour.Hub.InventoryColletion.GetAllAvailableCharactersItemTypes();
 			this._closedCharacterIds = new List<int>();
 			if (!SpectatorController.IsSpectating)
 			{
@@ -140,20 +270,21 @@ namespace HeavyMetalMachines.Frontend
 			int num = 0;
 			int num2 = 0;
 			int num3 = 0;
-			foreach (HeavyMetalMachines.Character.CharacterInfo characterInfo in allAvailableCharacterInfos)
+			foreach (IItemType itemType in allAvailableCharactersItemTypes)
 			{
-				HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind role = characterInfo.Role;
+				CharacterItemTypeComponent component = itemType.GetComponent<CharacterItemTypeComponent>();
+				DriverRoleKind role = component.Role;
 				UIGrid chosenGrid;
-				if (role != HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Carrier)
+				if (role != 1)
 				{
-					if (role != HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Tackler)
+					if (role != 2)
 					{
-						if (characterInfo.Role != HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Support)
+						if (component.Role != null)
 						{
 							PickModeGUI.Log.WarnFormat("Role {0} was not found. Using support role as default for {1} character. You should fix it fool.", new object[]
 							{
-								characterInfo.Role,
-								characterInfo.LocalizedName
+								component.Role,
+								component.GetCharacterLocalizedName()
 							});
 						}
 						chosenGrid = this.SupportsGridList;
@@ -170,14 +301,15 @@ namespace HeavyMetalMachines.Frontend
 					chosenGrid = this.CarriersGridList;
 					num++;
 				}
-				this.SetupCharacterConfig(chosenGrid, characterInfo);
+				this.SetupCharacterConfig(chosenGrid, itemType);
 			}
-			this.AddIconsLeft(num, this.CarriersGridList);
-			this.AddIconsLeft(num2, this.TacklersGridList);
-			this.AddIconsLeft(num3, this.SupportsGridList);
 			this.CarriersGridList.Reposition();
 			this.TacklersGridList.Reposition();
 			this.SupportsGridList.Reposition();
+			ObservableExtensions.Subscribe<Unit>(Observable.Do<Unit>(Observable.NextFrame(0), delegate(Unit _)
+			{
+				this.UiNavigationAxisSelectorRebuilder.RebuildAndSelect();
+			}));
 			if (GameHubBehaviour.Hub.Players.CurrentPlayerData.Character == null)
 			{
 				this.TryToSelectCharacter(this.FirstCharacterSelectedCharacterId);
@@ -188,32 +320,9 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
-		private void AddIconsLeft(int iconCount, UIGrid chosenGrid)
-		{
-			int num = iconCount % chosenGrid.maxPerLine;
-			if (num == 0)
-			{
-				return;
-			}
-			int num2 = chosenGrid.maxPerLine - num;
-			for (int i = 0; i < num2; i++)
-			{
-				this.AddDisabledIcon(chosenGrid);
-			}
-		}
-
-		private void AddDisabledIcon(UIGrid chosenGrid)
-		{
-			GameObject gameObject = this.InstantiateCharacterGridIcon(chosenGrid, false);
-			CharacterConfig component = gameObject.GetComponent<CharacterConfig>();
-			component.EmptyBorder.gameObject.SetActive(true);
-			component.CharInfo = null;
-			component.GetComponent<Collider>().enabled = false;
-		}
-
 		private GameObject InstantiateCharacterGridIcon(UIGrid chosenGrid, bool isRandom = false)
 		{
-			GameObject gameObject = UnityEngine.Object.Instantiate<GameObject>(this.CharacterIconGridPrefab, Vector3.zero, Quaternion.identity);
+			GameObject gameObject = Object.Instantiate<GameObject>(this.CharacterIconGridPrefab, Vector3.zero, Quaternion.identity);
 			gameObject.SetActive(!isRandom);
 			gameObject.transform.parent = chosenGrid.transform;
 			gameObject.transform.localPosition = Vector3.zero;
@@ -223,26 +332,39 @@ namespace HeavyMetalMachines.Frontend
 
 		private void ConfigTopPanelPlayerSelection()
 		{
+			if (GameHubBehaviour.Hub == null)
+			{
+				UnityEngine.Debug.Log("hub is null");
+			}
+			else if (GameHubBehaviour.Hub.Players == null)
+			{
+				UnityEngine.Debug.Log("hub.players is null");
+			}
+			else if (GameHubBehaviour.Hub.Players.CurrentPlayerData == null)
+			{
+				UnityEngine.Debug.Log("hub.players.current is null");
+			}
 			TeamKind team = GameHubBehaviour.Hub.Players.CurrentPlayerData.Team;
 			for (int i = 0; i < GameHubBehaviour.Hub.Players.PlayersAndBots.Count; i++)
 			{
 				PlayerData playerData = GameHubBehaviour.Hub.Players.PlayersAndBots[i];
-				Color playerColor = new Color(0.1f, 0.54f, 0.98f, 1f);
+				Color playerColor;
+				playerColor..ctor(0.1f, 0.54f, 0.98f, 1f);
 				playerColor = GUIColorsInfo.GetPlayerColor(playerData.PlayerId, playerData.Team);
-				Transform parent = (playerData.Team != team) ? this.RedPlayerSelectionGrid.transform : this.BluePlayerSelectionGrid.transform;
-				GameObject gameObject = UnityEngine.Object.Instantiate<GameObject>(this.CharacterIconPrefab, Vector3.zero, Quaternion.identity);
+				Transform parentTransform = (playerData.Team != team) ? this.RedPlayerSelectionGrid.transform : this.BluePlayerSelectionGrid.transform;
+				GameObject gameObject = this._container.InstantiatePrefab(this.CharacterIconPrefab, Vector3.zero, Quaternion.identity, parentTransform);
 				gameObject.SetActive(true);
 				gameObject.gameObject.name = ((GameHubBehaviour.Hub.Players.CurrentPlayerData.PlayerId != playerData.PlayerId) ? (playerData.PlayerCarId + 20).ToString("0000") : "0000");
 				PlayerSelectionConfig component = gameObject.GetComponent<PlayerSelectionConfig>();
 				component.SetupVoiceChatStatusChangerGUIButton(playerData);
 				component.PlayerAddress = (int)playerData.PlayerAddress;
-				component.SetPlayerName(playerData, playerColor);
+				component.SetPlayerName(playerData, playerColor, this._teams);
+				component.UpdatePsnInfo(playerData);
+				component.RepositionTeamTagPlayerNameAndPsnInfo();
 				component.CharacterIcon.SpriteName = this.DefaultIconName;
 				component.CharacterIcon.color = new Color(1f, 1f, 1f, 0.5f);
 				PortraitDecoratorGui.UpdatePortraitSprite(playerData.Customizations, component.FounderBorderSprite, PortraitDecoratorGui.PortraitSpriteType.Circle);
-				component.CharInfo = null;
 				this._playerSelection[(int)playerData.PlayerAddress] = component;
-				component.transform.parent = parent;
 				component.gameObject.transform.localScale = Vector3.one;
 				component.gameObject.SetActive(true);
 			}
@@ -253,11 +375,11 @@ namespace HeavyMetalMachines.Frontend
 
 		private void SetTopPanelPlayerSelection(int playerAddress, CharacterConfig chosenCharacter)
 		{
-			if (chosenCharacter.CharInfo == null)
+			if (chosenCharacter.CharItemType == null)
 			{
 				this._playerSelection[playerAddress].CharacterIcon.transform.rotation = Quaternion.identity;
 				this._playerSelection[playerAddress].CharacterIcon.gameObject.SetActive(false);
-				this._playerSelection[playerAddress].CharInfo = null;
+				this._playerSelection[playerAddress].CharItemType = null;
 				return;
 			}
 			this._playerSelection[playerAddress].CharacterIcon.gameObject.SetActive(true);
@@ -266,8 +388,8 @@ namespace HeavyMetalMachines.Frontend
 			{
 				this._playerSelection[playerAddress].CharacterIcon.transform.rotation = this.TopMenuEnemyIconRotation;
 			}
-			this._playerSelection[playerAddress].CharacterIcon.SpriteName = HudUtils.GetPlayerIconName(GameHubBehaviour.Hub, chosenCharacter.CharInfo.CharacterItemTypeGuid, HudUtils.PlayerIconSize.Size64);
-			this._playerSelection[playerAddress].CharInfo = chosenCharacter.CharInfo;
+			this._playerSelection[playerAddress].CharacterIcon.SpriteName = HudUtils.GetPlayerIconName(GameHubBehaviour.Hub, chosenCharacter.CharItemType.Id, HudUtils.PlayerIconSize.Size64);
+			this._playerSelection[playerAddress].CharItemType = chosenCharacter.CharItemType;
 		}
 
 		private void ConfirmTopPanelPlayerPick(int playerAddress, CharacterConfig chosenCharacter)
@@ -278,7 +400,7 @@ namespace HeavyMetalMachines.Frontend
 
 		public void OnCharacterClick(int characterId)
 		{
-			bool flag = this._characterSelected != null && this._characterSelected.CharInfo.CharacterId == characterId;
+			bool flag = this._characterSelected != null && this.GetCharacterIdFromCharacterConfig(this._characterSelected) == characterId;
 			if (flag)
 			{
 				return;
@@ -293,19 +415,27 @@ namespace HeavyMetalMachines.Frontend
 
 		public void TryToSelectCharacter(int characterId)
 		{
+			PickModeGUI.Log.InfoFormatStackTrace("[TestModelViewer][TryToSelectCharacter] {0}", new object[]
+			{
+				characterId
+			});
 			if (SpectatorController.IsSpectating)
 			{
-				this.RefreshSelectedCharacterUI(characterId, null);
+				this.RefreshSelectedCharacterUI(characterId);
 				return;
 			}
 			this._pickMode.SelectCharacter(characterId);
-			this.RefreshSelectedCharacterUI(characterId, null);
+			this.RefreshSelectedCharacterUI(characterId);
 		}
 
 		public void OnServerConfirmCharacterSelection(int playerAdress, int characterId)
 		{
 			if (characterId == -1)
 			{
+				PickModeGUI.Log.DebugFormat("OnServerConfirmCharacterSelection received characterId = -1. Check CharacterService.SelectCharacter() and see if it was selected an unavailable char on server. Player Address {0}", new object[]
+				{
+					playerAdress
+				});
 				return;
 			}
 			CharacterConfig chosenCharacter;
@@ -321,35 +451,43 @@ namespace HeavyMetalMachines.Frontend
 			this.SetTopPanelPlayerSelection(playerAdress, chosenCharacter);
 		}
 
-		private void RefreshSelectedCharacterUI(int characterId, CharacterConfig characterConfig = null)
+		private void RefreshSelectedCharacterUI(int characterId)
 		{
-			if (characterConfig == null)
+			IItemType itemType = GameHubBehaviour.Hub.InventoryColletion.AllCharactersByCharacterId[characterId];
+			CharacterItemTypeComponent component = itemType.GetComponent<CharacterItemTypeComponent>();
+			PickModeGUI.Log.InfoFormat("[TestModelViewer][RefreshSelectedCharacterUI] Character={0}", new object[]
 			{
-				characterConfig = this._charactersConfigDic[characterId];
-			}
-			this._selectedCharNameLabel.text = characterConfig.CharInfo.LocalizedName;
-			this._selectedCharRoleLabel.text = characterConfig.CharInfo.GetRoleTranslation();
-			this._selectedCharSprite.SpriteName = HudUtils.GetPlayerIconName(GameHubBehaviour.Hub, characterConfig.CharInfo.CharacterItemTypeGuid, HudUtils.PlayerIconSize.Size64);
-			this._selectedCharRecomendationSprite.gameObject.SetActive(characterConfig.CharInfo.Dificult <= 2);
+				component.Character
+			});
+			CharacterConfig characterConfig = this._charactersConfigDic[characterId];
+			this._selectedCharNameLabel.text = component.GetCharacterLocalizedName();
+			this._selectedCharRoleLabel.text = component.GetRoleLocalized();
+			this._selectedCharSprite.SpriteName = HudUtils.GetPlayerIconName(GameHubBehaviour.Hub, itemType.Id, HudUtils.PlayerIconSize.Size64);
+			this._selectedCharRecomendationSprite.gameObject.SetActive(component.Difficulty <= CharacterDifficulty.DifficultyLevel2);
 			this.SetConfirmCharacterButtonState(characterConfig.IsEnabled);
 			this.SetCharacterSelectedState(this._characterSelected, false);
 			this.SetCharacterSelectedState(characterConfig, true);
 			this.PlayCharacterMusic(this._characterSelected);
-			this.LoadinModelViewer(characterConfig);
-			ItemTypeScriptableObject driver = GameHubBehaviour.Hub.InventoryColletion.AllItemTypes[this._characterSelected.CharInfo.CharacterItemTypeGuid];
-			GameHubBehaviour.Hub.GuiScripts.DriverHelper.Setup(driver, GameHubBehaviour.Hub.State.Current);
+			this.LoadinModelViewer(this._characterSelected.CharItemType);
+			GameHubBehaviour.Hub.GuiScripts.DriverHelper.Setup(this._characterSelected.CharItemType, GameHubBehaviour.Hub.State.Current);
 		}
 
-		private void LoadinModelViewer(CharacterConfig characterConfig)
+		private void LoadinModelViewer(IItemType characterHierarchy)
 		{
 			this._modelViewerTexture.enabled = false;
 			this._loadingFeedbackAnimation.Show();
-			this._carModelViewer.ModelName = string.Format("{0}_skin_00_shop", characterConfig.CharInfo.Asset);
+			ShopItemTypeComponent component = characterHierarchy.GetComponent<ShopItemTypeComponent>();
+			PickModeGUI.Log.InfoFormatStackTrace("[TestModelViewer][LoadinModelViewer] Character={0}", new object[]
+			{
+				component.ArtAssetName
+			});
+			this._carModelViewer.ModelName = component.ArtAssetName;
 			this._carModelViewer.gameObject.SetActive(true);
 		}
 
 		private void ModelViewLoaded()
 		{
+			PickModeGUI.Log.InfoStackTrace("[TestModelViewer][ModelViewLoaded]");
 			this._loadingFeedbackAnimation.Hide();
 			this._modelViewerTexture.enabled = true;
 		}
@@ -361,24 +499,33 @@ namespace HeavyMetalMachines.Frontend
 				return;
 			}
 			characterConfig.IsSelected = targetState;
-			characterConfig.Animation.gameObject.SetActive(targetState);
+			characterConfig.SelectionAnimationGameObject.SetActive(targetState);
 			if (!targetState)
 			{
 				return;
 			}
 			this._characterSelected = characterConfig;
-			this.CharacterDescription.SetNewDescription(characterConfig, this, GameHubBehaviour.Hub);
+			this.UiNavigationAxisSelectorTransformHandler.TryForceSelection(this._characterSelected.transform);
 		}
 
 		private void PlayCharacterMusic(CharacterConfig selectedCharacter)
 		{
-			MusicManager.PlayCharacterMusic(selectedCharacter.CharInfo);
+			int characterMusicId = 0;
+			if (selectedCharacter.CharItemType != null)
+			{
+				AudioItemTypeComponent component = selectedCharacter.CharItemType.GetComponent<AudioItemTypeComponent>();
+				if (component != null)
+				{
+					characterMusicId = component.CharacterMusicId;
+				}
+			}
+			MusicManager.PlayCharacterMusic(characterMusicId);
 		}
 
 		public void TryToConfirmPick()
 		{
-			int characterId = (!(this._characterSelected.CharInfo == null)) ? this._characterSelected.CharInfo.CharacterId : -1;
-			this._pickMode.ConfirmPick(characterId);
+			int characterIdFromCharacterConfig = this.GetCharacterIdFromCharacterConfig(this._characterSelected);
+			this._pickMode.ConfirmPick(characterIdFromCharacterConfig);
 		}
 
 		public void OnServerConfirmMyPick(int characterId, Guid lastSkin)
@@ -393,9 +540,15 @@ namespace HeavyMetalMachines.Frontend
 				return;
 			}
 			this._pickConfirmedByServer = true;
+			this.RefreshSelectedCharacterUI(characterId);
+			PickModeGUI.Log.DebugFormat("Server confirmed character pick. CharacterID={0}, LastSkin={1}", new object[]
+			{
+				characterId,
+				lastSkin
+			});
 			FMODAudioManager.PlayOneShotAt(this.ConfirmCharacterPickAudio, Vector3.zero, 0);
-			int num = (!(this._characterSelected.CharInfo == null)) ? this._characterSelected.CharInfo.CharacterId : -1;
-			if (num != characterId)
+			int characterIdFromCharacterConfig = this.GetCharacterIdFromCharacterConfig(this._characterSelected);
+			if (characterIdFromCharacterConfig != characterId)
 			{
 				CharacterConfig characterSelected;
 				if (this._charactersConfigDic.TryGetValue(characterId, out characterSelected))
@@ -422,59 +575,56 @@ namespace HeavyMetalMachines.Frontend
 				this.PickScreenHints.UpdateTips(this._closedCharacterIds);
 			}
 			this._announcerTextSelector.ChangeVisibility(true);
-			for (int i = 0; i < this._keyNavigations.Count; i++)
-			{
-				CharacterConfig component = this._keyNavigations[i].GetComponent<CharacterConfig>();
-				if (component)
-				{
-					this.DisableCharacterSelection(component);
-				}
-			}
 			this.SkinSelectionGameObject.SetActive(true);
-			this.SkinMenuNavigator.OpenSkinWindow(GameHubBehaviour.Hub.InventoryColletion, this._characterSelected.CharInfo.CharacterItemTypeGuid);
+			this.SkinMenuNavigator.OpenSkinWindow(GameHubBehaviour.Hub.InventoryColletion, this._characterSelected.CharItemType.Id);
 			this.SkinMenuNavigator.ShowSelectSkin(lastSkin.ToString());
 			this.SetConfirmSkinButtonState(false);
 			this.PickStateFeedback.OnPickSkinStateStarted();
 			this.PlayAnimations(this.OnPickSkinStarted);
-			if (GameHubBehaviour.Hub && GameHubBehaviour.Hub.GuiScripts)
-			{
-				GameHubBehaviour.Hub.GuiScripts.TooltipController.HideWindow();
-			}
-			ItemTypeScriptableObject driver = GameHubBehaviour.Hub.InventoryColletion.AllItemTypes[this._characterSelected.CharInfo.CharacterItemTypeGuid];
+			this.TryToHideTooltip();
+			ItemTypeScriptableObject driver = GameHubBehaviour.Hub.InventoryColletion.AllItemTypes[this._characterSelected.CharItemType.Id];
 			GameHubBehaviour.Hub.GuiScripts.DriverHelper.Setup(driver, GameHubBehaviour.Hub.State.Current);
 			this.OnCharacterIconHoverOut();
 			this.PlayCharacterMusic(this._characterSelected);
 		}
 
-		private void SetInitialCharacterSelection(CharacterConfig charConfig, bool characterIsOwned, bool isRotationActive, bool characterIsInRotation, bool characterCanBePicked)
+		private void SetInitialCharacterSelection(CharacterConfig charConfig, bool characterIsOwned, bool isRotationActive, bool characterIsInRotation, bool characterCanBePicked, bool lockedInCompetitive)
 		{
 			charConfig.IconRef.color = Color.white;
 			charConfig.Button.defaultColor = Color.white;
 			charConfig.Button.hover = Color.white;
-			bool flag = characterCanBePicked && (!isRotationActive || characterIsInRotation || characterIsOwned);
+			bool flag = characterCanBePicked && (!isRotationActive || characterIsInRotation || characterIsOwned) && !lockedInCompetitive;
 			charConfig.GetComponent<Collider>().enabled = characterCanBePicked;
 			charConfig.Button.SetState((!flag) ? UIButtonColor.State.Disabled : UIButtonColor.State.Normal, true);
 			charConfig.IsEnabled = flag;
 			charConfig.IconRef.alpha = ((!flag) ? 0.5f : 1f);
+			UIButton[] components = charConfig.GetComponents<UIButton>();
+			for (int i = 0; i < components.Length; i++)
+			{
+				components[i].hover.a = ((!flag) ? 0.5f : 1f);
+			}
 			charConfig.CharacterBorder.gameObject.SetActive(true);
-			charConfig.RecommendedIcon.gameObject.SetActive(charConfig.CharInfo.Dificult <= 2);
-			charConfig.CarrierRing.gameObject.SetActive(flag && charConfig.CharInfo.Role == HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Carrier);
-			charConfig.TacklerRing.gameObject.SetActive(flag && charConfig.CharInfo.Role == HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Tackler);
-			charConfig.SupportRing.gameObject.SetActive(flag && charConfig.CharInfo.Role == HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Support);
+			CharacterItemTypeComponent component = charConfig.CharItemType.GetComponent<CharacterItemTypeComponent>();
+			charConfig.RecommendedIcon.gameObject.SetActive(component.Difficulty <= CharacterDifficulty.DifficultyLevel2);
+			charConfig.CarrierRing.gameObject.SetActive(flag && component.Role == 1);
+			charConfig.TacklerRing.gameObject.SetActive(flag && component.Role == 2);
+			charConfig.SupportRing.gameObject.SetActive(flag && component.Role == 0);
 			charConfig.RotationGroupGameObject.SetActive(isRotationActive && characterIsInRotation);
+			charConfig.LockedInCompetitiveImage.IsActive = lockedInCompetitive;
 		}
 
 		private void DisableCharacterSelection(CharacterConfig characterConfig)
 		{
 			characterConfig.Button.SetState(UIButtonColor.State.Disabled, true);
 			characterConfig.IconRef.color = new Color(1f, 1f, 1f, 0.5f);
-			characterConfig.Button.defaultColor = new Color(1f, 1f, 1f, 0.5f);
-			characterConfig.Button.hover = new Color(1f, 1f, 1f, 0.5f);
-			characterConfig.IsEnabled = false;
-			if (characterConfig.CharInfo)
+			UIButton[] components = characterConfig.GetComponents<UIButton>();
+			for (int i = 0; i < components.Length; i++)
 			{
-				this._closedCharacterIds.Add(characterConfig.CharInfo.CharacterId);
+				components[i].defaultColor = new Color(1f, 1f, 1f, 0.5f);
+				components[i].hover = new Color(1f, 1f, 1f, 0.5f);
 			}
+			characterConfig.IsEnabled = false;
+			this._closedCharacterIds.Add(this.GetCharacterIdFromCharacterConfig(characterConfig));
 		}
 
 		private void EnableCharacterSelection(CharacterConfig characterConfig)
@@ -492,7 +642,8 @@ namespace HeavyMetalMachines.Frontend
 			{
 				this._alliedClosedPicksCount++;
 				this.DisableCharacterSelection(characterConfig);
-				if (this._characterSelected && this._characterSelected.CharInfo && this._characterSelected.CharInfo.CharacterId == characterId)
+				int characterIdFromCharacterConfig = this.GetCharacterIdFromCharacterConfig(this._characterSelected);
+				if (characterIdFromCharacterConfig == characterId)
 				{
 					this.SetConfirmCharacterButtonState(false);
 				}
@@ -503,7 +654,7 @@ namespace HeavyMetalMachines.Frontend
 			}
 			this.CheckSpotlightActivation();
 			this.ConfirmTopPanelPlayerPick(playerAddress, characterConfig);
-			FMODAudioManager.PlayOneShotAt(GameHubBehaviour.Hub.AudioSettings.PickScreenCharacterEnterSFX, CarCamera.Singleton.transform.position, 0);
+			FMODAudioManager.PlayOneShotAt(GameHubBehaviour.Hub.AudioSettings.PickScreenCharacterEnterSFX, this._gameCameraEngine.CameraTransform.position, 0);
 			if (this.PickScreenHints != null)
 			{
 				this.PickScreenHints.UpdateTips(this._closedCharacterIds);
@@ -518,9 +669,9 @@ namespace HeavyMetalMachines.Frontend
 
 		public void TryToConfirmSkin()
 		{
-			Guid characterItemTypeGuid = this._characterSelected.CharInfo.CharacterItemTypeGuid;
+			Guid id = this._characterSelected.CharItemType.Id;
 			Guid chosenSkinGuid = this.SkinMenuNavigator.GetChosenSkinGuid();
-			this._pickMode.ConfirmSkin(characterItemTypeGuid, chosenSkinGuid);
+			this._pickMode.ConfirmSkin(id, chosenSkinGuid);
 		}
 
 		public void MoveToGridSelection()
@@ -541,9 +692,19 @@ namespace HeavyMetalMachines.Frontend
 		private void DisableSkinChange()
 		{
 			this.SkinMenuNavigator.DisableSkinState();
+			this.TryToHideTooltip();
+			if (this.OnPickModeEnd != null)
+			{
+				this.OnPickModeEnd();
+			}
 		}
 
 		public void OnServerConfirmSkin(ConfirmSkinCallback evt)
+		{
+			this.TryToHideTooltip();
+		}
+
+		private void TryToHideTooltip()
 		{
 			if (GameHubBehaviour.Hub && GameHubBehaviour.Hub.GuiScripts)
 			{
@@ -601,7 +762,8 @@ namespace HeavyMetalMachines.Frontend
 				return;
 			}
 			HMMUI2DDynamicSprite hmmui2DDynamicSprite = this.PlayersIcons[anyByAddress.TeamSlot];
-			hmmui2DDynamicSprite.SpriteName = this._playerSelection[(int)playerAddress].CharInfo.Asset + "_icon_char_64";
+			string assetPrefix = this._playerSelection[(int)playerAddress].CharItemType.GetComponent<CharacterItemTypeComponent>().AssetPrefix;
+			hmmui2DDynamicSprite.SpriteName = assetPrefix + "_icon_char_64";
 			bool confirmGridButtonState = !this._closedGridIndex.Contains(gridIndex);
 			this.SetConfirmGridButtonState(confirmGridButtonState);
 			UIGrid uigrid = this.UIGridListForPlayerGridSelection[gridIndex];
@@ -633,8 +795,13 @@ namespace HeavyMetalMachines.Frontend
 			this._pickMode.PickGrid();
 		}
 
-		public void OnConfirmGridPick(byte playerAddress, int gridIndex, Guid skinSelected)
+		public void OnConfirmGridPick(byte playerAddress, int gridIndex)
 		{
+			PickModeGUI.Log.InfoFormat("OnConfirmGridPick. playerAddress={0} gridIndex={1}", new object[]
+			{
+				playerAddress,
+				gridIndex
+			});
 			PlayerData anyByAddress = GameHubBehaviour.Hub.Players.GetAnyByAddress(playerAddress);
 			if (SpectatorController.IsSpectating)
 			{
@@ -648,7 +815,7 @@ namespace HeavyMetalMachines.Frontend
 			this._closedGridIndex.Add(gridIndex);
 			if (GameHubBehaviour.Hub.Players.CurrentPlayerData.PlayerAddress == playerAddress)
 			{
-				this.HandleCurrentPlayerPickConfirmation(gridIndex, skinSelected);
+				this.HandleCurrentPlayerPickConfirmation(gridIndex);
 				return;
 			}
 			HMMUI2DDynamicSprite hmmui2DDynamicSprite = this.PlayersIcons[anyByAddress.TeamSlot];
@@ -659,17 +826,19 @@ namespace HeavyMetalMachines.Frontend
 			}
 			UIButton component = uigrid.transform.parent.GetComponent<UIButton>();
 			component.isEnabled = false;
-			ItemTypeScriptableObject itemTypeScriptableObject = GameHubBehaviour.Hub.InventoryColletion.AllItemTypes[skinSelected];
-			SkinPrefabItemTypeComponent component2 = itemTypeScriptableObject.GetComponent<SkinPrefabItemTypeComponent>();
 			this.OnConfirmGirdIcons[gridIndex].gameObject.SetActive(true);
-			this.OnConfirmGirdIcons[gridIndex].SpriteName = component2.SkinSpriteName;
-			this.OnConfirmGirdPlayerNames[gridIndex].text = NGUIText.EscapeSymbols(anyByAddress.Name);
+			string text = NGUIText.EscapeSymbols(anyByAddress.Name);
+			if (!anyByAddress.IsBot)
+			{
+				text = this._getDisplayableNickName.GetFormattedNickNameWithPlayerTag(anyByAddress.PlayerId, NGUIText.EscapeSymbols(anyByAddress.Name), new long?(anyByAddress.PlayerTag));
+			}
+			this.OnConfirmGirdPlayerNames[gridIndex].text = text;
 			this.PositionIndexIdentifier[gridIndex].SetActive(true);
 			hmmui2DDynamicSprite.transform.parent.parent.gameObject.SetActive(false);
 			uigrid.Reposition();
 		}
 
-		private void HandleCurrentPlayerPickConfirmation(int gridIndex, Guid skinSelected)
+		private void HandleCurrentPlayerPickConfirmation(int gridIndex)
 		{
 			this.SetConfirmGridButtonState(false);
 			PlayerData currentPlayerData = GameHubBehaviour.Hub.Players.CurrentPlayerData;
@@ -685,8 +854,12 @@ namespace HeavyMetalMachines.Frontend
 			this.PickStateFeedback.OnWaitOtherPlayersStateStarted();
 			this.PlayAnimations(this.OnWaitOtherPlayersStarted);
 			this.OnConfirmGirdIcons[gridIndex].gameObject.SetActive(true);
-			this.OnConfirmGirdIcons[gridIndex].SpriteName = this.SkinMenuNavigator.GetSkinConfig(skinSelected).name;
-			this.OnConfirmGirdPlayerNames[gridIndex].text = NGUIText.EscapeSymbols(currentPlayerData.Name);
+			string text = NGUIText.EscapeSymbols(currentPlayerData.Name);
+			if (!currentPlayerData.IsBot)
+			{
+				text = this._getDisplayableNickName.GetFormattedNickNameWithPlayerTag(currentPlayerData.PlayerId, NGUIText.EscapeSymbols(currentPlayerData.Name), new long?(currentPlayerData.PlayerTag));
+			}
+			this.OnConfirmGirdPlayerNames[gridIndex].text = text;
 			this.PositionIndexIdentifier[gridIndex].SetActive(true);
 			hmmui2DDynamicSprite.transform.parent.parent.gameObject.SetActive(false);
 			uigrid.Reposition();
@@ -706,38 +879,34 @@ namespace HeavyMetalMachines.Frontend
 
 		private void UpdateTimer()
 		{
-			float timer = this._pickMode.GetTimer();
-			this._lastTime = (float)((int)timer);
-			int num = Mathf.FloorToInt(this._lastTime / 60f);
-			int num2 = Mathf.FloorToInt(this._lastTime - (float)(num * 60));
-			if (this._lastTime >= 0f)
+			float num = Mathf.Max(this._pickMode.GetTimer(), 0f);
+			TimeSpan timeSpan = TimeSpan.FromSeconds((double)num);
+			string text = TimeUtils.FormatTime(timeSpan);
+			this.TimerLabel.text = text;
+			this.SpectatorTimerLabel.text = text;
+			if (timeSpan.Seconds > 5)
 			{
-				this.TimerLabel.text = string.Format("{0:#0}:{1:00}", num, num2);
+				return;
 			}
-			if (num2 <= 5)
+			if (this._pickMode.CountdownStarted)
 			{
-				if (this._pickMode.CountdownStarted)
-				{
-					this.DisableSkinChange();
-					if (!this._countdownAudioPlayed)
-					{
-						this._countdownAudioPlayed = true;
-						GameHubBehaviour.Hub.AnnouncerAudio.Play(AnnouncerVoiceOverType.PickCountdown);
-						return;
-					}
-				}
-				if (num != 0 || num2 + this._countdownToAutoPickAudioPlayed != 5)
-				{
-					return;
-				}
-				this._countdownToAutoPickAudioPlayed++;
-				FMODAudioManager.PlayOneShotAt(this.CountdownToAutoPickupAudio, Vector3.zero, 0);
+				this.DisableSkinChange();
+				this.StartCountdownAnnouncerAudio();
 			}
+			if (timeSpan.Minutes != 0 || timeSpan.Seconds + this._countdownToAutoPickAudioPlayed != 5)
+			{
+				return;
+			}
+			this._countdownToAutoPickAudioPlayed++;
+			FMODAudioManager.PlayOneShotAt(this.CountdownToAutoPickupAudio, Vector3.zero, 0);
 		}
 
 		public void OnCountdownStarted()
 		{
+			this._timerLabelEnabled = true;
+			this.EnableTimerCounterAndDisableInfinityTimer();
 			this.TimerLabel.color = this.CountdownTimerColor;
+			this.SpectatorTimerLabel.color = this.CountdownTimerColor;
 			this.PickStateFeedback.OnWaitOtherPlayersStateFinished();
 			this.WaitForOthersGameObject.SetActive(false);
 			this._announcerTextSelector.ChangeVisibility(false);
@@ -745,28 +914,34 @@ namespace HeavyMetalMachines.Frontend
 
 		private void PlayConfirmationPickAudio()
 		{
-			if (!SpectatorController.IsSpectating)
+			if (SpectatorController.IsSpectating)
 			{
-				if (GameHubBehaviour.Hub.Options.Game.CounselorActive && this._characterSelected.CharInfo.voiceOver.CounselorOnLoading.VoiceLine != null)
-				{
-					GameHubBehaviour.Hub.AnnouncerAudio.PlayAudio(this._characterSelected.CharInfo.voiceOver.CounselorOnLoading.VoiceLine, true);
-				}
-				else if (this._characterSelected.CharInfo.voiceOver.PickScreen_Confirmation.VoiceLine)
-				{
-					FMODAudioManager.PlayOneShotAt(this._characterSelected.CharInfo.voiceOver.PickScreen_Confirmation.VoiceLine, Vector3.zero, 0);
-				}
+				return;
+			}
+			AudioItemTypeComponent component = this._characterSelected.CharItemType.GetComponent<AudioItemTypeComponent>();
+			if (component == null)
+			{
+				return;
+			}
+			if (GameHubBehaviour.Hub.Options.Game.CounselorActive && component.VoiceOver.CounselorOnLoading.VoiceLine != null)
+			{
+				GameHubBehaviour.Hub.AnnouncerAudio.PlayAudio(component.VoiceOver.CounselorOnLoading.VoiceLine, true);
+			}
+			else if (component.VoiceOver.PickScreen_Confirmation.VoiceLine)
+			{
+				FMODAudioManager.PlayOneShotAt(component.VoiceOver.PickScreen_Confirmation.VoiceLine, Vector3.zero, 0);
 			}
 		}
 
 		public void PlayEndPickScreenAudio()
 		{
 			bool flag = false;
-			if (GameHubBehaviour.Hub.Options.Game.CounselorActive && !SpectatorController.IsSpectating)
+			if (GameHubBehaviour.Hub.Options.Game.CounselorActive && !SpectatorController.IsSpectating && GameHubBehaviour.Hub.Match.Kind != 6)
 			{
 				int[] allowedLoadingAdvicesCharactersId = GameHubBehaviour.Hub.CounselorConfig.AllowedLoadingAdvicesCharactersId;
 				for (int i = 0; i < allowedLoadingAdvicesCharactersId.Length; i++)
 				{
-					if (this._characterSelected.CharInfo.CharacterId == allowedLoadingAdvicesCharactersId[i])
+					if (this.GetCharacterIdFromCharacterConfig(this._characterSelected) == allowedLoadingAdvicesCharactersId[i])
 					{
 						flag = true;
 						break;
@@ -779,20 +954,24 @@ namespace HeavyMetalMachines.Frontend
 			}
 			else
 			{
-				GameHubBehaviour.Hub.AnnouncerAudio.Play(AnnouncerVoiceOverType.PickEnd);
+				GameHubBehaviour.Hub.AnnouncerAudio.Play(4);
 			}
 		}
 
 		public void PlayIntroPickScreenAudio()
 		{
-			bool flag = GameHubBehaviour.Hub.Options.Game.CounselorActive && !SpectatorController.IsSpectating && GameHubBehaviour.Hub.CounselorConfig.IntroCounselorAudioAsset != null;
-			if (flag)
+			AudioEventAsset audioEventAsset = null;
+			if (GameHubBehaviour.Hub.Options.Game.CounselorActive && !SpectatorController.IsSpectating && GameHubBehaviour.Hub.Match.Kind != 6)
 			{
-				GameHubBehaviour.Hub.AnnouncerAudio.PlayAudio(GameHubBehaviour.Hub.CounselorConfig.IntroCounselorAudioAsset, true);
+				audioEventAsset = ((this._inputGetActiveDevicePoller.GetActiveDevice() != 3) ? GameHubBehaviour.Hub.CounselorConfig.IntroCounselorAudioAsset : GameHubBehaviour.Hub.CounselorConfig.JoystickIntroCounselorAudioAsset);
+			}
+			if (audioEventAsset != null)
+			{
+				GameHubBehaviour.Hub.AnnouncerAudio.PlayAudio(audioEventAsset, true);
 			}
 			else
 			{
-				GameHubBehaviour.Hub.AnnouncerAudio.Play(AnnouncerVoiceOverType.PickStart);
+				GameHubBehaviour.Hub.AnnouncerAudio.Play(2);
 			}
 		}
 
@@ -807,8 +986,8 @@ namespace HeavyMetalMachines.Frontend
 			ConfirmWindowProperties properties = new ConfirmWindowProperties
 			{
 				Guid = confirmWindowGuid,
-				QuestionText = string.Format(Language.Get(draftFeedback, TranslationSheets.PickMode), args),
-				OkButtonText = Language.Get("Ok", "GUI"),
+				QuestionText = Language.GetFormatted(draftFeedback, TranslationContext.PickMode, args),
+				OkButtonText = Language.Get("Ok", TranslationContext.GUI),
 				OnOk = delegate()
 				{
 					GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.HideConfirmWindow(confirmWindowGuid);
@@ -864,54 +1043,13 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
-		public void OnButtonHover(GameObject button)
-		{
-			button.gameObject.SetActive(!button.activeInHierarchy);
-		}
-
-		public void ShowRoleTooltip(string translatedText)
-		{
-			this.CharacterDescription.ShowRoleTooltip(translatedText);
-		}
-
-		public void ShowSkillTooltip(GadgetInfo gadget)
-		{
-			this.CharacterDescription.ShowSkillTooltip(gadget);
-		}
-
-		public void HideTooltip()
-		{
-			if (this.CharacterDescription == null)
-			{
-				return;
-			}
-			this.CharacterDescription.HideTooltip();
-		}
-
-		public void QuitApplication()
-		{
-			GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.OpenCloseGameConfirmWindow(delegate
-			{
-				try
-				{
-					if (!GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish, false))
-					{
-						GameHubBehaviour.Hub.Swordfish.Msg.Cleanup();
-					}
-				}
-				catch (Exception ex)
-				{
-				}
-			});
-		}
-
 		private void Loading_OnHidingAnimationCompleted()
 		{
 			if (this.PickScreenHints != null)
 			{
 				if (SpectatorController.IsSpectating)
 				{
-					UnityEngine.Object.Destroy(this.PickScreenHints.gameObject);
+					Object.Destroy(this.PickScreenHints.gameObject);
 				}
 				else
 				{
@@ -929,45 +1067,35 @@ namespace HeavyMetalMachines.Frontend
 		{
 			this.AllyTeamGameObject.SetActive(false);
 			this.EnemyTeamGameObject.SetActive(false);
-			TeamUtils.GetGroupTeamAsync(GameHubBehaviour.Hub, TeamKind.Blue, delegate(Team team)
-			{
-				this.SetGroupTeamInfo(TeamKind.Blue, team);
-			}, delegate(Exception exception)
-			{
-				PickModeGUI.Log.Error(string.Format("Error on GetGroupTeamAsync [{0}]. Exception:{1}", TeamKind.Blue, exception));
-			});
-			TeamUtils.GetGroupTeamAsync(GameHubBehaviour.Hub, TeamKind.Red, delegate(Team team)
-			{
-				this.SetGroupTeamInfo(TeamKind.Red, team);
-			}, delegate(Exception exception)
-			{
-				PickModeGUI.Log.Error(string.Format("Error on GetGroupTeamAsync [{0}]. Exception:{1}", TeamKind.Red, exception));
-			});
+			this.SetGroupTeamInfo(TeamKind.Blue);
+			this.SetGroupTeamInfo(TeamKind.Red);
 		}
 
-		private void SetGroupTeamInfo(TeamKind teamKind, Team team)
+		private void SetGroupTeamInfo(TeamKind teamKind)
 		{
-			if (team == null)
+			Team groupTeam = this._teams.GetGroupTeam(teamKind);
+			if (groupTeam == null)
 			{
 				return;
 			}
+			string teamTagGlobalRestriction = this._teamNameRestriction.GetTeamTagGlobalRestriction(groupTeam.Tag);
 			if (GameHubBehaviour.Hub.Players.CurrentPlayerData.Team == teamKind)
 			{
-				this.AllyTeamIconSprite.SpriteName = team.ImageUrl;
-				this.AllyTeamNameLabel.text = NGUIText.EscapeSymbols(string.Format("[{0}]", team.Tag));
+				this.AllyTeamIconSprite.SpriteName = groupTeam.ImageUrl;
+				this.AllyTeamNameLabel.text = NGUIText.EscapeSymbols(string.Format("[{0}]", teamTagGlobalRestriction));
 				this.AllyTeamGameObject.SetActive(true);
 			}
 			else if (SpectatorController.IsSpectating)
 			{
-				this.EnemyTeamIconSprite.SpriteName = team.ImageUrl;
-				this.EnemyTeamNameLabel.text = NGUIText.EscapeSymbols(string.Format("[{0}]", team.Tag));
+				this.EnemyTeamIconSprite.SpriteName = groupTeam.ImageUrl;
+				this.EnemyTeamNameLabel.text = NGUIText.EscapeSymbols(string.Format("[{0}]", teamTagGlobalRestriction));
 				this.EnemyTeamGameObject.SetActive(true);
 			}
 		}
 
 		public void OnCharacterIconHoverOver(CharacterConfig characterConfig)
 		{
-			this.PickdModeStatusInfo.Setup(characterConfig.CharInfo);
+			this.PickdModeStatusInfo.Setup(characterConfig.CharItemType);
 			this.PickdModeStatusInfo.SetVisibility(true);
 		}
 
@@ -976,27 +1104,65 @@ namespace HeavyMetalMachines.Frontend
 			this.PickdModeStatusInfo.SetVisibility(false);
 		}
 
-		protected static readonly BitLogger Log = new BitLogger(typeof(PickModeGUI));
+		private int GetCharacterIdFromCharacterConfig(CharacterConfig charConfig)
+		{
+			if (charConfig.CharItemType == null)
+			{
+				return -1;
+			}
+			CharacterItemTypeComponent component = charConfig.CharItemType.GetComponent<CharacterItemTypeComponent>();
+			return (!(component == null)) ? component.CharacterId : -1;
+		}
+
+		private static readonly BitLogger Log = new BitLogger(typeof(PickModeGUI));
+
+		[Inject]
+		private DiContainer _container;
+
+		[Inject]
+		private IMatchTeams _teams;
+
+		[Inject]
+		private IUpdateCurrentMatchPlayersCompetitiveState _updateCurrentMatchPlayersCompetitiveState;
+
+		[Inject]
+		private IGameCameraEngine _gameCameraEngine;
+
+		[Inject]
+		private IOptionsPresenter _optionsPresenter;
+
+		[Inject]
+		private IGetDisplayableNickName _getDisplayableNickName;
+
+		[Inject]
+		private ITeamNameRestriction _teamNameRestriction;
+
+		[InjectOnClient]
+		private IInputGetActiveDevicePoller _inputGetActiveDevicePoller;
 
 		private PickModeSetup _pickMode;
+
+		private bool _timerLabelEnabled;
 
 		[Header("Timer")]
 		public UILabel TimerLabel;
 
-		public Color CountdownTimerColor;
+		public UI2DSprite InfinityTimerSprite;
 
-		private float _lastTime;
+		public UILabel SpectatorTimerLabel;
+
+		public Color CountdownTimerColor;
 
 		private bool _countdownAudioPlayed;
 
 		private int _countdownToAutoPickAudioPlayed;
 
 		[Header("Audio")]
-		public FMODAsset ConfirmCharacterPickAudio;
+		public AudioEventAsset ConfirmCharacterPickAudio;
 
-		public FMODAsset ConfirmSkinPickAudio;
+		public AudioEventAsset ConfirmSkinPickAudio;
 
-		public FMODAsset CountdownToAutoPickupAudio;
+		public AudioEventAsset CountdownToAutoPickupAudio;
 
 		[Header("Pick State Feedback")]
 		public PickStateFeedback PickStateFeedback;
@@ -1029,8 +1195,6 @@ namespace HeavyMetalMachines.Frontend
 		public UIGrid TacklersGridList;
 
 		public UIGrid SupportsGridList;
-
-		public PilotDescriptionConfig CharacterDescription;
 
 		[SerializeField]
 		private BaseModelViewer _carModelViewer;
@@ -1116,6 +1280,15 @@ namespace HeavyMetalMachines.Frontend
 		[SerializeField]
 		private AnnouncerTextSelector _announcerTextSelector;
 
+		[SerializeField]
+		private UILabel _trainingTitle;
+
+		[SerializeField]
+		private UILabel _trainingDescription;
+
+		[SerializeField]
+		private HMMUI2DDynamicSprite _trainingIcon;
+
 		private int _alliedClosedPicksCount;
 
 		private int _alliedCount;
@@ -1128,14 +1301,13 @@ namespace HeavyMetalMachines.Frontend
 
 		private bool _pickConfirmedByServer;
 
-		private List<UIKeyNavigation> _keyNavigations;
-
 		private float _uiRootScale;
 
 		private float _halfTooltipWidth;
 
 		private float _screenAspectRatio;
 
+		[Header("[Hints]")]
 		public UIGrid[] UIGridListForPlayerGridSelection;
 
 		public HMMUI2DDynamicSprite[] PlayersIcons;
@@ -1155,5 +1327,12 @@ namespace HeavyMetalMachines.Frontend
 		private List<int> _closedGridIndex = new List<int>(4);
 
 		private int _mySelectedGrid = -1;
+
+		[Header("[Ui Navigation]")]
+		[SerializeField]
+		private UiNavigationGroupHolder _uiNavigationGroupHolder;
+
+		[SerializeField]
+		private UiNavigationAxisSelector _uiNavigationAxisSelector;
 	}
 }

@@ -9,38 +9,68 @@ namespace HeavyMetalMachines.Render
 {
 	public class BaseGadgetFeedback : GameHubBehaviour
 	{
+		public bool SetPrevizIsAlly
+		{
+			set
+			{
+				this.previzIsAlly = value;
+			}
+		}
+
 		protected void Awake()
 		{
-			if (!GameHubBehaviour.Hub || (GameHubBehaviour.Hub.Net.IsServer() && !GameHubBehaviour.Hub.Net.IsTest()))
+			if (!GameHubBehaviour.Hub)
 			{
-				UnityEngine.Object.Destroy(this);
+				this.previzMode = true;
+				return;
+			}
+			if (GameHubBehaviour.Hub.Net.IsServer() && !GameHubBehaviour.Hub.Net.IsTest())
+			{
+				Object.Destroy(this);
 			}
 		}
 
 		protected virtual void Start()
 		{
-			this.combatObject = base.GetComponentInParent<CombatObject>();
-			if (this.combatObject == null || this.combatObject.Combat == null)
+			this.InitializeGadgetFeedback();
+			if (this.combatObject == null)
 			{
 				base.enabled = false;
-				return;
 			}
-			this.gadgetState = this.combatObject.Combat.GadgetStates.GetGadgetState(this.slot);
-			if (this.gadgetState == null)
+		}
+
+		protected virtual void InitializeGadgetFeedback()
+		{
+			if (this.combatObject == null)
 			{
-				base.enabled = false;
-				BaseGadgetFeedback.Log.ErrorFormat("Failed to get gadget state. Slot: {0} GameObject: {1}", new object[]
+				this.combatObject = base.GetComponentInParent<CombatObject>();
+				if (this.combatObject == null || this.combatObject.Combat == null)
 				{
-					this.slot,
-					base.gameObject.name
-				});
-				return;
-			}
-			this.InitializeValueCondition();
-			this.InitializeNewGadgetParameterCondition();
-			if (this.checkForMana && !this.HasEnoughMana())
-			{
-				this.OnDeactivate();
+					base.enabled = false;
+					return;
+				}
+				if (this.combatObject.Data == null || this.combatObject.Combat == null || this.combatObject.Combat.GadgetStates == null || this.combatObject.CustomGadget0 == null || this.combatObject.CustomGadget1 == null || this.combatObject.CustomGadget2 == null)
+				{
+					this.combatObject = null;
+					return;
+				}
+				this.gadgetState = this.combatObject.Combat.GadgetStates.GetGadgetState(this.slot);
+				if (this.gadgetState == null)
+				{
+					base.enabled = false;
+					BaseGadgetFeedback.Log.ErrorFormat("Failed to get gadget state. Slot: {0} GameObject: {1}", new object[]
+					{
+						this.slot,
+						base.gameObject.name
+					});
+					return;
+				}
+				this.InitializeValueCondition();
+				this.InitializeNewGadgetParameterCondition();
+				if (this.checkForMana && !this.HasEnoughMana())
+				{
+					this.OnDeactivate();
+				}
 			}
 		}
 
@@ -61,15 +91,15 @@ namespace HeavyMetalMachines.Render
 		{
 			if (this._gadgetParameters == null)
 			{
-				this._gadgetParameters = new PublicParameterComparisonInt[0];
+				this._gadgetParameters = new PublicParameterComparisonFloat[0];
 			}
 			for (int i = 0; i < this._gadgetParameters.Length; i++)
 			{
-				PublicParameterComparisonInt publicParameterComparisonInt = this._gadgetParameters[i];
-				CombatGadget context;
-				if (this.combatObject.CustomGadgets.TryGetValue(publicParameterComparisonInt.ParameterGadget, out context))
+				PublicParameterComparisonFloat publicParameterComparisonFloat = this._gadgetParameters[i];
+				CombatGadget combatGadget = (CombatGadget)this.combatObject.GetGadgetContext((int)publicParameterComparisonFloat.ParameterGadget);
+				if (null != combatGadget)
 				{
-					publicParameterComparisonInt.Initialize(context);
+					publicParameterComparisonFloat.Initialize(combatGadget);
 				}
 			}
 		}
@@ -161,6 +191,10 @@ namespace HeavyMetalMachines.Render
 
 		protected void LateUpdate()
 		{
+			if (this.combatObject == null)
+			{
+				return;
+			}
 			this.UpdateImpl();
 			if (this._gadgetParameters.Length > 0)
 			{
@@ -200,6 +234,14 @@ namespace HeavyMetalMachines.Render
 				if (!this._active)
 				{
 					this.OnActivate();
+				}
+				if (this.gadgetState.GadgetState == this.activateState)
+				{
+					this.previousState = this.gadgetState.GadgetState;
+				}
+				if (this.gadgetState.GadgetState == this.deactivateState)
+				{
+					this.previousState = this.deactivateState;
 				}
 			}
 			else if (this._active)
@@ -292,7 +334,7 @@ namespace HeavyMetalMachines.Render
 
 		[Header("[New Gadgets]")]
 		[SerializeField]
-		private PublicParameterComparisonInt[] _gadgetParameters;
+		private PublicParameterComparisonFloat[] _gadgetParameters;
 
 		private CombatGadget _combatGadget;
 
@@ -313,5 +355,9 @@ namespace HeavyMetalMachines.Render
 		private bool _valueConditionMet;
 
 		private bool _valueConditionChanged;
+
+		protected bool previzMode;
+
+		protected bool previzIsAlly;
 	}
 }

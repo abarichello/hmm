@@ -37,18 +37,18 @@ namespace HeavyMetalMachines.VFX
 		{
 			base.OnFill(verts, uvs, cols);
 			int i = 0;
-			Vector2 v = default(Vector2);
+			Vector2 vector = default(Vector2);
 			int num = this.Vertices.Length;
 			while (i < num)
 			{
-				Vector2 vector = this.Vertices[i];
+				Vector2 vector2 = this.Vertices[i];
 				if (this.Interpolate)
 				{
 					this._interpolatedVertices[i] = Vector3.Lerp(this._interpolatedVertices[i], this.Vertices[i], (!Application.isPlaying) ? 1f : Time.unscaledDeltaTime);
-					vector = this._interpolatedVertices[i];
+					vector2 = this._interpolatedVertices[i];
 				}
-				v = new Vector2(this._pivotPositionModifierX + this.localSize.x * vector.x, this._pivotPositionModifierY + this.localSize.y * vector.y);
-				verts.Add(v);
+				vector..ctor(this._pivotPositionModifierX + this.localSize.x * vector2.x, this._pivotPositionModifierY + this.localSize.y * vector2.y);
+				verts.Add(vector);
 				i++;
 			}
 			if (num % 4 != 0)
@@ -56,7 +56,7 @@ namespace HeavyMetalMachines.VFX
 				int num2 = num + (4 - num % 4);
 				while (i < num2)
 				{
-					verts.Add(v);
+					verts.Add(vector);
 					i++;
 				}
 			}
@@ -176,8 +176,8 @@ namespace HeavyMetalMachines.VFX
 		protected Texture mTexture;
 
 		[HideInInspector]
-		[Range(3f, 12f)]
 		[SerializeField]
+		[Range(3f, 12f)]
 		protected int mNumVertices = 3;
 
 		private Material mMaterial;

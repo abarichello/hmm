@@ -32,8 +32,6 @@ namespace HeavyMetalMachines.Frontend
 		public Color EnemyNameColor;
 
 		[Header("[Offset per Character]")]
-		public Vector2 CreepOffset;
-
 		public Vector2 DefaultCharacterOffset;
 
 		public HudLifebarSettings.HudLifebarCharacterOffset[] CharacterOffsets;
@@ -78,8 +76,6 @@ namespace HeavyMetalMachines.Frontend
 
 		[Header("[Client Object Pool]")]
 		public int PlayerMaxPool;
-
-		public int CreepMaxPool;
 
 		[Header("[BuffOnSpeed]")]
 		public Color BuffOnSpeedColor;

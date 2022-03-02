@@ -2,6 +2,7 @@
 using HeavyMetalMachines.Car;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Combat.Gadget;
+using HeavyMetalMachines.Infra.Context;
 using Pocketverse;
 using UnityEngine;
 
@@ -50,7 +51,8 @@ namespace HeavyMetalMachines.Render
 				this.backSensorGroundJump -= Time.deltaTime;
 				if (this.backSensorGroundJump < 0f)
 				{
-					Vector3 force = new Vector3(0f, 5f, 0f);
+					Vector3 force;
+					force..ctor(0f, 5f, 0f);
 					this.backRightWheel.AddWheelForce(force);
 					this.backLeftWheel.AddWheelForce(force);
 				}
@@ -60,7 +62,8 @@ namespace HeavyMetalMachines.Render
 				this.frontSensorGroundJump -= Time.deltaTime;
 				if (this.frontSensorGroundJump < 0f)
 				{
-					Vector3 force2 = new Vector3(0f, 5f, 0f);
+					Vector3 force2;
+					force2..ctor(0f, 5f, 0f);
 					this.frontRightWheel.AddWheelForce(force2);
 					this.frontLeftWheel.AddWheelForce(force2);
 				}
@@ -130,12 +133,15 @@ namespace HeavyMetalMachines.Render
 
 		private void Awake()
 		{
-			GameHubBehaviour.Hub.BombManager.ListenToPhaseChange += this.OnPhaseChanged;
+			if (GameHubBehaviour.Hub)
+			{
+				GameHubBehaviour.Hub.BombManager.ListenToPhaseChange += this.OnPhaseChanged;
+			}
 		}
 
-		private void OnPhaseChanged(BombScoreBoard.State obj)
+		private void OnPhaseChanged(BombScoreboardState obj)
 		{
-			if (obj == BombScoreBoard.State.Replay || obj == BombScoreBoard.State.Shop)
+			if (obj == BombScoreboardState.Replay || obj == BombScoreboardState.Shop)
 			{
 				this.freezePhysics = false;
 				this.freezeBodyPhysics = false;
@@ -222,11 +228,11 @@ namespace HeavyMetalMachines.Render
 			this.backRightWheel.AddForce(Vector3.up * (zero.x + zero.z));
 			this.frontLeftWheel.AddForce(Vector3.up * (-zero.x - zero.z));
 			this.frontRightWheel.AddForce(Vector3.up * (-zero.x + zero.z));
-			Vector3 a = this.frontLeftWheel.Target + this.frontRightWheel.Target + this.backLeftWheel.Target + this.backRightWheel.Target;
-			a /= 4f;
+			Vector3 vector3 = this.frontLeftWheel.Target + this.frontRightWheel.Target + this.backLeftWheel.Target + this.backRightWheel.Target;
+			vector3 /= 4f;
 			if (!this.freezeBodyPhysics)
 			{
-				this.carBody.transform.position = a + this.carBody.transform.parent.TransformDirection(this.originalOffset + this.offset);
+				this.carBody.transform.position = vector3 + this.carBody.transform.parent.TransformDirection(this.originalOffset + this.offset);
 			}
 		}
 
@@ -280,7 +286,8 @@ namespace HeavyMetalMachines.Render
 			{
 				return;
 			}
-			Vector3 vector = new Vector3(direction.x, 0f, direction.z);
+			Vector3 vector;
+			vector..ctor(direction.x, 0f, direction.z);
 			direction = vector.normalized;
 			if (!ignoreHit && this.nextAllowedHit > Time.time)
 			{

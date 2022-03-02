@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkParabolicMovement : BasePerk, DestroyEffect.IDestroyEffectListener, IPerkMovement
+	public class PerkParabolicMovement : BasePerk, DestroyEffectMessage.IDestroyEffectListener, IPerkMovement
 	{
 		private float DeltaTime
 		{
@@ -86,7 +86,7 @@ namespace HeavyMetalMachines.Combat
 			obj.ListenToObjectUnspawn -= this.OnObjectDeath;
 		}
 
-		public override void PerkDestroyed(DestroyEffect destroyEffect)
+		public override void PerkDestroyed(DestroyEffectMessage destroyEffectMessage)
 		{
 			this._initialized = false;
 		}
@@ -111,23 +111,35 @@ namespace HeavyMetalMachines.Combat
 			Vector3 position = base._trans.position;
 			EffectEvent data = this.Effect.Data;
 			float num = Mathf.Clamp(this.DeltaTime / data.LifeTime, 0f, 1f);
-			Vector3 result = Vector3.Lerp(data.Origin, this.TargetPosition, num);
+			Vector3 vector = Vector3.Lerp(data.Origin, this.TargetPosition, num);
 			if (this.useCurve)
 			{
-				result.y = this._zeroHeight + Mathf.Lerp(Mathf.Lerp(data.Origin.y - this._zeroHeight, this.TargetPosition.y - this._zeroHeight, num), data.EffectInfo.Height, this.animationCurve.Evaluate(num));
+				vector.y = this._zeroHeight + Mathf.Lerp(Mathf.Lerp(data.Origin.y - this._zeroHeight, this.TargetPosition.y - this._zeroHeight, num), data.EffectInfo.Height, this.animationCurve.Evaluate(num));
 			}
 			else
 			{
-				result.y = this._zeroHeight + (this._a * num * num + this._b * num + this._c);
+				vector.y = this._zeroHeight + (this._a * num * num + this._b * num + this._c);
 			}
-			if (float.IsNaN(result.x) || float.IsNaN(result.y) || float.IsNaN(result.z))
+			if (float.IsNaN(vector.x) || float.IsNaN(vector.y) || float.IsNaN(vector.z))
 			{
+				PerkParabolicMovement.Log.DebugFormat("Invalid pos={0} or={1} dir={2} h={3} sp={4} dt={5} a={6} b={7} c={8}", new object[]
+				{
+					vector,
+					data.Origin,
+					data.Direction,
+					data.EffectInfo.Height,
+					data.MoveSpeed,
+					this.DeltaTime,
+					this._a,
+					this._b,
+					this._c
+				});
 			}
 			if (!GameHubBehaviour.Hub.Net.IsClient())
 			{
 				this.PosUpdatePostion(position);
 			}
-			return result;
+			return vector;
 		}
 
 		private void PreUpdatePosition()
@@ -146,9 +158,10 @@ namespace HeavyMetalMachines.Combat
 				return;
 			}
 			Vector3 targetPosition = this.TargetPosition;
-			targetPosition.y = base._trans.position.y;
+			Vector3 position = base._trans.position;
+			targetPosition.y = position.y;
 			float sqrMagnitude = (initialPosition - targetPosition).sqrMagnitude;
-			float sqrMagnitude2 = (base._trans.position - initialPosition).sqrMagnitude;
+			float sqrMagnitude2 = (position - initialPosition).sqrMagnitude;
 			if (sqrMagnitude <= this.DestroyOnRemainingDistance || sqrMagnitude2 >= sqrMagnitude)
 			{
 				this._shouldDestroy = true;
@@ -164,13 +177,13 @@ namespace HeavyMetalMachines.Combat
 			this._c = num;
 			float num3 = 1f / (4f * (num - data.EffectInfo.Height));
 			float num4 = num - num2;
-			float a = (-1f + Mathf.Sqrt(1f - 4f * num3 * num4)) / (2f * num3);
-			float b = (-1f - Mathf.Sqrt(1f - 4f * num3 * num4)) / (2f * num3);
-			this._b = Mathf.Max(a, b);
+			float num5 = (-1f + Mathf.Sqrt(1f - 4f * num3 * num4)) / (2f * num3);
+			float num6 = (-1f - Mathf.Sqrt(1f - 4f * num3 * num4)) / (2f * num3);
+			this._b = Mathf.Max(num5, num6);
 			this._a = num2 - num - this._b;
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			this._targetCombat = null;
 		}

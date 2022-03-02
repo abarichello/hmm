@@ -66,13 +66,13 @@ namespace HeavyMetalMachines.Render
 
 		public HoplonParticleSystem bombBlockerCollision;
 
-		public FMODAsset hitAudio;
+		public AudioEventAsset hitAudio;
 
-		public FMODAsset hitOtherAudio;
+		public AudioEventAsset hitOtherAudio;
 
-		public FMODAsset hitBombBlockerAudio;
+		public AudioEventAsset hitBombBlockerAudio;
 
-		public FMODAsset hitBombBlockerOtherAudio;
+		public AudioEventAsset hitBombBlockerOtherAudio;
 
 		public bool isOwner;
 

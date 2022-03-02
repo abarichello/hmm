@@ -24,12 +24,6 @@ namespace HeavyMetalMachines.Frontend
 
 		public HMMUI2DDynamicSprite SkinSprite;
 
-		public UILabel CharacterNameLabel;
-
-		public UILabel SkinName;
-
-		public HMMUI2DDynamicSprite SkinRarity;
-
 		public UILabel CardSkinName;
 
 		public UIButton CardButton;

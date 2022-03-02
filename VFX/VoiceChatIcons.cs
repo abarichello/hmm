@@ -1,6 +1,9 @@
 ﻿using System;
-using HeavyMetalMachines.VFX.PlotKids.VoiceChat;
+using HeavyMetalMachines.Players.Business;
+using HeavyMetalMachines.VoiceChat.Business;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.VFX
 {
@@ -15,20 +18,23 @@ namespace HeavyMetalMachines.VFX
 			set
 			{
 				this._userUniversalId = value;
+				this._dummyPlayer.UniversalId = this._userUniversalId;
 				this.UpdateFriendVoiceMutedStatus();
 			}
 		}
 
 		public void onButtonClick_FriendVoiceHandle()
 		{
-			SingletonMonoBehaviour<VoiceChatController>.Instance.ToggleMuteUser(this._userUniversalId);
-			this.UpdateFriendVoiceMutedStatus();
 			Debug.Log("pressed onButtonClick_FriendVoiceHandle");
+			ObservableExtensions.Subscribe<Unit>(this._muteVoiceChatPlayer.ToggleMute(this._dummyPlayer), delegate(Unit _)
+			{
+				this.UpdateFriendVoiceMutedStatus();
+			});
 		}
 
 		private void UpdateFriendVoiceMutedStatus()
 		{
-			bool flag = SingletonMonoBehaviour<VoiceChatController>.Instance.IsUserMuted(this._userUniversalId);
+			bool flag = this._isVoiceChatPlayerMuted.IsMuted(this._dummyPlayer);
 			if (this._headSetIcon_ActivatedSprite != null)
 			{
 				this._headSetIcon_ActivatedSprite.enabled = !flag;
@@ -52,6 +58,14 @@ namespace HeavyMetalMachines.VFX
 
 		[SerializeField]
 		private UI2DSprite _headSetIcon_DesactivatedSprite;
+
+		private Player _dummyPlayer = new Player();
+
+		[Inject]
+		private IMuteVoiceChatPlayer _muteVoiceChatPlayer;
+
+		[Inject]
+		private IIsVoiceChatPlayerMuted _isVoiceChatPlayerMuted;
 
 		[SerializeField]
 		private UI2DSprite _dialogIcon_ActivatedSprite;

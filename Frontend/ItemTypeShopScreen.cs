@@ -2,6 +2,9 @@
 using System.Collections.Generic;
 using Assets.ClientApiObjects;
 using Assets.ClientApiObjects.Components;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Localization;
+using HeavyMetalMachines.Store.Business;
 using HeavyMetalMachines.Utils;
 using Pocketverse;
 using UnityEngine;
@@ -31,11 +34,12 @@ namespace HeavyMetalMachines.Frontend
 				}
 				if (list.Count > 0)
 				{
-					ObjectPoolUtils.CreateObjectPool<StoreItem>(this._referenceItem, out this._storeItems, list.Count);
+					ObjectPoolUtils.CreateObjectPool<StoreItem>(this._referenceItem, out this._storeItems, list.Count, null);
 					for (int k = 0; k < this._storeItems.Length; k++)
 					{
 						this.SetupItem(this._storeItems[k], list[k]);
 					}
+					base.UiNavigationAxisSelectorRebuilder.RebuildAndSelect();
 				}
 			}
 			else
@@ -43,7 +47,7 @@ namespace HeavyMetalMachines.Frontend
 				for (int l = 0; l < this._storeItems.Length; l++)
 				{
 					StoreItem storeItem = this._storeItems[l];
-					this.UpdateBoughtStatus(storeItem, storeItem.StoreItemType);
+					storeItem.UpdateBoughtStatus();
 				}
 			}
 			this.ConfigurePages();
@@ -62,21 +66,25 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
-		private int Comparison(StoreItem thisStoreItem, StoreItem otherStoreItem)
+		protected virtual int Comparison(StoreItem thisStoreItem, StoreItem otherStoreItem)
 		{
 			return thisStoreItem.StoreItemType.name.CompareTo(otherStoreItem.StoreItemType.name);
 		}
 
 		protected virtual void SetupItem(StoreItem storeItem, ItemTypeScriptableObject itemType)
 		{
-			storeItem.StoreItemType = itemType;
+			storeItem.Setup(itemType, this._storeBusinessFactory);
+			storeItem.IsPurchasableChanged += delegate(StoreItem sender, bool isPurchasable)
+			{
+				this._shouldReconfigurePages = true;
+			};
 			ShopItemTypeComponent component = itemType.GetComponent<ShopItemTypeComponent>();
 			if (component == null)
 			{
 				return;
 			}
 			storeItem.carTexture.SpriteName = component.IconAssetName;
-			storeItem.itemName.text = Language.Get(component.TitleDraft, TranslationSheets.Items);
+			storeItem.itemName.text = Language.Get(component.TitleDraft, TranslationContext.Items);
 			if (storeItem.categoryLabel != null)
 			{
 				ItemCategoryScriptableObject categoryById = GameHubBehaviour.Hub.InventoryColletion.GetCategoryById(itemType.ItemCategoryId);
@@ -84,7 +92,7 @@ namespace HeavyMetalMachines.Frontend
 			}
 			if (storeItem.descriptionLabel != null)
 			{
-				storeItem.descriptionLabel.text = Language.Get(component.DescriptionDraft, TranslationSheets.Items);
+				storeItem.descriptionLabel.text = Language.Get(component.DescriptionDraft, TranslationContext.Items);
 			}
 			if (storeItem.icon != null)
 			{
@@ -92,37 +100,8 @@ namespace HeavyMetalMachines.Frontend
 			}
 			if (storeItem.characterName != null)
 			{
-				storeItem.characterName.text = Language.Get(itemType.GetItemCategory().TitleDraft, TranslationSheets.Inventory);
+				storeItem.characterName.text = itemType.GetItemCategory().LocalizedName;
 			}
-			this.UpdateBoughtStatus(storeItem, itemType);
-		}
-
-		protected virtual void UpdateBoughtStatus(StoreItem storeItem, ItemTypeScriptableObject itemType)
-		{
-			if (storeItem.boughtGO == null || storeItem.unboughtGO == null)
-			{
-				ItemTypeShopScreen.SetItemPrices(storeItem, itemType);
-				return;
-			}
-			bool flag = GameHubBehaviour.Hub.User.Inventory.HasItemOfType(itemType.Id);
-			storeItem.boughtGO.SetActive(flag);
-			storeItem.unboughtGO.SetActive(!flag);
-			if (flag)
-			{
-				return;
-			}
-			ItemTypeShopScreen.SetItemPrices(storeItem, itemType);
-		}
-
-		protected static void SetItemPrices(StoreItem storeItem, ItemTypeScriptableObject itemType)
-		{
-			int num;
-			int num2;
-			GameHubBehaviour.Hub.Store.GetItemPrice(itemType.Id, out num, out num2, false);
-			storeItem.softPrice.text = num.ToString("0");
-			storeItem.SoftPriceGroup.SetActive(itemType.IsActive && itemType.IsSoftPurchasable);
-			storeItem.hardPrice.text = num2.ToString("0");
-			storeItem.HardPriceGroup.SetActive(itemType.IsActive && itemType.IsHardPurchasable);
 		}
 
 		public virtual void OnStoreItemClick(StoreItem item)
@@ -141,7 +120,7 @@ namespace HeavyMetalMachines.Frontend
 			{
 				bool flag = this.IsFiltered(i);
 				bool flag2 = false;
-				if (flag)
+				if (flag && this._storeItems[i].IsPurchasable)
 				{
 					flag2 = (num3 >= num && num2 < this._itemsPerPage);
 					num3++;
@@ -181,6 +160,22 @@ namespace HeavyMetalMachines.Frontend
 			this.ShowPage(base.CurrentPage + 1);
 		}
 
+		private void LateUpdate()
+		{
+			if (this._shouldReconfigurePages)
+			{
+				this._shouldReconfigurePages = false;
+				base.CurrentPage = 0;
+				this.ConfigurePages();
+			}
+		}
+
+		public override void Hide()
+		{
+			base.Hide();
+			base.gameObject.SetActive(false);
+		}
+
 		[SerializeField]
 		private CollectionScriptableObject _customizationAssets;
 
@@ -199,5 +194,10 @@ namespace HeavyMetalMachines.Frontend
 		protected StoreItem[] _storeItems;
 
 		protected int _selectedItem;
+
+		[InjectOnClient]
+		protected IStoreBusinessFactory _storeBusinessFactory;
+
+		protected bool _shouldReconfigurePages;
 	}
 }

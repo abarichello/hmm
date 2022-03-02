@@ -4,8 +4,8 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Tutorial.Behaviours
 {
-	[Obsolete]
 	[ExecuteInEditMode]
+	[Obsolete]
 	public class HudMaskTutorialBehaviour : InGameTutorialBehaviourBase
 	{
 		private void Awake()

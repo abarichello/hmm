@@ -12,14 +12,14 @@ namespace HeavyMetalMachines.Combat
 		public IFuture OnGridGameStarted()
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1029, 7, new object[0]);
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1030, 7, new object[0]);
 			return future;
 		}
 
 		public IFuture OnGridGameFinished(byte playerAdress, float finalValue)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1029, 8, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1030, 8, new object[]
 			{
 				playerAdress,
 				finalValue
@@ -30,7 +30,7 @@ namespace HeavyMetalMachines.Combat
 		public IFuture OnPlayerUpdatedGridProgress(byte playerAddress, int clientProgress)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1029, 9, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1030, 9, new object[]
 			{
 				playerAddress,
 				clientProgress
@@ -41,14 +41,14 @@ namespace HeavyMetalMachines.Combat
 		public IFuture DisputeStarted()
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1029, 20, new object[0]);
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1030, 20, new object[0]);
 			return future;
 		}
 
 		public IFuture DisputeFinished(int teamKind)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1029, 21, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1030, 21, new object[]
 			{
 				teamKind
 			});
@@ -58,7 +58,7 @@ namespace HeavyMetalMachines.Combat
 		public IFuture SlowMotionCallback(bool enable)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1029, 39, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1030, 39, new object[]
 			{
 				enable
 			});
@@ -68,7 +68,7 @@ namespace HeavyMetalMachines.Combat
 		public IFuture ClientEnableOvertimeEffects(int id)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1029, 49, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1030, 49, new object[]
 			{
 				id
 			});
@@ -78,7 +78,7 @@ namespace HeavyMetalMachines.Combat
 		public IFuture ClientListenToBombAlmostDeliveredTriggerEnter(int trackTeamKind)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1029, 59, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1030, 59, new object[]
 			{
 				trackTeamKind
 			});
@@ -88,7 +88,7 @@ namespace HeavyMetalMachines.Combat
 		public IFuture ClientListenToBombLastCurveTriggerEnter(int trackTeamKind)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1029, 60, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1030, 60, new object[]
 			{
 				trackTeamKind
 			});
@@ -98,7 +98,7 @@ namespace HeavyMetalMachines.Combat
 		public IFuture ClientListenToBombFirstCurveTriggerEnter(int trackTeamKind)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1029, 61, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1030, 61, new object[]
 			{
 				trackTeamKind
 			});
@@ -108,7 +108,7 @@ namespace HeavyMetalMachines.Combat
 		public IFuture ClientListenToBombTrackEntryTriggerEnter(int trackTeamKind)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1029, 62, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1030, 62, new object[]
 			{
 				trackTeamKind
 			});
@@ -118,7 +118,7 @@ namespace HeavyMetalMachines.Combat
 		public IFuture ClientListenToBombAlmostDeliveredTriggerExit()
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1029, 64, new object[0]);
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1030, 64, new object[0]);
 			return future;
 		}
 

@@ -3,27 +3,24 @@ using System.Collections.Generic;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Counselor;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Playback;
 using Pocketverse;
+using Zenject;
 
 namespace HeavyMetalMachines
 {
 	[RemoteClass]
-	public class PlaybackManager : GameHubBehaviour, MatchController.GameOverMessage.IGameOverListener, IBitComponent
+	public class PlaybackManager : GameHubBehaviour, MatchController.GameOverMessage.IGameOverListener, IServerPlaybackDispatcher, IBitComponent
 	{
-		public static IKeyFrameParser GetFrameParser(KeyFrameType index)
-		{
-			return PlaybackManager.FrameParsers[index];
-		}
-
-		public static KeyStateParser GetStateParser(StateType index)
+		public static IKeyStateParser GetStateParser(StateType index)
 		{
 			return PlaybackManager.StateParsers[index];
 		}
 
 		private void Awake()
 		{
-			PlaybackManager.FrameParsers[KeyFrameType.ManagerEvent] = GameHubBehaviour.Hub.Events;
 			PlaybackManager.StateParsers[StateType.Players] = GameHubBehaviour.Hub.Players;
+			PlaybackManager.StateParsers[StateType.Teams] = GameHubBehaviour.Hub.Teams;
 			if (GameHubBehaviour.Hub.Net.IsServer())
 			{
 				this._recorder = new MatchRecorder();
@@ -36,20 +33,26 @@ namespace HeavyMetalMachines
 			return this._currentFrameId;
 		}
 
-		public void SendKeyFrame(KeyFrameType keyframetype, bool reliable, int frameId, int previousFrameId, byte[] data)
+		public void SendKeyFrame(byte keyframetype, bool reliable, int frameId, int previousFrameId, byte[] data)
 		{
 			int playbackTime = GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
-			this._recorder.KeyFrames.AddFrame((byte)keyframetype, frameId, previousFrameId, playbackTime, data);
+			this._recorder.KeyFrames.AddFrame(keyframetype, frameId, previousFrameId, playbackTime, data);
 			IPlaybackManagerDispatch playbackManagerDispatch = (!reliable) ? this.Dispatch(GameHubBehaviour.Hub.SendAll) : this.DispatchReliable(GameHubBehaviour.Hub.SendAll);
-			playbackManagerDispatch.AddKeyframe((byte)keyframetype, frameId, previousFrameId, playbackTime, data);
+			playbackManagerDispatch.AddKeyframe(keyframetype, frameId, previousFrameId, playbackTime, data);
 		}
 
-		public void SendFullKeyFrame(byte to, KeyFrameType keyframetype, int frameId, int previousFrameId, int time, byte[] data)
+		public void SendFullKeyFrame(byte to, byte keyframetype, int frameId, int previousFrameId, int time, byte[] data)
 		{
+			if (to == 1)
+			{
+				this._recorder.KeyFrames.AddFrame(keyframetype, frameId, previousFrameId, time, data);
+				this.DispatchReliable(GameHubBehaviour.Hub.AddressGroups.GetGroup(0)).AddKeyframe(keyframetype, frameId, previousFrameId, time, data);
+				return;
+			}
 			this.DispatchReliable(new byte[]
 			{
 				to
-			}).AddKeyframe((byte)keyframetype, frameId, previousFrameId, time, data);
+			}).AddKeyframe(keyframetype, frameId, previousFrameId, time, data);
 		}
 
 		public void SendState(StateType stateType, byte[] data)
@@ -75,7 +78,7 @@ namespace HeavyMetalMachines
 		[RemoteMethod]
 		private void AddKeyframe(byte keyframetype, int frameId, int previousFrameId, int time, byte[] data)
 		{
-			PlaybackSystem.Instance.AddStateKeyFrame((KeyFrameType)keyframetype, frameId, previousFrameId, time, data);
+			this._playback.AddStateKeyFrame(keyframetype, frameId, previousFrameId, time, data);
 		}
 
 		[RemoteMethod]
@@ -91,6 +94,35 @@ namespace HeavyMetalMachines
 			{
 				this._recorder.SaveMatch();
 			}
+		}
+
+		public int GetNextFrameId()
+		{
+			return this.NextId();
+		}
+
+		public void SendFrame(FrameKind kind, bool reliable, int frameId, int previousFrameId, byte[] data)
+		{
+			if (kind.IsKeyFrameType())
+			{
+				KeyFrameType keyframetype = kind.ToKeyFrameType();
+				this.SendKeyFrame((byte)keyframetype, reliable, frameId, previousFrameId, data);
+				return;
+			}
+			StateType stateType = kind.ToStateType();
+			this.SendState(stateType, data);
+		}
+
+		public void SendSnapshot(byte to, FrameKind kind, int frameId, int previousFrameId, int time, byte[] data)
+		{
+			if (kind.IsKeyFrameType())
+			{
+				KeyFrameType keyframetype = kind.ToKeyFrameType();
+				this.SendFullKeyFrame(to, (byte)keyframetype, frameId, previousFrameId, time, data);
+				return;
+			}
+			StateType stateType = kind.ToStateType();
+			this.SendFullState(to, stateType, data);
 		}
 
 		private int OID
@@ -154,25 +186,32 @@ namespace HeavyMetalMachines
 			this._delayed = future;
 		}
 
-		public object Invoke(int classId, short methodId, object[] args)
+		public object Invoke(int classId, short methodId, object[] args, BitStream bitstream = null)
 		{
-			if (classId != 1008)
-			{
-				throw new Exception("Hierarchy in RemoteClass is not allowed!!! " + classId);
-			}
 			this._delayed = null;
-			if (methodId == 9)
+			if (methodId == 8)
 			{
-				this.AddKeyframe((byte)args[0], (int)args[1], (int)args[2], (int)args[3], (byte[])args[4]);
+				byte keyframetype = bitstream.ReadByte();
+				int frameId = bitstream.ReadCompressedInt();
+				int previousFrameId = bitstream.ReadCompressedInt();
+				int time = bitstream.ReadCompressedInt();
+				byte[] data = bitstream.CachedReadByteArray();
+				this.AddKeyframe(keyframetype, frameId, previousFrameId, time, data);
+				ByteArrayCache.Free(data);
 				return null;
 			}
-			if (methodId != 10)
+			if (methodId != 9)
 			{
 				throw new ScriptMethodNotFoundException(classId, (int)methodId);
 			}
-			this.UpdateState((byte)args[0], (byte[])args[1]);
+			byte statetype = bitstream.ReadByte();
+			byte[] data2 = bitstream.ReadByteArray();
+			this.UpdateState(statetype, data2);
 			return null;
 		}
+
+		[Inject]
+		private IPlayback _playback;
 
 		public static readonly TransformParser TransformStates = new TransformParser();
 
@@ -198,47 +237,7 @@ namespace HeavyMetalMachines
 
 		public static readonly CounselorParser Counselor = new CounselorParser();
 
-		private static readonly Dictionary<KeyFrameType, IKeyFrameParser> FrameParsers = new Dictionary<KeyFrameType, IKeyFrameParser>
-		{
-			{
-				KeyFrameType.CombatStates,
-				PlaybackManager.CombatStates
-			},
-			{
-				KeyFrameType.TransformStates,
-				PlaybackManager.TransformStates
-			},
-			{
-				KeyFrameType.ModifierEvent,
-				PlaybackManager.ModifierEvent
-			},
-			{
-				KeyFrameType.CollisionEvent,
-				PlaybackManager.Collision
-			},
-			{
-				KeyFrameType.GadgetLevel,
-				PlaybackManager.GadgetLevel
-			},
-			{
-				KeyFrameType.BombInstance,
-				PlaybackManager.BombInstance
-			},
-			{
-				KeyFrameType.BombDetonation,
-				PlaybackManager.BombDetonation
-			},
-			{
-				KeyFrameType.CombatFeedbacks,
-				PlaybackManager.CombatFeedbacks
-			},
-			{
-				KeyFrameType.GadgetEvent,
-				PlaybackManager.GadgetEvent
-			}
-		};
-
-		private static readonly Dictionary<StateType, KeyStateParser> StateParsers = new Dictionary<StateType, KeyStateParser>
+		private static readonly Dictionary<StateType, IKeyStateParser> StateParsers = new Dictionary<StateType, IKeyStateParser>
 		{
 			{
 				StateType.PlayerStats,
@@ -256,13 +255,11 @@ namespace HeavyMetalMachines
 
 		private MatchRecorder _recorder;
 
-		public const int NullFrameId = -1;
-
 		private int _currentStateId;
 
 		private int _currentFrameId;
 
-		public const int StaticClassId = 1008;
+		public const int StaticClassId = 1009;
 
 		private Identifiable _identifiable;
 

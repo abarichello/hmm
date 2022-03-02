@@ -9,6 +9,6 @@ namespace HeavyMetalMachines
 
 		IFuture TriggerPauseNotification(int kind, float delay);
 
-		IFuture ChangePauseStateOnClient(int newState, long playerId);
+		IFuture ChangePauseStateOnClient(int newState, long playerId, int timeRemaining, int timeoutMillis, int activations);
 	}
 }

@@ -12,6 +12,6 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 
 		public float nextNodeTransitionTime = 1.5f;
 
-		public EaseType easing = EaseType.EaseInOutCubic;
+		public EaseType easing = 9;
 	}
 }

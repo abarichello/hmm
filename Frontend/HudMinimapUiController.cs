@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using Assets.Standard_Assets.Scripts.HMM.PlotKids;
-using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Arena;
 using HeavyMetalMachines.Event;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.Match;
 using HeavyMetalMachines.Utils;
 using Pocketverse;
@@ -21,7 +21,7 @@ namespace HeavyMetalMachines.Frontend
 			{
 				quantity = 2;
 			}
-			ObjectPoolUtils.CreateObjectPool<HudMinimapPlayerObject>(this._minimapPlayerObjectReference, out this._hudMinimapPlayerObjects, quantity);
+			ObjectPoolUtils.CreateObjectPool<HudMinimapPlayerObject>(this._minimapPlayerObjectReference, out this._hudMinimapPlayerObjects, quantity, null);
 			for (int i = 0; i < this._hudMinimapPlayerObjects.Length; i++)
 			{
 				this._hudMinimapPlayerObjects[i].gameObject.SetActive(true);
@@ -30,14 +30,14 @@ namespace HeavyMetalMachines.Frontend
 
 		protected void Start()
 		{
-			GameArenaInfo gameArenaInfo = GameHubBehaviour.Hub.ArenaConfig.Arenas[GameHubBehaviour.Hub.Match.ArenaIndex];
-			if (string.IsNullOrEmpty(gameArenaInfo.MinimapTextureName))
+			IGameArenaInfo currentArena = GameHubBehaviour.Hub.ArenaConfig.GetCurrentArena();
+			if (string.IsNullOrEmpty(currentArena.MinimapTextureName))
 			{
 				base.gameObject.SetActive(false);
 			}
 			else
 			{
-				this.ApplyArenaConfig(gameArenaInfo);
+				this.ApplyArenaConfig(currentArena);
 				UICamera.onScreenResize += this.RecalculateMinimap;
 				GameHubBehaviour.Hub.Events.Players.ListenToAllPlayersSpawned += this.OnAllPlayersSpawned;
 				GameHubBehaviour.Hub.Events.Bots.ListenToAllPlayersSpawned += this.OnAllPlayersSpawned;
@@ -56,9 +56,9 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
-		private void BombManagerOnListenToPhaseChange(BombScoreBoard.State state)
+		private void BombManagerOnListenToPhaseChange(BombScoreboardState state)
 		{
-			if (state == BombScoreBoard.State.EndGame)
+			if (state == BombScoreboardState.EndGame)
 			{
 				if (this._initialized)
 				{
@@ -80,6 +80,11 @@ namespace HeavyMetalMachines.Frontend
 		private void RecalculateMinimap()
 		{
 			this._baseInfo.RecalculateBasePoints();
+			this.TryToCalculateObjectsMinimapProportions();
+		}
+
+		private void TryToCalculateObjectsMinimapProportions()
+		{
 			if (this._initialized)
 			{
 				for (int i = 0; i < this._hudMinimapPlayerObjects.Length; i++)
@@ -107,6 +112,10 @@ namespace HeavyMetalMachines.Frontend
 		private void InternalSetVisibility(bool isVisible, bool imediate)
 		{
 			this._isVisible = isVisible;
+			if (isVisible)
+			{
+				this.TryToCalculateObjectsMinimapProportions();
+			}
 			if (imediate || PauseController.Instance.IsGamePaused)
 			{
 				this._windowCanvasGroup.alpha = ((!isVisible) ? 0f : 1f);
@@ -120,7 +129,7 @@ namespace HeavyMetalMachines.Frontend
 			return !isVisible || !this._currentPlayerIsInDeadZone;
 		}
 
-		private void ApplyArenaConfig(GameArenaInfo arenaInfo)
+		private void ApplyArenaConfig(IGameArenaInfo arenaInfo)
 		{
 			TeamKind currentPlayerTeam = GameHubBehaviour.Hub.Players.CurrentPlayerTeam;
 			RectTransform rectTransform = this._minimapBackgroundSprite.rectTransform;
@@ -130,12 +139,13 @@ namespace HeavyMetalMachines.Frontend
 			localPosition.y += (float)arenaInfo.MinimapTextureYOffset;
 			localPosition.x += (float)arenaInfo.MinimapTextureXOffset;
 			rectTransform.localPosition = localPosition;
-			Vector2 sizeDelta = new Vector2(arenaInfo.MinimapTextureSize.x, arenaInfo.MinimapTextureSize.y);
+			Vector2 sizeDelta;
+			sizeDelta..ctor(arenaInfo.MinimapTextureSize.x, arenaInfo.MinimapTextureSize.y);
 			rectTransform.sizeDelta = sizeDelta;
 			this._pivotGroupTransform.sizeDelta = sizeDelta;
 			this._pivotGroupTransform.localPosition = localPosition;
 			this._pivotGroupTransform.localPosition += new Vector3(arenaInfo.IconPositionOffset.x, arenaInfo.IconPositionOffset.y);
-			if (!SpectatorController.IsSpectating && currentPlayerTeam == arenaInfo.ArenaFlipTeam && arenaInfo.ArenaFlipScale == -1)
+			if (currentPlayerTeam == arenaInfo.ArenaFlipTeam && arenaInfo.ArenaFlipScale == -1)
 			{
 				Vector3 localScale = rectTransform.localScale;
 				localScale.x *= (float)arenaInfo.ArenaFlipScale;
@@ -144,21 +154,12 @@ namespace HeavyMetalMachines.Frontend
 				localPosition2.x -= rectTransform.sizeDelta.x;
 				rectTransform.localPosition = localPosition2;
 			}
-			if (GameHubBehaviour.Hub.Match.ArenaIndex == 3 && arenaInfo.ArenaFlipRotation == 180)
-			{
-				Quaternion localRotation = this._pivotGroupTransform.localRotation;
-				localRotation.z = (float)arenaInfo.ArenaFlipRotation;
-				this._pivotGroupTransform.localRotation = localRotation;
-				Vector3 localPosition3 = this._pivotGroupTransform.localPosition;
-				localPosition3.x -= this._pivotGroupTransform.sizeDelta.x;
-				this._pivotGroupTransform.localPosition = localPosition3;
-			}
 			this._hideWhenInDeadZone = arenaInfo.HideWhenInDeadZone;
 			this._baseInfo.Setup(currentPlayerTeam, arenaInfo);
 			this._angleY = (float)((currentPlayerTeam != TeamKind.Blue) ? arenaInfo.TeamRedAngleY : arenaInfo.TeamBlueAngleY);
-			Quaternion localRotation2 = Quaternion.Euler(new Vector3(0f, 0f, this._angleY));
-			this.MinimapObjectsHubTransform.localRotation = localRotation2;
-			Shader.SetGlobalFloat("_MinimapAngle", 0.0174532924f * this._angleY);
+			Quaternion localRotation = Quaternion.Euler(new Vector3(0f, 0f, this._angleY));
+			this.MinimapObjectsHubTransform.localRotation = localRotation;
+			Shader.SetGlobalFloat("_MinimapAngle", 0.017453292f * this._angleY);
 			if (currentPlayerTeam == arenaInfo.ArenaFlipTeam)
 			{
 				Shader.DisableKeyword("NORMAL_MODE");
@@ -188,7 +189,7 @@ namespace HeavyMetalMachines.Frontend
 			{
 				return;
 			}
-			GameArenaInfo arenaInfo = GameHubBehaviour.Hub.ArenaConfig.Arenas[GameHubBehaviour.Hub.Match.ArenaIndex];
+			IGameArenaInfo currentArena = GameHubBehaviour.Hub.ArenaConfig.GetCurrentArena();
 			TeamKind currentPlayerTeam = GameHubBehaviour.Hub.Players.CurrentPlayerTeam;
 			List<PlayerData> playersAndBots = GameHubBehaviour.Hub.Players.PlayersAndBots;
 			int num = 0;
@@ -197,7 +198,7 @@ namespace HeavyMetalMachines.Frontend
 				PlayerData playerData = playersAndBots[i];
 				if (!playerData.IsCurrentPlayer && playerData.Team == currentPlayerTeam && !playerData.IsNarrator)
 				{
-					this._hudMinimapPlayerObjects[num++].Setup(playerData, arenaInfo, this.PlayerGuiAssets);
+					this._hudMinimapPlayerObjects[num++].Setup(playerData, currentArena, this.PlayerGuiAssets);
 				}
 			}
 			for (int j = 0; j < playersAndBots.Count; j++)
@@ -205,14 +206,14 @@ namespace HeavyMetalMachines.Frontend
 				PlayerData playerData2 = playersAndBots[j];
 				if (playerData2.Team != currentPlayerTeam && !playerData2.IsNarrator)
 				{
-					this._hudMinimapPlayerObjects[num++].Setup(playerData2, arenaInfo, this.PlayerGuiAssets);
+					this._hudMinimapPlayerObjects[num++].Setup(playerData2, currentArena, this.PlayerGuiAssets);
 				}
 			}
 			HudMinimapPlayerObject hudMinimapPlayerObject = null;
 			if (num < this._hudMinimapPlayerObjects.Length && GameHubBehaviour.Hub.Players.CurrentPlayerData != null && !GameHubBehaviour.Hub.Players.CurrentPlayerData.IsNarrator)
 			{
 				hudMinimapPlayerObject = this._hudMinimapPlayerObjects[num++];
-				hudMinimapPlayerObject.Setup(GameHubBehaviour.Hub.Players.CurrentPlayerData, arenaInfo, this.PlayerGuiAssets);
+				hudMinimapPlayerObject.Setup(GameHubBehaviour.Hub.Players.CurrentPlayerData, currentArena, this.PlayerGuiAssets);
 			}
 			this._minimapBombObject.CalculateMinimapProportions();
 			this._minimapDeliveryObject.CalculateMinimapProportions();
@@ -277,6 +278,8 @@ namespace HeavyMetalMachines.Frontend
 				this._deadZoneTestFrameCount = Time.frameCount;
 			}
 		}
+
+		private static readonly BitLogger Log = new BitLogger(typeof(HudMinimapUiController));
 
 		public HudMinimapUiController.HudMinimapPlayerGuiAssets PlayerGuiAssets;
 

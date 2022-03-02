@@ -1,5 +1,6 @@
 ﻿using System;
 using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Match;
 using Hoplon.SensorSystem;
 using Pocketverse;
 using UnityEngine;
@@ -22,7 +23,7 @@ namespace HeavyMetalMachines.Infra.Counselor
 			this._notMovingTimeId = controller.GetHash(notMovingName);
 			this._player = player;
 			this._hasHealed = false;
-			this._role = (int)player.Player.Character.Role;
+			this._role = player.Player.GetCharacterRole();
 			this._player.OnRepairDealt += this._player_OnRepairDealt;
 			CombatController.OnInstantModifierApplied += this.OnInstantModifierApplied;
 			GameHubObject.Hub.BombManager.ListenToBombDrop += this.ListenToBombDrop;
@@ -85,9 +86,9 @@ namespace HeavyMetalMachines.Infra.Counselor
 		public void UpdateContext(SensorController context)
 		{
 			float num;
-			context.GetParameter(context.MainClockId, out num);
+			context.GetParameter(context.MainClockId, ref num);
 			float num2;
-			context.GetParameter(context.DeltaTimeId, out num2);
+			context.GetParameter(context.DeltaTimeId, ref num2);
 			context.SetParameter(this._healedId, (!this._hasHealed) ? 0f : 1f);
 			this._hasHealed = false;
 			context.SetParameter(this._heavyDamageId, this._receivedHeavyDamaged);

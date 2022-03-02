@@ -2,14 +2,14 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using fastJSON;
+using ClientAPI.Utils;
 using Pocketverse;
 using UnityEngine;
 
 namespace HeavyMetalMachines.VFX
 {
-	[ExecuteInEditMode]
 	[RequireComponent(typeof(HMMLifebarPanelMeshController))]
+	[ExecuteInEditMode]
 	public class HMMLifebarPanel : MonoBehaviour
 	{
 		public bool hasSpriteContainers
@@ -126,7 +126,7 @@ namespace HeavyMetalMachines.VFX
 		public void ParseDataFile()
 		{
 			this._spriteDataList.Clear();
-			Dictionary<string, object> dictionary = fastJSON.JSON.Instance.ToObject<Dictionary<string, object>>(this.dataFile.text);
+			Dictionary<string, object> dictionary = Json.ToObject<Dictionary<string, object>>(this.dataFile.text);
 			Dictionary<string, object> dictionary2 = dictionary["frames"] as Dictionary<string, object>;
 			Dictionary<string, object> dictionary3 = dictionary["meta"] as Dictionary<string, object>;
 			Dictionary<string, object> dictionary4 = dictionary3["size"] as Dictionary<string, object>;

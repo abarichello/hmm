@@ -1,20 +1,28 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids;
 using ClientAPI.Objects;
 using HeavyMetalMachines.Announcer;
 using HeavyMetalMachines.Bank;
 using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Input.ControllerInput;
 using HeavyMetalMachines.Match;
-using HeavyMetalMachines.Options;
+using HeavyMetalMachines.Memory;
+using HeavyMetalMachines.MuteSystem;
+using HeavyMetalMachines.ParentalControl.Restrictions;
+using HeavyMetalMachines.Publishing.Presenting;
 using HeavyMetalMachines.Utils;
 using HeavyMetalMachines.VFX;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
-	public class HudTabController : HudWindow, PlayerBuildComplete.IPlayerBuildCompleteListener
+	public class HudTabController : HudWindow, PlayerBuildComplete.IPlayerBuildCompleteListener, IHudTabPresenter
 	{
 		private GameGui GameGui
 		{
@@ -27,6 +35,19 @@ namespace HeavyMetalMachines.Frontend
 				}
 				return result;
 			}
+		}
+
+		public bool Visible
+		{
+			get
+			{
+				return this.IsVisible;
+			}
+		}
+
+		public IObservable<bool> VisibilityChanged()
+		{
+			return this._visibilityObservation;
 		}
 
 		public void OnPlayerBuildComplete(PlayerBuildComplete evt)
@@ -47,8 +68,45 @@ namespace HeavyMetalMachines.Frontend
 
 		private void BuildCompleteAllPlayers()
 		{
+			this.SetupPlayers();
+			this.SetupSpectators();
+			this.SetupTeamInfo();
+		}
+
+		private void SetupSpectators()
+		{
+			int count = GameHubBehaviour.Hub.Players.Narrators.Count;
+			if (count > this._spectatorPlayers.Length)
+			{
+				HudTabController.Log.ErrorFormat("Number of Spectators is bigger than available spectators slots. Spectators: {0}, Slots: {1}", new object[]
+				{
+					count,
+					this._spectatorPlayers.Length
+				});
+			}
+			int num = 0;
+			for (int i = 0; i < count; i++)
+			{
+				PlayerData playerData = GameHubBehaviour.Hub.Players.Narrators[i];
+				if (!playerData.Connected)
+				{
+					this._spectatorPlayers[i].gameObject.SetActive(false);
+				}
+				else
+				{
+					this._spectatorPlayers[i].gameObject.SetActive(true);
+					this._spectatorPlayers[i].SetupSpectator(playerData);
+					num++;
+				}
+			}
+			this._spectatorGroup.SetActive(num > 0);
+		}
+
+		private void SetupPlayers()
+		{
 			List<PlayerData> list = new List<PlayerData>(GameHubBehaviour.Hub.Players.PlayersAndBots);
-			HudUtils.PlayerDataComparer comparer = new HudUtils.PlayerDataComparer(GameHubBehaviour.Hub, HudUtils.PlayerDataComparer.PlayerDataComparerType.InstanceId);
+			int instanceId = GameHubBehaviour.Hub.Players.CurrentPlayerData.PlayerCarId.GetInstanceId();
+			HudUtils.PlayerDataComparer comparer = new HudUtils.PlayerDataComparer(instanceId, HudUtils.PlayerDataComparer.PlayerDataComparerType.InstanceId);
 			list.Sort(comparer);
 			for (int i = 0; i < list.Count; i++)
 			{
@@ -66,7 +124,6 @@ namespace HeavyMetalMachines.Frontend
 					this.SetupCombatObject(bitComponent, isAlly);
 				}
 			}
-			this.SetupTeamInfo();
 		}
 
 		private void SetupCombatObject(CombatObject combatObject, bool isAlly)
@@ -107,11 +164,11 @@ namespace HeavyMetalMachines.Frontend
 		{
 			HudMegafeedbacksController.EvtAnimationStart += this.OnMegaAnimationPlaying;
 			GameHubBehaviour.Hub.GuiScripts.DriverHelper.OnVisibilityChange += this.OtherCompetingWindowOnVisibilityChange;
+			GameHubBehaviour.Hub.GuiScripts.AfkControllerGui.OnVisibilityChange += this.OtherCompetingWindowOnVisibilityChange;
 			this.WindowGameObject.SetActive(false);
 			this.ExitGroupGameObject.SetActive(false);
-			this._toggleModeButtonClickEventDelegate = new EventDelegate(new EventDelegate.Callback(this.ToggleModeButtonClick));
-			this.ToggleModeButton.onClick.Add(this._toggleModeButtonClickEventDelegate);
-			this.SetVisibilityMode(HudTabController.VisibilityMode.Statistics);
+			this.TitleGroupStatisticsGameObject.SetActive(true);
+			this._visibilityObservation = new Subject<bool>();
 			for (int i = 0; i < this.AllyPlayers.Length; i++)
 			{
 				this.AllyPlayers[i].gameObject.SetActive(false);
@@ -120,6 +177,11 @@ namespace HeavyMetalMachines.Frontend
 			{
 				this.EnemyPlayers[j].gameObject.SetActive(false);
 			}
+			for (int k = 0; k < this._spectatorPlayers.Length; k++)
+			{
+				this._spectatorPlayers[k].gameObject.SetActive(false);
+			}
+			this._spectatorGroup.SetActive(false);
 			this._isGameOver = false;
 		}
 
@@ -147,12 +209,15 @@ namespace HeavyMetalMachines.Frontend
 		public override void OnDestroy()
 		{
 			base.OnDestroy();
-			this.ToggleModeButton.onClick.Remove(this._toggleModeButtonClickEventDelegate);
-			this._toggleModeButtonClickEventDelegate = null;
+			if (this._visibilityObservation != null)
+			{
+				this._visibilityObservation.Dispose();
+			}
 			this._playerBuildCount = 0;
 			this._isGameOver = false;
 			HudMegafeedbacksController.EvtAnimationStart -= this.OnMegaAnimationPlaying;
 			GameHubBehaviour.Hub.GuiScripts.DriverHelper.OnVisibilityChange -= this.OtherCompetingWindowOnVisibilityChange;
+			GameHubBehaviour.Hub.GuiScripts.AfkControllerGui.OnVisibilityChange -= this.OtherCompetingWindowOnVisibilityChange;
 			this._gameGui = null;
 		}
 
@@ -166,7 +231,7 @@ namespace HeavyMetalMachines.Frontend
 			GameHubBehaviour.Hub.Announcer.ListenToEvent -= this.ListenToAnnouncer;
 		}
 
-		private void ListenToAnnouncer(AnnouncerManager.QueuedAnnouncerLog announcerLog)
+		private void ListenToAnnouncer(QueuedAnnouncerLog announcerLog)
 		{
 			if (announcerLog.AnnouncerEvent.AnnouncerEventKind != AnnouncerLog.AnnouncerEventKinds.BotControllerActivated && announcerLog.AnnouncerEvent.AnnouncerEventKind != AnnouncerLog.AnnouncerEventKinds.BotControllerDeactivated)
 			{
@@ -189,34 +254,18 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
-		private void HudGarageShopOnVisibilityChange(bool visible)
+		private IEnumerator CollectGC()
 		{
-			if (visible && this.IsVisible && !this._isGameOver)
+			for (int i = 0; i < 10; i++)
 			{
-				base.SetWindowVisibility(false);
+				yield return null;
 			}
-		}
-
-		private void ToggleModeButtonClick()
-		{
-			this.SetVisibilityMode((this._visibilityMode != HudTabController.VisibilityMode.Statistics) ? HudTabController.VisibilityMode.Statistics : HudTabController.VisibilityMode.Upgrade);
-		}
-
-		private void SetVisibilityMode(HudTabController.VisibilityMode visibilityMode)
-		{
-			this._visibilityMode = visibilityMode;
-			this.TitleGroupStatisticsGameObject.SetActive(this._visibilityMode == HudTabController.VisibilityMode.Statistics);
-			this.TitleGroupUpgradeGameObject.SetActive(this._visibilityMode == HudTabController.VisibilityMode.Upgrade);
-			for (int i = 0; i < this.AllyPlayers.Length; i++)
+			GarbageCollector.Collect("Tab window has been closed.");
+			for (int j = 0; j < 10; j++)
 			{
-				this.AllyPlayers[i].SetVisibilityMode(this._visibilityMode);
+				yield return null;
 			}
-			for (int j = 0; j < this.EnemyPlayers.Length; j++)
-			{
-				this.EnemyPlayers[j].SetVisibilityMode(this._visibilityMode);
-			}
-			string key = (this._visibilityMode != HudTabController.VisibilityMode.Statistics) ? "TAB_BUTTON_STATISTICS" : "TAB_BUTTON_UPGRADE";
-			this.ToggleModeButtonLabel.text = Language.Get(key, TranslationSheets.GUI);
+			yield break;
 		}
 
 		private void Update()
@@ -227,7 +276,7 @@ namespace HeavyMetalMachines.Frontend
 			}
 			if (!this._isGameOver && !this._megaFeedbackIsPlaying && !SpectatorController.IsSpectating)
 			{
-				bool button = ControlOptions.GetButton(ControlAction.GUIOpenScore);
+				bool button = this._inputActionPoller.GetButton(13);
 				if (button && !this.IsVisible)
 				{
 					base.SetWindowVisibility(true);
@@ -235,6 +284,7 @@ namespace HeavyMetalMachines.Frontend
 				else if (!button && this.IsVisible)
 				{
 					base.SetWindowVisibility(false);
+					base.StartCoroutine(this.CollectGC());
 				}
 			}
 			if (!this.IsVisible)
@@ -243,13 +293,13 @@ namespace HeavyMetalMachines.Frontend
 			}
 			if (GameHubBehaviour.Hub.Players.CurrentPlayerData.Team == TeamKind.Blue)
 			{
-				this.AllyKillsLabel.text = GameHubBehaviour.Hub.BombManager.ScoreBoard.BombScoreBlue.ToString();
-				this.EnemyKillsLabel.text = GameHubBehaviour.Hub.BombManager.ScoreBoard.BombScoreRed.ToString();
+				this.AllyKillsLabel.text = StringCaches.NonPaddedIntegers.Get(GameHubBehaviour.Hub.BombManager.ScoreBoard.BombScoreBlue);
+				this.EnemyKillsLabel.text = StringCaches.NonPaddedIntegers.Get(GameHubBehaviour.Hub.BombManager.ScoreBoard.BombScoreRed);
 			}
 			else
 			{
-				this.AllyKillsLabel.text = GameHubBehaviour.Hub.BombManager.ScoreBoard.BombScoreRed.ToString();
-				this.EnemyKillsLabel.text = GameHubBehaviour.Hub.BombManager.ScoreBoard.BombScoreBlue.ToString();
+				this.AllyKillsLabel.text = StringCaches.NonPaddedIntegers.Get(GameHubBehaviour.Hub.BombManager.ScoreBoard.BombScoreRed);
+				this.EnemyKillsLabel.text = StringCaches.NonPaddedIntegers.Get(GameHubBehaviour.Hub.BombManager.ScoreBoard.BombScoreBlue);
 			}
 			if (!this._isGameOver)
 			{
@@ -260,11 +310,12 @@ namespace HeavyMetalMachines.Frontend
 		private void TimerUpdate()
 		{
 			this._time = GameHubBehaviour.Hub.GameTime.MatchTimer.GetTimeSpan();
-			if (this._seconds != this._time.Seconds)
+			if (this._seconds == this._time.Seconds)
 			{
-				this._seconds = this._time.Seconds;
-				this.TimerLabel.text = TimeUtils.FormatTime(this._time);
+				return;
 			}
+			this._seconds = this._time.Seconds;
+			this.TimerLabel.text = TimeUtils.FormatTime(this._time);
 		}
 
 		public override void ChangeWindowVisibility(bool visible)
@@ -272,6 +323,7 @@ namespace HeavyMetalMachines.Frontend
 			PlayerController bitComponent = GameHubBehaviour.Hub.Players.CurrentPlayerData.CharacterInstance.GetBitComponent<PlayerController>();
 			bitComponent.HudTabInterfaceOpen = visible;
 			base.ChangeWindowVisibility(visible);
+			this._visibilityObservation.OnNext(visible);
 			if (!visible)
 			{
 				GameHubBehaviour.Hub.CursorManager.Pop();
@@ -280,7 +332,6 @@ namespace HeavyMetalMachines.Frontend
 			GameHubBehaviour.Hub.CursorManager.Push(true, CursorManager.CursorTypes.MatchstatsCursor);
 			this.UpdateTopStatsInfo(true, this.AllyPlayers);
 			this.UpdateTopStatsInfo(false, this.EnemyPlayers);
-			this.SetVisibilityMode(HudTabController.VisibilityMode.Statistics);
 			for (int i = 0; i < this.AllyPlayers.Length; i++)
 			{
 				HudTabPlayer hudTabPlayer = this.AllyPlayers[i];
@@ -297,6 +348,7 @@ namespace HeavyMetalMachines.Frontend
 					hudTabPlayer2.UpdatePlayerName(!hudTabPlayer2.CombatObject.Player.IsBot && hudTabPlayer2.CombatObject.Player.IsBotControlled);
 				}
 			}
+			this.SetupSpectators();
 		}
 
 		private int UpdateTopStatsInfo(bool isAlly, HudTabPlayer[] hudTabPlayers)
@@ -484,51 +536,58 @@ namespace HeavyMetalMachines.Frontend
 
 		public override bool CanOpen()
 		{
-			return !GameHubBehaviour.Hub.GuiScripts.AfkControllerGui.IsWindowVisible() && (HudWindowManager.Instance.State == HudWindowManager.GuiGameState.Game && !GameHubBehaviour.Hub.GuiScripts.Esc.IsWindowVisible()) && !GameHubBehaviour.Hub.GuiScripts.DriverHelper.IsWindowVisible();
+			return !GameHubBehaviour.Hub.GuiScripts.AfkControllerGui.IsWindowVisible() && (HudWindowManager.Instance.State == GuiGameState.Game && !GameHubBehaviour.Hub.Match.LevelIsTutorial() && !GameHubBehaviour.Hub.GuiScripts.Esc.IsWindowVisible() && !GameHubBehaviour.Hub.GuiScripts.DriverHelper.IsWindowVisible()) && !this._muteSystemPresenter.Visible;
 		}
 
 		private void SetupTeamInfo()
 		{
 			this.AllyTeamGameObject.SetActive(false);
 			this.EnemyTeamGameObject.SetActive(false);
-			TeamUtils.GetGroupTeamAsync(GameHubBehaviour.Hub, TeamKind.Blue, delegate(Team team)
-			{
-				this.SetGroupTeamInfo(TeamKind.Blue, team);
-			}, delegate(Exception exception)
-			{
-				HudTabController.Log.Error(string.Format("Error on GetGroupTeamAsync [{0}]. Exception:{1}", TeamKind.Blue, exception));
-			});
-			TeamUtils.GetGroupTeamAsync(GameHubBehaviour.Hub, TeamKind.Red, delegate(Team team)
-			{
-				this.SetGroupTeamInfo(TeamKind.Red, team);
-			}, delegate(Exception exception)
-			{
-				HudTabController.Log.Error(string.Format("Error on GetGroupTeamAsync [{0}]. Exception:{1}", TeamKind.Red, exception));
-			});
+			this.SetGroupTeamInfo(TeamKind.Blue);
+			this.SetGroupTeamInfo(TeamKind.Red);
 		}
 
-		private void SetGroupTeamInfo(TeamKind teamKind, Team team)
+		private void SetGroupTeamInfo(TeamKind teamKind)
 		{
-			if (team == null)
+			Team groupTeam = this._teams.GetGroupTeam(teamKind);
+			if (groupTeam == null)
 			{
 				return;
 			}
-			string text = string.Format("[{0}]", team.Tag);
+			string anyTeamTagRestriction = this._teamNameRestriction.GetAnyTeamTagRestriction(groupTeam.CurrentUgmUserPlayerId, groupTeam.Tag);
+			string text = string.Format("[{0}]", NGUIText.EscapeSymbols(anyTeamTagRestriction));
 			if (GameHubBehaviour.Hub.Players.CurrentPlayerData.Team == teamKind)
 			{
-				this.AllyTeamIconSprite.SpriteName = team.ImageUrl;
+				this.AllyTeamIconSprite.SpriteName = groupTeam.ImageUrl;
 				this.AllyTeamNameLabel.text = text;
 				this.AllyTeamGameObject.SetActive(true);
+				this.FetchAndFillTeamUserGeneratedContentPublisherUserName(groupTeam, this.AllyTeamUserGeneratedContentCurrentOwnerPublisherUserNameLabel);
 			}
 			else
 			{
-				this.EnemyTeamIconSprite.SpriteName = team.ImageUrl;
+				this.EnemyTeamIconSprite.SpriteName = groupTeam.ImageUrl;
 				this.EnemyTeamNameLabel.text = text;
 				this.EnemyTeamGameObject.SetActive(true);
+				this.FetchAndFillTeamUserGeneratedContentPublisherUserName(groupTeam, this.EnemyTeamUserGeneratedContentCurrentOwnerPublisherUserNameLabel);
 			}
 		}
 
+		private void FetchAndFillTeamUserGeneratedContentPublisherUserName(Team team, UILabel label)
+		{
+			label.text = string.Empty;
+			ObservableExtensions.Subscribe<string>(Observable.Do<string>(this._getDisplayablePublisherUserName.GetAsTeamUgcOwner(team.CurrentUgmUserUniversalId), delegate(string displayablePublisherUserName)
+			{
+				label.Text = displayablePublisherUserName;
+			}));
+		}
+
 		private static readonly BitLogger Log = new BitLogger(typeof(HudTabController));
+
+		[Inject]
+		private IMatchTeams _teams;
+
+		[Inject]
+		private ITeamNameRestriction _teamNameRestriction;
 
 		public int BasePlayerSlotsOffset;
 
@@ -542,31 +601,17 @@ namespace HeavyMetalMachines.Frontend
 
 		public Color StatsTopEnemyColor;
 
-		public Color UpgradeBorderDisabledColor;
-
-		public Color UpgradeBorderEnabledColor;
-
-		public Color UpgradeBorderFullColor;
-
 		public UILabel TimerLabel;
 
 		public UILabel AllyKillsLabel;
 
 		public UILabel EnemyKillsLabel;
 
-		public UIButton ToggleModeButton;
-
-		public UILabel ToggleModeButtonLabel;
-
 		public GameObject TitleGroupStatisticsGameObject;
-
-		public GameObject TitleGroupUpgradeGameObject;
 
 		public UI2DSprite PlayerBaseSlotSprite;
 
 		public GameObject ExitGroupGameObject;
-
-		public int PlayerNameMaxChars = 15;
 
 		public HudTabPlayer[] AllyPlayers;
 
@@ -579,30 +624,41 @@ namespace HeavyMetalMachines.Frontend
 
 		public UILabel AllyTeamNameLabel;
 
+		public UILabel AllyTeamUserGeneratedContentCurrentOwnerPublisherUserNameLabel;
+
 		public GameObject EnemyTeamGameObject;
 
 		public HMMUI2DDynamicSprite EnemyTeamIconSprite;
 
 		public UILabel EnemyTeamNameLabel;
 
+		public UILabel EnemyTeamUserGeneratedContentCurrentOwnerPublisherUserNameLabel;
+
 		private TimeSpan _time;
 
 		private int _seconds;
-
-		private HudTabController.VisibilityMode _visibilityMode;
-
-		private EventDelegate _toggleModeButtonClickEventDelegate;
 
 		private int _playerBuildCount;
 
 		private bool _isGameOver;
 
-		private bool _megaFeedbackIsPlaying;
+		[SerializeField]
+		private GameObject _spectatorGroup;
 
-		public enum VisibilityMode : byte
-		{
-			Statistics,
-			Upgrade
-		}
+		[SerializeField]
+		private HudTabPlayer[] _spectatorPlayers;
+
+		[InjectOnClient]
+		private IControllerInputActionPoller _inputActionPoller;
+
+		[InjectOnClient]
+		private IMuteSystemPresenter _muteSystemPresenter;
+
+		[Inject]
+		private IGetDisplayablePublisherUserName _getDisplayablePublisherUserName;
+
+		private Subject<bool> _visibilityObservation;
+
+		private bool _megaFeedbackIsPlaying;
 	}
 }

@@ -15,7 +15,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				num = this.Effect.Data.Range;
 			}
-			return Physics.OverlapSphere(this.GetCenter(), num, 1077058560);
+			return Physics.OverlapSphere(this.GetCenter(), num, 1077054464);
 		}
 
 		public override void PerkInitialized()

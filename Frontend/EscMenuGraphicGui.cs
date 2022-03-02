@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using HeavyMetalMachines.Localization;
 using Pocketverse;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -33,16 +34,19 @@ namespace HeavyMetalMachines.Frontend
 			this._visualMonitorPopup.value = null;
 			this._visualVsyncPopup.value = null;
 			this._visualFpsPopup.value = null;
-			this._resolutions = GameHubBehaviour.Hub.GuiScripts.ScreenResolution.GetAvailableResolutions();
+			List<Resolution> availableResolutions = GameHubBehaviour.Hub.GuiScripts.ScreenResolution.GetAvailableResolutions();
+			this._resolutions.Clear();
 			this._visualResolutionPopup.items.Clear();
-			for (int i = 0; i < this._resolutions.Count; i++)
+			for (int i = availableResolutions.Count - 1; i >= 0; i--)
 			{
-				this._visualResolutionPopup.items.Add(this._resolutions[i].ToString());
+				Resolution item = availableResolutions[i];
+				this._resolutions.Add(item);
+				this._visualResolutionPopup.items.Add(item.ToString());
 			}
 			this._visualResolutionPopup.value = GameHubBehaviour.Hub.GuiScripts.ScreenResolution.GetCurrentResolution().ToString();
 			this._visualFullScreenPopup.items.Clear();
-			this._visualFullScreenPopup.items.Add(Language.Get("VISUAL_FULLSCREEN_WINDOWED", TranslationSheets.Options));
-			this._visualFullScreenPopup.items.Add(Language.Get("VISUAL_FULLSCREEN_FULLSCREEN", TranslationSheets.Options));
+			this._visualFullScreenPopup.items.Add(Language.Get("VISUAL_FULLSCREEN_WINDOWED", TranslationContext.Options));
+			this._visualFullScreenPopup.items.Add(Language.Get("VISUAL_FULLSCREEN_FULLSCREEN", TranslationContext.Options));
 			int index = (!GameHubBehaviour.Hub.GuiScripts.ScreenResolution.IsFullscreen()) ? 0 : 1;
 			this._visualFullScreenPopup.value = this._visualFullScreenPopup.items[index];
 			this._displays = GameHubBehaviour.Hub.GuiScripts.ScreenResolution.GetAvailableDisplays();
@@ -53,14 +57,14 @@ namespace HeavyMetalMachines.Frontend
 			}
 			this._visualMonitorPopup.value = (GameHubBehaviour.Hub.GuiScripts.ScreenResolution.GetCurrentDisplay() + 1).ToString();
 			this._visualVsyncPopup.items.Clear();
-			this._visualVsyncPopup.items.Add(Language.Get("Desligado", TranslationSheets.Options));
-			this._visualVsyncPopup.items.Add(Language.Get("Ligado", TranslationSheets.Options));
+			this._visualVsyncPopup.items.Add(Language.Get("Desligado", TranslationContext.Options));
+			this._visualVsyncPopup.items.Add(Language.Get("Ligado", TranslationContext.Options));
 			this._visualVsyncPopup.itemData.Clear();
 			this._visualVsyncPopup.itemData.Add(0);
 			this._visualVsyncPopup.itemData.Add(1);
 			this._visualVsyncPopup.value = ((GameHubBehaviour.Hub.GuiScripts.ScreenResolution.GetCurrentVsyncCount() <= 0) ? this._visualVsyncPopup.items[0] : this._visualVsyncPopup.items[1]);
 			this._visualFpsPopup.items.Clear();
-			this._visualFpsPopup.items.Add(Language.Get("Desligado", TranslationSheets.Options));
+			this._visualFpsPopup.items.Add(Language.Get("Desligado", TranslationContext.Options));
 			this._visualFpsPopup.items.Add("30");
 			this._visualFpsPopup.items.Add("60");
 			this._visualFpsPopup.items.Add("120");
@@ -146,16 +150,16 @@ namespace HeavyMetalMachines.Frontend
 		}
 
 		[Header("GRAPHICS")]
+		[SerializeField]
 		[FormerlySerializedAs("VisualResolutionPopup")]
-		[SerializeField]
-		private UIScrollablePopupList _visualResolutionPopup;
+		private UIPopupList _visualResolutionPopup;
 
-		[FormerlySerializedAs("VisualFullScreenPopup")]
 		[SerializeField]
+		[FormerlySerializedAs("VisualFullScreenPopup")]
 		private UIPopupList _visualFullScreenPopup;
 
-		[FormerlySerializedAs("VisualMonitorPopup")]
 		[SerializeField]
+		[FormerlySerializedAs("VisualMonitorPopup")]
 		private UIPopupList _visualMonitorPopup;
 
 		[SerializeField]
@@ -169,8 +173,8 @@ namespace HeavyMetalMachines.Frontend
 
 		private bool _reloading = true;
 
-		private List<ScreenResolutionController.Resolution> _resolutions;
+		private List<Resolution> _resolutions = new List<Resolution>();
 
-		private List<ScreenResolutionController.Display> _displays;
+		private List<Display> _displays;
 	}
 }

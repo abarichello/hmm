@@ -1,12 +1,22 @@
 ﻿using System;
 using System.Collections;
-using Commons.Swordfish.Battlepass;
+using HeavyMetalMachines.DataTransferObjects.Battlepass;
+using HeavyMetalMachines.DataTransferObjects.Progression;
+using Hoplon.Input.UiNavigation;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Battlepass
 {
 	internal class UnityUiBattlepassMissionsTabPresenter : MonoBehaviour
 	{
+		private IUiNavigationSubGroupHolder UiNavigationSubGroupHolder
+		{
+			get
+			{
+				return this._uiNavigationSubGroupHolder;
+			}
+		}
+
 		private void OnEnable()
 		{
 			this._canvasGroup.alpha = 1f;
@@ -23,7 +33,7 @@ namespace HeavyMetalMachines.Battlepass
 			MissionConfig mission = battlepassViewData.BattlepassConfig.Mission;
 			BattlepassProgress battlepassProgress = battlepassViewData.BattlepassProgress;
 			DateTime utcNow = battlepassViewData.DataTime.UtcNow;
-			this._weekGroupPresenter.Setup(battlepassViewData.BattlepassConfig, utcNow);
+			this._weekGroupPresenter.Setup(battlepassViewData);
 			this._weekMissionsPresenter.Setup(buyUiActions, userHasPremium, mission, battlepassProgress, utcNow);
 			this._listMissionsGroupPresenter.Setup(buyUiActions, userHasPremium, mission, battlepassProgress);
 			this._togglePresenter.Setup(true, this._listMissionsGroupPresenter);
@@ -33,6 +43,7 @@ namespace HeavyMetalMachines.Battlepass
 		{
 			base.StopAllCoroutines();
 			base.gameObject.SetActive(true);
+			this.SetUiNavigationFocus(isVisible);
 			if (isVisible)
 			{
 				this._mainAnimation.Play("battlepass_transition_in");
@@ -57,6 +68,18 @@ namespace HeavyMetalMachines.Battlepass
 			yield break;
 		}
 
+		private void SetUiNavigationFocus(bool focused)
+		{
+			if (focused)
+			{
+				this.UiNavigationSubGroupHolder.SubGroupFocusGet();
+			}
+			else
+			{
+				this.UiNavigationSubGroupHolder.SubGroupFocusRelease();
+			}
+		}
+
 		[SerializeField]
 		private CanvasGroup _canvasGroup;
 
@@ -74,5 +97,9 @@ namespace HeavyMetalMachines.Battlepass
 
 		[SerializeField]
 		private UnityUiBattlepassMissionsTogglePresenter _togglePresenter;
+
+		[Header("[Ui Navigation]")]
+		[SerializeField]
+		private UiNavigationSubGroupHolder _uiNavigationSubGroupHolder;
 	}
 }

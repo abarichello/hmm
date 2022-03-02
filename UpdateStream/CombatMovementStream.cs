@@ -11,7 +11,7 @@ namespace HeavyMetalMachines.UpdateStream
 	{
 		protected override Timeline<CombatMovementPose> InstantiateTimeline()
 		{
-			return new CombatMovementTimeline(this.configuration.SmoothClockInstance, 1024u);
+			return new CombatMovementTimeline(this.configuration.SmoothClockInstance, 1024U);
 		}
 
 		protected override void Awake()
@@ -24,8 +24,8 @@ namespace HeavyMetalMachines.UpdateStream
 				if (component != null)
 				{
 					component.isKinematic = true;
-					component.constraints = RigidbodyConstraints.None;
-					component.collisionDetectionMode = CollisionDetectionMode.Discrete;
+					component.constraints = 0;
+					component.collisionDetectionMode = 0;
 				}
 			}
 		}
@@ -45,7 +45,7 @@ namespace HeavyMetalMachines.UpdateStream
 			pose.AngularVelocity = this._combatMovement.LastAngularVelocity;
 		}
 
-		public override void Read(Pocketverse.BitStream stream, double offset)
+		public override void Read(BitStream stream, double offset)
 		{
 			double num = stream.ReadDouble();
 			CombatMovementPose combatMovementPose = new CombatMovementPose
@@ -58,7 +58,7 @@ namespace HeavyMetalMachines.UpdateStream
 			this.Timeline.AddPose(num + offset, ref combatMovementPose);
 		}
 
-		public override void Write(Pocketverse.BitStream stream)
+		public override void Write(BitStream stream)
 		{
 			stream.WriteDouble((double)GameHubBehaviour.Hub.GameTime.GetPlaybackTime() / 1000.0);
 			stream.WriteVector3(base.transform.position);

@@ -1,5 +1,6 @@
 ﻿using System;
-using Commons.Swordfish.Battlepass;
+using HeavyMetalMachines.DataTransferObjects.Battlepass;
+using HeavyMetalMachines.DataTransferObjects.Progression;
 using HeavyMetalMachines.Infra.ScriptableObjects;
 using Pocketverse;
 using UnityEngine;
@@ -9,19 +10,9 @@ namespace HeavyMetalMachines.Battlepass
 {
 	public class BattlepassDetailComponent : GameHubScriptableObject, IBattlepassDetailComponent
 	{
-		public UnityUiBattlepassDetailView.BattlepassDetailViewData RegisterDetailView(IBattlepassDetailView view)
+		public void RegisterDetailView(IBattlepassDetailView view)
 		{
 			this._battlepassDetailView = view;
-			BattlepassConfig battlepass = GameHubScriptableObject.Hub.SharedConfigs.Battlepass;
-			DateTime startDate = battlepass.GetStartDate();
-			DateTime endDate = battlepass.GetEndDate();
-			return new UnityUiBattlepassDetailView.BattlepassDetailViewData
-			{
-				StartDay = startDate.Day,
-				StartMonth = "BATTLEPASS_WELCOME_START_DATE",
-				EndDay = endDate.Day,
-				EndMonth = "BATTLEPASS_WELCOME_END_DATE"
-			};
 		}
 
 		public bool TryToShowDetailWindow(Action<bool> onWindowCloseAction)
@@ -33,7 +24,7 @@ namespace HeavyMetalMachines.Battlepass
 			if (this._battlepassDetailView == null)
 			{
 				this._onDetailWindowCloseAction = onWindowCloseAction;
-				SceneManager.LoadSceneAsync("UI_ADD_BattlepassDetail", LoadSceneMode.Additive);
+				SceneManager.LoadSceneAsync("UI_ADD_BattlepassDetail", 1);
 				this.MarkDetailWindowOpened();
 				return true;
 			}
@@ -60,12 +51,20 @@ namespace HeavyMetalMachines.Battlepass
 			}
 		}
 
+		public BattlepassConfig BattlepassConfig
+		{
+			get
+			{
+				return GameHubScriptableObject.Hub.SharedConfigs.Battlepass;
+			}
+		}
+
 		private void MarkDetailWindowOpened()
 		{
 			BattlepassDetailComponent._detailWindowHasOpened = true;
 		}
 
-		private bool CanOpenDetailWindow()
+		public bool CanOpenDetailWindow()
 		{
 			if (BattlepassDetailComponent._detailWindowHasOpened)
 			{

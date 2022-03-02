@@ -17,7 +17,7 @@ namespace HeavyMetalMachines.VFX
 			int num2 = -1;
 			while (++num < this.Sprites.Length && num2 == -1)
 			{
-				if (this.Sprites[num].Language == Language.CurrentLanguage())
+				if (this.Sprites[num].Language == Language.CurrentLanguage)
 				{
 					num2 = num;
 				}

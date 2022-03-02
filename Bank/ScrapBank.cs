@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using HeavyMetalMachines.BI;
 using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.Match;
 using Pocketverse;
 using UnityEngine;
@@ -27,7 +27,7 @@ namespace HeavyMetalMachines.Bank
 
 		private void Update()
 		{
-			if (this.PlayerAccounts.Count > 0 && GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreBoard.State.BombDelivery && !this._updater.ShouldHalt())
+			if (this.PlayerAccounts.Count > 0 && GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreboardState.BombDelivery && !this._updater.ShouldHalt())
 			{
 				foreach (KeyValuePair<int, PlayerStats> keyValuePair in this.PlayerAccounts)
 				{
@@ -63,179 +63,12 @@ namespace HeavyMetalMachines.Bank
 			return true;
 		}
 
-		public bool HaveEnoughScrap(int id, int scrapAmount)
-		{
-			if (GameHubBehaviour.Hub.ScrapLevel.FreeUpgrades)
-			{
-				return true;
-			}
-			PlayerStats playerStats;
-			if (!this.PlayerAccounts.TryGetValue(id, out playerStats))
-			{
-				ScrapBank.Log.ErrorFormat("Failed to find scrap acount for player={0}", new object[]
-				{
-					id
-				});
-				return false;
-			}
-			return playerStats.Scrap >= scrapAmount;
-		}
-
-		public int GetScraps(int id)
-		{
-			PlayerStats playerStats;
-			if (!this.PlayerAccounts.TryGetValue(id, out playerStats))
-			{
-				ScrapBank.Log.ErrorFormat("Failed to find scrap acount for player={0}", new object[]
-				{
-					id
-				});
-				return -1;
-			}
-			return playerStats.Scrap;
-		}
-
-		public bool SpendScrap(int id, int scrapAmount)
-		{
-			if (GameHubBehaviour.Hub.ScrapLevel.FreeUpgrades)
-			{
-				return true;
-			}
-			PlayerStats playerStats;
-			if (!this.PlayerAccounts.TryGetValue(id, out playerStats))
-			{
-				ScrapBank.Log.ErrorFormat("Failed to find scrap acount for player={0}", new object[]
-				{
-					id
-				});
-				return false;
-			}
-			if (!playerStats.SpendScrap(scrapAmount))
-			{
-				return false;
-			}
-			playerStats.ScrapSpent += scrapAmount;
-			return true;
-		}
-
-		public bool AddScrap(int id, int scrapAmount, ScrapBank.ScrapReason reason)
-		{
-			PlayerStats playerStats;
-			if (!this.PlayerAccounts.TryGetValue(id, out playerStats))
-			{
-				ScrapBank.Log.ErrorFormat("AddScrap - Failed to find scrap acount for player={0}", new object[]
-				{
-					id
-				});
-				return false;
-			}
-			playerStats.AddScrap(scrapAmount, true, reason);
-			return true;
-		}
-
-		public int GetPlayerBounty(int playerId, int killerId, CombatObject killer, int possibleKillerId)
-		{
-			PlayerStats playerStats;
-			if (!this.PlayerAccounts.TryGetValue(playerId, out playerStats))
-			{
-				ScrapBank.Log.ErrorFormat("Not really a player victim id={0}", new object[]
-				{
-					playerId
-				});
-				return 0;
-			}
-			PlayerStats playerStats2;
-			if (!this.PlayerAccounts.TryGetValue(killerId, out playerStats2))
-			{
-				CombatObject combatObject = (!(killer != null) || !killer.IsCreep) ? null : killer;
-				if (combatObject != null && this.PlayerAccounts.TryGetValue(combatObject.Creep.ParentId, out playerStats2))
-				{
-					killerId = combatObject.Creep.ParentId;
-					this.PlayerAccounts.TryGetValue(killerId, out playerStats2);
-				}
-				else if (possibleKillerId != -1)
-				{
-					killerId = possibleKillerId;
-					this.PlayerAccounts.TryGetValue(killerId, out playerStats2);
-				}
-			}
-			Identifiable @object = GameHubBehaviour.Hub.ObjectCollection.GetObject(killerId);
-			TeamKind teamKind = TeamKind.Zero;
-			CombatObject component;
-			if (@object != null && (component = @object.GetComponent<CombatObject>()) != null)
-			{
-				teamKind = component.Team;
-			}
-			else
-			{
-				TeamKind team = playerStats.Combat.Team;
-				if (team != TeamKind.Red)
-				{
-					if (team == TeamKind.Blue)
-					{
-						teamKind = TeamKind.Red;
-					}
-				}
-				else
-				{
-					teamKind = TeamKind.Blue;
-				}
-			}
-			int num = -1;
-			if (playerStats2 != null)
-			{
-				num = playerStats2.Level;
-			}
-			else
-			{
-				Dictionary<int, PlayerStats> dictionary = null;
-				if (teamKind != TeamKind.Blue)
-				{
-					if (teamKind == TeamKind.Red)
-					{
-						dictionary = this.TeamRedAccounts;
-					}
-				}
-				else
-				{
-					dictionary = this.TeamBluAccounts;
-				}
-				if (dictionary != null && dictionary.Count > 0)
-				{
-					foreach (PlayerStats playerStats3 in dictionary.Values)
-					{
-						num += playerStats3.Level;
-					}
-					num /= dictionary.Count;
-				}
-			}
-			int value = GameHubBehaviour.Hub.ScrapLevel.ScrapPerPlayerKill.Value;
-			int num2 = (num > 0) ? (Mathf.Clamp(playerStats.Level - num, -GameHubBehaviour.Hub.ScrapLevel.ScrapPerPlayerKillLevelDiff, GameHubBehaviour.Hub.ScrapLevel.ScrapPerPlayerKillLevelDiff) * GameHubBehaviour.Hub.ScrapLevel.ScrapPerPlayerKillLevelBonus) : 0;
-			float num3 = GameHubBehaviour.Hub.ScrapLevel.ScrapPerPlayerKillDeathStreakMaxReduction * Mathf.InverseLerp(0f, (float)GameHubBehaviour.Hub.ScrapLevel.ScrapPerPlayerKillDeathStreakMaxAmount, (float)playerStats.CurrentDeathStreak);
-			int num4 = Mathf.RoundToInt((float)(value + num2) * (1f - num3));
-			int num5 = GameHubBehaviour.Hub.MatchHistory.FirstBloodOccurred ? 0 : GameHubBehaviour.Hub.ScrapLevel.ScrapPerFirstBlood.Value;
-			int num6 = GameHubBehaviour.Hub.ScrapLevel.ScrapPerKillStreakEndBase.Value * GameHubBehaviour.Hub.ScrapLevel.ScrapPerKillStreakEndLevels[Mathf.Min(playerStats.CurrentKillingStreak, GameHubBehaviour.Hub.ScrapLevel.ScrapPerKillStreakEndLevels.Length - 1)];
-			int num7 = num4 + num5 + num6;
-			return (num7 <= 0) ? 0 : num7;
-		}
-
-		public void CreepKilled(int creep, int killer)
-		{
-			PlayerStats playerStats;
-			if (!this.PlayerAccounts.TryGetValue(killer, out playerStats))
-			{
-				return;
-			}
-			playerStats.CreepKills++;
-		}
-
 		private void ScrapCollected(int player, int amount, ScrapIncomeKind kind)
 		{
 			PlayerStats playerStats;
 			if (this.PlayerAccounts.TryGetValue(player, out playerStats))
 			{
 				playerStats.ScrapCollected += amount;
-				BombMatchBI.ScrapContributed(player, amount, kind);
 			}
 		}
 

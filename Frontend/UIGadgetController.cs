@@ -7,6 +7,9 @@ using HeavyMetalMachines.Audio;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Combat.Gadget;
 using HeavyMetalMachines.Combat.GadgetScript;
+using HeavyMetalMachines.Infra.Context;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Input.ControllerInput;
 using HeavyMetalMachines.Match;
 using HeavyMetalMachines.Options;
 using HeavyMetalMachines.Utils;
@@ -23,15 +26,34 @@ namespace HeavyMetalMachines.Frontend
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		private event Action CustomParamsUpdate;
 
+		private void AddCombatListeners()
+		{
+			if (this._gadget != null && this._gadget.Combat != null)
+			{
+				this._gadget.Combat.ListenToObjectSpawn += this.OnCombatObjecSpawn;
+				this._gadget.Combat.ListenToObjectUnspawn += this.OnCombatObjecUnspawn;
+			}
+		}
+
+		private void RemoveCombatListeners()
+		{
+			if (this._gadget != null && this._gadget.Combat != null)
+			{
+				this._gadget.Combat.ListenToObjectSpawn -= this.OnCombatObjecSpawn;
+				this._gadget.Combat.ListenToObjectUnspawn -= this.OnCombatObjecUnspawn;
+			}
+		}
+
 		public void Setup(PlayerData playerData, GadgetData gadgetData, GadgetBehaviour gadget, GadgetSlot slot)
 		{
+			this.RemoveCombatListeners();
 			this._gadgetData = gadgetData;
 			this._gadget = gadget;
 			this._gadgetSlot = slot;
 			this._gadgetNature = gadget.Nature;
 			this._kind = gadget.Kind;
 			this._combatData = gadget.Combat.Data;
-			gadget.Combat.CustomGadgets.TryGetValue(slot, out this._customGadget);
+			this._customGadget = (CombatGadget)gadget.Combat.GetGadgetContext((int)slot);
 			if (SpectatorController.IsSpectating)
 			{
 				this._currentPlayerData = playerData;
@@ -42,17 +64,19 @@ namespace HeavyMetalMachines.Frontend
 				this._currentPlayerData = GameHubBehaviour.Hub.Players.CurrentPlayerData;
 				this.voiceOverController = playerData.CharacterInstance.GetBitComponent<VoiceOverController>();
 			}
-			this.GadgetSprite.SpriteName = HudUtils.GetGadgetIconName(this._currentPlayerData.Character, this._gadgetSlot);
+			bool flag = this._gadget.Slot == GadgetSlot.PassiveGadget;
+			if (!flag || playerData.GetCharacterHasPassive())
+			{
+				this.GadgetSprite.SpriteName = HudUtils.GetGadgetIconName(this._currentPlayerData, this._gadgetSlot);
+			}
 			this.SetupOverheatComponents();
-			gadget.Combat.ListenToObjectSpawn += this.OnCombatObjecSpawn;
-			gadget.Combat.ListenToObjectUnspawn += this.OnCombatObjecUnspawn;
+			this.AddCombatListeners();
 			this._isAlive = gadget.Combat.IsAlive();
-			this.TryToSetupCounter(gadget);
 			this.TryToSetupCooldown();
 			this.TryToSetupRage();
 			this.TryToSetupBuffOnSpeed();
 			this.TryToSetupCustomGadget();
-			if (this._gadget.Slot == GadgetSlot.PassiveGadget)
+			if (flag)
 			{
 				base.gameObject.SetActive(this.RageComponents.IsEnabled() || this.BuffOnSpeedComponents.IsEnabled());
 			}
@@ -130,6 +154,7 @@ namespace HeavyMetalMachines.Frontend
 
 		public void OnDestroy()
 		{
+			this.RemoveCombatListeners();
 			this._gadgetData = null;
 			this._gadget = null;
 			this._combatData = null;
@@ -166,7 +191,7 @@ namespace HeavyMetalMachines.Frontend
 
 		private bool IsInputBlocked()
 		{
-			return !ControlOptions.IsControlActionUnlocked(this.ControlAction);
+			return !ControlOptions.IsControlActionUnlocked(this.InputAction);
 		}
 
 		private bool IsCoolingAfterOverheat()
@@ -187,8 +212,8 @@ namespace HeavyMetalMachines.Frontend
 		private bool IsBombDeliveryOrTutorialWarmup()
 		{
 			bool flag = GameHubBehaviour.Hub.Match.LevelIsTutorial();
-			bool flag2 = GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreBoard.State.BombDelivery;
-			bool flag3 = GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreBoard.State.Warmup;
+			bool flag2 = GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreboardState.BombDelivery;
+			bool flag3 = GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreboardState.Warmup;
 			return flag2 || (flag3 && flag);
 		}
 
@@ -217,7 +242,7 @@ namespace HeavyMetalMachines.Frontend
 				{
 					if (this.CooldownEndFX != null)
 					{
-						this.CooldownEndFX.Play(PlayMode.StopAll);
+						this.CooldownEndFX.Play(4);
 					}
 					GUIUtils.PlayAnimation(this.FireGadgetAnimation, true, 1f, string.Empty);
 				}
@@ -249,7 +274,7 @@ namespace HeavyMetalMachines.Frontend
 				{
 					if (this.CooldownEndFX != null)
 					{
-						this.CooldownEndFX.Play(PlayMode.StopAll);
+						this.CooldownEndFX.Play(4);
 					}
 					this.CooldownInfo.SetSpritesEnabled(this.GadgetSprite, this.KeyLabelGroupGameObject.GetComponent<UI2DSprite>(), this.KeyLabel, this.BorderSprite);
 					this.UpdateChargeComponentsColors(true, false);
@@ -306,7 +331,7 @@ namespace HeavyMetalMachines.Frontend
 			{
 				return false;
 			}
-			this._gadgetState = ((this._customGadget.GetCooldownEndTime() <= GameHubBehaviour.Hub.Clock.GetPlaybackTime()) ? GadgetState.Ready : GadgetState.Cooldown);
+			this._gadgetState = ((this._customGadget.GetCooldownEndTime() <= GameHubBehaviour.Hub.GameTime.GetPlaybackTime()) ? GadgetState.Ready : GadgetState.Cooldown);
 			if (this._gadgetState != this._lastGadgetState)
 			{
 				this.ChangeState();
@@ -337,10 +362,6 @@ namespace HeavyMetalMachines.Frontend
 			this.UpdateCooldownTimer(gadgetState);
 			this.ChargingUpdater(gadgetState);
 			this._chargedAnimationQueue.Update();
-			if (this.GadgetCounterComponents.isActive)
-			{
-				this.GadgetCounterComponents.Update();
-			}
 			this.ProgressUpdate();
 			this.RageUpdate();
 			this.BuffOnSpeedUpdate();
@@ -408,8 +429,8 @@ namespace HeavyMetalMachines.Frontend
 			}
 			else
 			{
-				float t = num3 - (float)num4;
-				this.OverheatComponents.HeatAnimatedColor.color = Color.Lerp(heatPhaseColors[num4], heatPhaseColors[num4 + 1], t);
+				float num5 = num3 - (float)num4;
+				this.OverheatComponents.HeatAnimatedColor.color = Color.Lerp(heatPhaseColors[num4], heatPhaseColors[num4 + 1], num5);
 			}
 			switch (this._gadgetState)
 			{
@@ -423,7 +444,7 @@ namespace HeavyMetalMachines.Frontend
 				}
 				break;
 			case GadgetState.CoolingAfterOverheat:
-				if (this.OverheatComponents.DeniedAudioFmodAsset != null && !SpectatorController.IsSpectating && ControlOptions.GetButtonDown(this.ControlAction))
+				if (this.OverheatComponents.DeniedAudioFmodAsset != null && !SpectatorController.IsSpectating && this._inputActionPoller.GetButtonDown(this.InputAction))
 				{
 					FMODAudioManager.PlayOneShotAt(this.OverheatComponents.DeniedAudioFmodAsset, Vector3.zero, 0);
 				}
@@ -440,7 +461,7 @@ namespace HeavyMetalMachines.Frontend
 			if (this._gadgetState == GadgetState.Cooldown)
 			{
 				this._isCountingDown = true;
-				float cooldownTimeRemainingSeconds = (float)(gadgetStateObject.CoolDown - (long)GameHubBehaviour.Hub.GameTime.GetPlaybackTime()) * 0.001f;
+				float cooldownTimeRemainingSeconds = (float)(gadgetStateObject.Cooldown - (long)GameHubBehaviour.Hub.GameTime.GetPlaybackTime()) * 0.001f;
 				this.UpdateCooldownUiComponents(cooldownTimeRemainingSeconds, this._gadget.Cooldown);
 			}
 			else if (this._isCountingDown)
@@ -523,7 +544,7 @@ namespace HeavyMetalMachines.Frontend
 			{
 				return;
 			}
-			if (!ControlOptions.GetButtonDown(this.ControlAction))
+			if (!this._inputActionPoller.GetButtonDown(this.InputAction))
 			{
 				return;
 			}
@@ -584,11 +605,11 @@ namespace HeavyMetalMachines.Frontend
 			this._lastGadgetValue = value;
 			if (value == 0)
 			{
-				this.GadgetSprite.SpriteName = HudUtils.GetGadgetIconName(this._currentPlayerData.Character, this._gadgetSlot);
+				this.GadgetSprite.SpriteName = HudUtils.GetGadgetIconName(this._currentPlayerData, this._gadgetSlot);
 			}
 			else
 			{
-				this.GadgetSprite.SpriteName = HudUtils.GetGadgetIconNameB(this._currentPlayerData.Character, this._gadgetSlot);
+				this.GadgetSprite.SpriteName = HudUtils.GetGadgetIconNameB(this._currentPlayerData, this._gadgetSlot);
 			}
 		}
 
@@ -600,7 +621,7 @@ namespace HeavyMetalMachines.Frontend
 			}
 			this.ProgressComponents.MainGroup.SetActive(true);
 			this.ProgressComponents.ProgressBar.value = 1f;
-			this.GadgetSprite.SpriteName = HudUtils.GetGadgetIconNameB(this._currentPlayerData.Character, this._gadgetSlot);
+			this.GadgetSprite.SpriteName = HudUtils.GetGadgetIconNameB(this._currentPlayerData, this._gadgetSlot);
 		}
 
 		private void ToggleOff()
@@ -610,7 +631,7 @@ namespace HeavyMetalMachines.Frontend
 				return;
 			}
 			this.ProgressComponents.MainGroup.SetActive(false);
-			this.GadgetSprite.SpriteName = HudUtils.GetGadgetIconName(this._currentPlayerData.Character, this._gadgetSlot);
+			this.GadgetSprite.SpriteName = HudUtils.GetGadgetIconName(this._currentPlayerData, this._gadgetSlot);
 		}
 
 		public void UltimateCustomParameterToggle(UiParameterCallback parameter)
@@ -618,11 +639,11 @@ namespace HeavyMetalMachines.Frontend
 			bool flag = (bool)parameter.CurrentValue;
 			if (flag)
 			{
-				this.GadgetSprite.SpriteName = HudUtils.GetGadgetIconNameB(this._currentPlayerData.Character, this._gadgetSlot);
+				this.GadgetSprite.SpriteName = HudUtils.GetGadgetIconNameB(this._currentPlayerData, this._gadgetSlot);
 			}
 			else
 			{
-				this.GadgetSprite.SpriteName = HudUtils.GetGadgetIconName(this._currentPlayerData.Character, this._gadgetSlot);
+				this.GadgetSprite.SpriteName = HudUtils.GetGadgetIconName(this._currentPlayerData, this._gadgetSlot);
 			}
 		}
 
@@ -666,7 +687,7 @@ namespace HeavyMetalMachines.Frontend
 
 		public void UpdateKey(string keyText)
 		{
-			this._gadgetHasKey = (keyText != KeyCode.None.ToString());
+			this._gadgetHasKey = (keyText != 0.ToString());
 			if (this.TryDisableShortcutKeysIfSpectator())
 			{
 				return;
@@ -720,29 +741,6 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
-		private void TryToSetupCounter(GadgetBehaviour gadget)
-		{
-			if (this.GadgetCounterComponents.GroupGameObject == null)
-			{
-				return;
-			}
-			GranTorinoRocket granTorinoRocket = gadget as GranTorinoRocket;
-			if (granTorinoRocket != null)
-			{
-				this.GadgetCounterComponents.Setup(gadget, new Func<float>(granTorinoRocket.GetCurrentPickup), new Func<float>(granTorinoRocket.GetMaxPickup), new Func<bool>(granTorinoRocket.HasPickupUpgrade));
-				this.GadgetCounterComponents.GroupGameObject.SetActive(true);
-				return;
-			}
-			SpikeTrap spikeTrap = gadget as SpikeTrap;
-			if (spikeTrap != null)
-			{
-				this.GadgetCounterComponents.Setup(gadget, new Func<float>(spikeTrap.GetSpikeExtraDamage), new Func<float>(spikeTrap.GetSpikeTrapMaxSteps), new Func<bool>(spikeTrap.HasSpikeDamageUpgrade));
-				this.GadgetCounterComponents.GroupGameObject.SetActive(false);
-				return;
-			}
-			this.GadgetCounterComponents.GroupGameObject.SetActive(false);
-		}
-
 		private void TryToSetupCooldown()
 		{
 			this.ProgressComponents.Hide();
@@ -751,13 +749,13 @@ namespace HeavyMetalMachines.Frontend
 		public void OnVfxActivated(float lifeTime)
 		{
 			this.ProgressComponents.Start(lifeTime);
-			this.GadgetSprite.SpriteName = HudUtils.GetGadgetIconNameB(this._currentPlayerData.Character, this._gadgetSlot);
+			this.GadgetSprite.SpriteName = HudUtils.GetGadgetIconNameB(this._currentPlayerData, this._gadgetSlot);
 		}
 
 		public void OnVfxDeactivated()
 		{
 			this.ProgressComponents.Hide();
-			this.GadgetSprite.SpriteName = HudUtils.GetGadgetIconName(this._currentPlayerData.Character, this._gadgetSlot);
+			this.GadgetSprite.SpriteName = HudUtils.GetGadgetIconName(this._currentPlayerData, this._gadgetSlot);
 		}
 
 		private bool TryToStartProgressFeedback()
@@ -767,7 +765,7 @@ namespace HeavyMetalMachines.Frontend
 				return false;
 			}
 			this.ProgressComponents.Start(this._gadget.LifeTime);
-			this.GadgetSprite.SpriteName = HudUtils.GetGadgetIconNameB(this._currentPlayerData.Character, this._gadgetSlot);
+			this.GadgetSprite.SpriteName = HudUtils.GetGadgetIconNameB(this._currentPlayerData, this._gadgetSlot);
 			return true;
 		}
 
@@ -779,7 +777,7 @@ namespace HeavyMetalMachines.Frontend
 			}
 			if (!this.ProgressComponents.Update())
 			{
-				this.GadgetSprite.SpriteName = HudUtils.GetGadgetIconName(this._currentPlayerData.Character, this._gadgetSlot);
+				this.GadgetSprite.SpriteName = HudUtils.GetGadgetIconName(this._currentPlayerData, this._gadgetSlot);
 			}
 		}
 
@@ -820,16 +818,9 @@ namespace HeavyMetalMachines.Frontend
 			return this._gadgetSlot == GadgetSlot.PassiveGadget || this._gadgetHasKey;
 		}
 
-		public void ResetGadgetState()
-		{
-			this._lastGadgetState = GadgetState.None;
-			this._gadgetState = GadgetState.None;
-			this._isCountingDown = false;
-		}
-
 		public HMMUI2DDynamicSprite GadgetSprite;
 
-		public ControlAction ControlAction;
+		public ControllerInputActions InputAction;
 
 		public UILabel CooldownLabelSeconds;
 
@@ -871,13 +862,13 @@ namespace HeavyMetalMachines.Frontend
 
 		private int audioCooldownTime;
 
-		public FMODAsset CooldownAudioFmodAsset;
+		public AudioEventAsset CooldownAudioFmodAsset;
 
-		public FMODAsset DisarmedAudioFmodAsset;
+		public AudioEventAsset DisarmedAudioFmodAsset;
 
-		public FMODAsset UndisarmedAudioFmodAsset;
+		public AudioEventAsset UndisarmedAudioFmodAsset;
 
-		public FMODAsset ActivatedAudioFmodAsset;
+		public AudioEventAsset ActivatedAudioFmodAsset;
 
 		private VoiceOverController voiceOverController;
 
@@ -925,12 +916,11 @@ namespace HeavyMetalMachines.Frontend
 
 		private readonly AnimationQueue _chargedAnimationQueue = new AnimationQueue();
 
+		[InjectOnClient]
+		private IControllerInputActionPoller _inputActionPoller;
+
 		[Header("[Overheat]")]
 		public UIGadgetController.GuiOverheatComponents OverheatComponents;
-
-		[Header("[Gadget Counter]")]
-		[SerializeField]
-		protected GuiGadgetCounterComponents GadgetCounterComponents;
 
 		[Header("[Charging Components]")]
 		[SerializeField]
@@ -992,11 +982,11 @@ namespace HeavyMetalMachines.Frontend
 			public string OverheatAnimatorPropertyName;
 
 			[Header("[Audio]")]
-			public FMODAsset OverheatAudioFmodAsset;
+			public AudioEventAsset OverheatAudioFmodAsset;
 
-			public FMODAsset DeniedAudioFmodAsset;
+			public AudioEventAsset DeniedAudioFmodAsset;
 
-			public FMODAsset ReadyAfterCoolingAudioFmodAsset;
+			public AudioEventAsset ReadyAfterCoolingAudioFmodAsset;
 		}
 
 		[Serializable]
@@ -1215,10 +1205,10 @@ namespace HeavyMetalMachines.Frontend
 			private float _RageLevelDecreaseValue;
 
 			[SerializeField]
-			private FMODAsset[] _increaseAudios;
+			private AudioEventAsset[] _increaseAudios;
 
 			[SerializeField]
-			private FMODAsset[] _decreaseAudios;
+			private AudioEventAsset[] _decreaseAudios;
 		}
 
 		[Serializable]

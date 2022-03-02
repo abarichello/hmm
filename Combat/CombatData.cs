@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Diagnostics;
 using HeavyMetalMachines.Frontend;
+using HeavyMetalMachines.Infra.Context;
+using HeavyMetalMachines.Playback.Snapshot;
 using HeavyMetalMachines.UpdateStream;
 using Pocketverse;
 using UnityEngine;
@@ -8,7 +10,7 @@ using UnityEngine;
 namespace HeavyMetalMachines.Combat
 {
 	[Serializable]
-	public class CombatData : StreamContent, IObjectSpawnListener
+	public class CombatData : StreamContent, IObjectSpawnListener, ICombatDataSerialData, IBaseStreamSerialData<ICombatDataSerialData>
 	{
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatData.ChangeListener OnHPChanged;
@@ -88,7 +90,10 @@ namespace HeavyMetalMachines.Combat
 			{
 				if (this._ep != value)
 				{
-					GameHubBehaviour.Hub.Stream.CombatDataStream.Changed(this);
+					if (GameHubBehaviour.Hub)
+					{
+						GameHubBehaviour.Hub.Stream.CombatDataStream.Changed(this);
+					}
 					this._ep = value;
 					if (this.OnEPChanged != null)
 					{
@@ -349,7 +354,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				return;
 			}
-			if (!this.IsAlive() || GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreBoard.State.BombDelivery)
+			if (!this.IsAlive() || GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreboardState.BombDelivery)
 			{
 				this._lastTimeUpdate = GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
 				this._regenUpdater.Reset();
@@ -399,7 +404,7 @@ namespace HeavyMetalMachines.Combat
 
 		public override int GetStreamData(ref byte[] data, bool boForceSerialization)
 		{
-			Pocketverse.BitStream stream = base.GetStream();
+			BitStream stream = base.GetStream();
 			stream.WriteCompressedFloat(this.HP);
 			stream.WriteCompressedFloat(this.HPTemp);
 			stream.WriteCompressedFloat(this.EP);
@@ -408,10 +413,17 @@ namespace HeavyMetalMachines.Combat
 
 		public override void ApplyStreamData(byte[] data)
 		{
-			Pocketverse.BitStream streamFor = base.GetStreamFor(data);
+			BitStream streamFor = base.GetStreamFor(data);
 			this.HP = streamFor.ReadCompressedFloat();
 			this.HPTemp = streamFor.ReadCompressedFloat();
 			this.EP = streamFor.ReadCompressedFloat();
+		}
+
+		public void Apply(ICombatDataSerialData other)
+		{
+			this.HP = other.HP;
+			this.HPTemp = other.HPTemp;
+			this.EP = other.EP;
 		}
 
 		public static readonly BitLogger Log = new BitLogger(typeof(CombatData));

@@ -5,7 +5,6 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.UpdateStream
 {
-	[RequireComponent(typeof(Rigidbody))]
 	internal class PositionStream : TimelineStream<PositionPose>
 	{
 		protected override void Awake()
@@ -14,15 +13,26 @@ namespace HeavyMetalMachines.UpdateStream
 			this._rigidbody = base.GetComponent<Rigidbody>();
 			if (base.enabled)
 			{
+				if (!this._rigidbody)
+				{
+					return;
+				}
 				this._rigidbody.isKinematic = true;
-				this._rigidbody.constraints = RigidbodyConstraints.None;
-				this._rigidbody.collisionDetectionMode = CollisionDetectionMode.Discrete;
+				this._rigidbody.constraints = 0;
+				this._rigidbody.collisionDetectionMode = 0;
+			}
+			else if (!this._rigidbody)
+			{
+				PositionStream.Log.ErrorFormat("This script requires a RigidBody to work. Effect name: {0}", new object[]
+				{
+					base.gameObject.name
+				});
 			}
 		}
 
 		protected override Timeline<PositionPose> InstantiateTimeline()
 		{
-			return new PositionTimeline(this.configuration.SmoothClockInstance, 1024u);
+			return new PositionTimeline(this.configuration.SmoothClockInstance, 1024U);
 		}
 
 		protected override void SetCurrentPose(ref PositionPose pose)
@@ -37,7 +47,7 @@ namespace HeavyMetalMachines.UpdateStream
 			pose.Rotation = base.transform.rotation;
 		}
 
-		public override void Read(Pocketverse.BitStream stream, double offset)
+		public override void Read(BitStream stream, double offset)
 		{
 			double num = stream.ReadDouble();
 			PositionPose positionPose = new PositionPose
@@ -49,13 +59,15 @@ namespace HeavyMetalMachines.UpdateStream
 			this.Timeline.AddPose(num + offset, ref positionPose);
 		}
 
-		public override void Write(Pocketverse.BitStream stream)
+		public override void Write(BitStream stream)
 		{
 			stream.WriteDouble((double)GameHubBehaviour.Hub.GameTime.GetPlaybackTime() / 1000.0);
 			stream.WriteVector3(base.transform.position);
 			stream.WriteVector3(this._rigidbody.velocity);
 			stream.WriteQuaternion(base.transform.rotation);
 		}
+
+		private static readonly BitLogger Log = new BitLogger(typeof(PositionStream));
 
 		private Rigidbody _rigidbody;
 	}

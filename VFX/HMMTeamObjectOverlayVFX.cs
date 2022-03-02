@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using HeavyMetalMachines.GameCamera;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
 using HeavyMetalMachines.Match;
 using Pocketverse;
 using UnityEngine;
@@ -18,6 +20,14 @@ namespace HeavyMetalMachines.VFX
 			this._propertyIds.Color = Shader.PropertyToID("_Color");
 			this._propertyIds.OutlineColor = Shader.PropertyToID("_OutlineColor");
 			this.IgnoreLayer |= 268435456;
+			this._boundingSpheres = new BoundingSphere[]
+			{
+				new BoundingSphere(Vector3.zero, this.CullingRadius)
+			};
+			this._cullingGroup = new CullingGroup();
+			this._cullingGroup.targetCamera = ((this._gameCameraEngine == null) ? null : this._gameCameraEngine.UnityCamera);
+			this._cullingGroup.SetBoundingSpheres(this._boundingSpheres);
+			this._cullingGroup.SetBoundingSphereCount(this._boundingSpheres.Length);
 			if (HMMTeamObjectOverlayVFX.RenderBuffer == null)
 			{
 				HMMTeamObjectOverlayVFX.RenderBuffer = new RenderTexture(512, 512, 24);
@@ -56,18 +66,28 @@ namespace HeavyMetalMachines.VFX
 
 		protected void OnDestroy()
 		{
+			this._cullingGroup.Dispose();
+			this._cullingGroup = null;
+			this._boundingSpheres = null;
+			this._writerInstance = null;
 			HMMTeamObjectOverlayVFX.InstanceCount--;
 			if (HMMTeamObjectOverlayVFX.InstanceCount > 0)
 			{
 				return;
 			}
 			HMMTeamObjectOverlayVFX.InstanceCount = 0;
-			UnityEngine.Object.Destroy(HMMTeamObjectOverlayVFX.RenderBuffer);
-			UnityEngine.Object.Destroy(HMMTeamObjectOverlayVFX.QuadMesh);
-			UnityEngine.Object.Destroy(this._writerInstance);
+			Object.Destroy(HMMTeamObjectOverlayVFX.RenderBuffer);
+			Object.Destroy(HMMTeamObjectOverlayVFX.QuadMesh);
+			Object.Destroy(this._writerInstance);
 			HMMTeamObjectOverlayVFX.RenderBuffer = null;
 			HMMTeamObjectOverlayVFX.QuadMesh = null;
-			this._writerInstance = null;
+		}
+
+		protected void Update()
+		{
+			Vector3 position = this._targetObject.position;
+			position.y += this.CenterYOffset;
+			this._boundingSpheres[0].position = position;
 		}
 
 		protected void OnRenderObject()
@@ -77,7 +97,11 @@ namespace HeavyMetalMachines.VFX
 				return;
 			}
 			Camera current = Camera.current;
-			if (current.GetInstanceID() != CarCamera.Singleton.CameraInstanceId || (current.cullingMask & 1) == 0)
+			if (current.GetInstanceID() != this._gameCameraEngine.UnityCamera.GetInstanceID() || (current.cullingMask & 1) == 0)
+			{
+				return;
+			}
+			if (!this._cullingGroup.IsVisible(0))
 			{
 				return;
 			}
@@ -86,25 +110,26 @@ namespace HeavyMetalMachines.VFX
 			GL.Clear(true, true, new Color(0f, 0f, 0f, 0f));
 			Vector3 position = this._targetObject.position;
 			position.y += this.CenterYOffset;
-			float num = Vector3.Distance(Camera.current.transform.position, position);
-			float fov = 114.59156f * Mathf.Atan(this.Size / num);
 			Vector3 position2 = Camera.current.transform.position;
-			Quaternion q = Quaternion.LookRotation(Camera.current.transform.position - position, Vector3.up);
-			Matrix4x4 matrix4x = Matrix4x4.TRS(position2, Quaternion.LookRotation(position2 - new Vector3(position.x, position.y, position.z), Vector3.up), Vector3.one);
-			float zNear = Mathf.Max(num - this.Size * 2f, 1f);
-			float zFar = num + this.Size * 2f;
-			Matrix4x4 lhs = Matrix4x4.Perspective(fov, 1f, zNear, zFar);
+			float num = Vector3.Distance(position2, position);
+			float num2 = 114.59156f * Mathf.Atan(this.Size / num);
+			Vector3 vector = position2;
+			Quaternion quaternion = Quaternion.LookRotation(position2 - position, Vector3.up);
+			Matrix4x4 matrix4x = Matrix4x4.TRS(vector, Quaternion.LookRotation(vector - new Vector3(position.x, position.y, position.z), Vector3.up), Vector3.one);
+			float num3 = Mathf.Max(num - this.Size * 2f, 1f);
+			float num4 = num + this.Size * 2f;
+			Matrix4x4 matrix4x2 = Matrix4x4.Perspective(num2, 1f, num3, num4);
 			Matrix4x4 inverse = matrix4x.inverse;
 			for (int i = 0; i < 4; i++)
 			{
-				lhs[1, i] = -lhs[1, i];
+				matrix4x2[1, i] = -matrix4x2[1, i];
 			}
 			for (int j = 0; j < 4; j++)
 			{
-				lhs[2, j] = lhs[2, j] * 0.5f + lhs[3, j] * 0.5f;
+				matrix4x2[2, j] = matrix4x2[2, j] * 0.5f + matrix4x2[3, j] * 0.5f;
 			}
-			Matrix4x4 value = lhs * inverse;
-			this._writerInstance.SetMatrix(this._propertyIds.MV, value);
+			Matrix4x4 matrix4x3 = matrix4x2 * inverse;
+			this._writerInstance.SetMatrix(this._propertyIds.MV, matrix4x3);
 			for (int k = 0; k < this._filters.Count; k++)
 			{
 				this._writerInstance.SetMatrix(this._propertyIds.Model, this._filters[k].transform.localToWorldMatrix);
@@ -117,8 +142,8 @@ namespace HeavyMetalMachines.VFX
 			this._materialInstance.SetTexture(this._propertyIds.RT, HMMTeamObjectOverlayVFX.RenderBuffer);
 			if (this._materialInstance.SetPass(0))
 			{
-				Matrix4x4 matrix = Matrix4x4.TRS(position, q, new Vector3(this.Size, this.Size, this.Size));
-				Graphics.DrawMeshNow(HMMTeamObjectOverlayVFX.QuadMesh, matrix, 0);
+				Matrix4x4 matrix4x4 = Matrix4x4.TRS(position, quaternion, new Vector3(this.Size, this.Size, this.Size));
+				Graphics.DrawMeshNow(HMMTeamObjectOverlayVFX.QuadMesh, matrix4x4, 0);
 			}
 		}
 
@@ -149,7 +174,8 @@ namespace HeavyMetalMachines.VFX
 				}
 			}
 			TeamKind team = GameHubBehaviour.Hub.Players.GetPlayerOrBotsByObjectId(this._targetFXInfo.Owner.ObjId).Team;
-			this._materialInstance = UnityEngine.Object.Instantiate<Material>((team != GameHubBehaviour.Hub.Players.CurrentPlayerTeam) ? this.EnemyMaterial : this.AllyMaterial);
+			this._materialInstance = Object.Instantiate<Material>((team != GameHubBehaviour.Hub.Players.CurrentPlayerTeam) ? this.EnemyMaterial : this.AllyMaterial);
+			this._cullingGroup.enabled = true;
 			base.enabled = true;
 		}
 
@@ -160,11 +186,15 @@ namespace HeavyMetalMachines.VFX
 		protected override void OnDeactivate()
 		{
 			base.enabled = false;
+			this._cullingGroup.enabled = false;
 			this._filters.Clear();
 			this._targetObject = null;
-			UnityEngine.Object.Destroy(this._materialInstance);
+			Object.Destroy(this._materialInstance);
 			this._materialInstance = null;
 		}
+
+		[InjectOnClient]
+		private IGameCameraEngine _gameCameraEngine;
 
 		public Shader WriterShader;
 
@@ -179,6 +209,8 @@ namespace HeavyMetalMachines.VFX
 		public HMMTeamObjectOverlayVFX.ETarget EffectTarget;
 
 		public LayerMask IgnoreLayer = 0;
+
+		public float CullingRadius = 7f;
 
 		protected static RenderTexture RenderBuffer;
 
@@ -195,6 +227,10 @@ namespace HeavyMetalMachines.VFX
 		private Transform _targetObject;
 
 		private HMMTeamObjectOverlayVFX.PropertyIds _propertyIds;
+
+		private CullingGroup _cullingGroup;
+
+		private BoundingSphere[] _boundingSpheres;
 
 		public enum ETarget
 		{

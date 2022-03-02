@@ -12,7 +12,7 @@ namespace HeavyMetalMachines.Tutorial.InGame
 		public IFuture SetInterfaceScraps(string scrapText)
 		{
 			IFuture<object> future = new Future<object>();
-			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1012, 4, new object[]
+			base.ExecuteAsync(future, base.AsyncDestination(), base.CallbackTimeoutMillis, base.OID, 1013, 4, new object[]
 			{
 				scrapText
 			});

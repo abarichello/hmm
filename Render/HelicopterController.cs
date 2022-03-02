@@ -1,5 +1,4 @@
 ﻿using System;
-using FMod;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Match;
 using NewParticleSystem;
@@ -22,7 +21,7 @@ namespace HeavyMetalMachines.Render
 			{
 				this._lifeTimer = 0f;
 				this._heliInstance = (HelicopterComponents)GameHubBehaviour.Hub.Resources.PrefabCacheInstantiate(this.HeliPrefab, this._target.position, this._target.rotation);
-				this._heliInstance.transform.parent = GameHubBehaviour.Hub.Drawer.Effects;
+				GameHubBehaviour.Hub.Drawer.AddEffect(this._heliInstance.transform);
 				this._localAnimTime = 0f;
 				this._heliInstance.HeliAnimator.SetLayerWeight(2, 0f);
 				this._heliInstance.HeliAnimator.SetBool("isAlly", true);
@@ -36,7 +35,6 @@ namespace HeavyMetalMachines.Render
 				this.HeliActiveParticles.Play();
 				this.HeliCallParticles.Play();
 				this._heliInstance.HeliCallParticles.Play();
-				FMODAudioManager.PlayAt(this.HeliIntroVO, this._heliInstance.HelicopterTransform);
 			}
 			else if (followTarget)
 			{
@@ -70,7 +68,7 @@ namespace HeavyMetalMachines.Render
 			}
 			if (GameHubBehaviour.Hub.Net.IsServer() && !GameHubBehaviour.Hub.Net.IsTest())
 			{
-				UnityEngine.Object.Destroy(this);
+				Object.Destroy(this);
 				return;
 			}
 			GameHubBehaviour.Hub.Resources.PrefabPreCache(this.HeliPrefab, 1);
@@ -131,21 +129,21 @@ namespace HeavyMetalMachines.Render
 						this.CurrentState = HelicopterController.State.Idle;
 					}
 				}
-				goto IL_5DE;
+				goto IL_5B7;
 			case HelicopterController.State.Idle:
 				if (this._lifeTimer > this.LifeTime)
 				{
 					this.CurrentState = HelicopterController.State.Disconnected;
 				}
-				goto IL_5DE;
+				goto IL_5B7;
 			case HelicopterController.State.Moving:
 			{
-				float t = LerpFunc.QuadInOut(this._movingAnimTime, 0f, 1f, 1f);
-				this._heliInstance.transform.position = Vector3.Lerp(this._originalPos, this._targetPos, t);
-				this._heliInstance.HelicopterTransform.rotation = Quaternion.Slerp(this._originalRot, this._targetRot, t);
-				Quaternion rotation = Quaternion.LookRotation((this._heliInstance.HelicopterTransform.position - base.transform.position).normalized);
-				this.HeliCallParticles.transform.parent.rotation = rotation;
-				this._heliInstance.HeliCallParticles.transform.parent.rotation = Quaternion.Inverse(rotation);
+				float num = LerpFunc.QuadInOut(this._movingAnimTime, 0f, 1f, 1f);
+				this._heliInstance.transform.position = Vector3.Lerp(this._originalPos, this._targetPos, num);
+				this._heliInstance.HelicopterTransform.rotation = Quaternion.Slerp(this._originalRot, this._targetRot, num);
+				Quaternion quaternion = Quaternion.LookRotation((this._heliInstance.HelicopterTransform.position - base.transform.position).normalized);
+				this.HeliCallParticles.transform.parent.rotation = quaternion;
+				this._heliInstance.HeliCallParticles.transform.parent.rotation = Quaternion.Inverse(quaternion);
 				this._heliInstance.HeliCallLaser.SetPosition(0, this._heliInstance.HeliCallParticles.transform.position);
 				this._heliInstance.HeliCallLaser.SetPosition(1, this.HeliCallParticles.transform.position);
 				this._movingAnimTime += 0.01f * this.MovementSpeed;
@@ -161,7 +159,7 @@ namespace HeavyMetalMachines.Render
 						this.CurrentState = HelicopterController.State.Disconnected;
 					}
 				}
-				goto IL_5DE;
+				goto IL_5B7;
 			}
 			case HelicopterController.State.Disconnected:
 				for (int j = 0; j < this._heliInstance.StopOnLeavingParticles.Length; j++)
@@ -169,8 +167,6 @@ namespace HeavyMetalMachines.Render
 					HoplonParticleSystem hoplonParticleSystem = this._heliInstance.StopOnLeavingParticles[j];
 					hoplonParticleSystem.Stop();
 				}
-				this._heliInstance.HeliSoundLoop.KeyOff();
-				FMODAudioManager.PlayAt(this.HeliOutroVO, this._heliInstance.HelicopterTransform);
 				this.HeliActiveParticles.Stop();
 				this._localAnimTime = 0f;
 				this.CurrentState = HelicopterController.State.PreLeaving;
@@ -183,12 +179,12 @@ namespace HeavyMetalMachines.Render
 				{
 					this.CurrentState = HelicopterController.State.Finished;
 				}
-				float t2 = LerpFunc.QuadIn(this._localAnimTime, 0f, 1f, this.OutroTime);
-				this._heliInstance.HelicopterTransform.rotation = Quaternion.Slerp(this._originalRot, this._targetRot, t2);
-				Vector3 position2 = Vector3.Lerp(this._heliInstance.DummyIdle.position, this._heliInstance.DummyOutro.position, t2);
+				float num2 = LerpFunc.QuadIn(this._localAnimTime, 0f, 1f, this.OutroTime);
+				this._heliInstance.HelicopterTransform.rotation = Quaternion.Slerp(this._originalRot, this._targetRot, num2);
+				Vector3 position2 = Vector3.Lerp(this._heliInstance.DummyIdle.position, this._heliInstance.DummyOutro.position, num2);
 				this._heliInstance.HelicopterTransform.position = position2;
 				this._localAnimTime += Time.deltaTime;
-				goto IL_5DE;
+				goto IL_5B7;
 			}
 			case HelicopterController.State.Finished:
 				GameHubBehaviour.Hub.Resources.ReturnToPrefabCache(this.HeliPrefab, this._heliInstance);
@@ -196,9 +192,9 @@ namespace HeavyMetalMachines.Render
 				this._target = null;
 				this.CurrentState = HelicopterController.State.None;
 				base.enabled = false;
-				goto IL_5DE;
+				goto IL_5B7;
 			default:
-				goto IL_5DE;
+				goto IL_5B7;
 			}
 			this._heliInstance.HeliAnimator.SetBool("ultimateDeactivate", true);
 			for (int k = 0; k < this._heliInstance.LookAtDummies.Length; k++)
@@ -216,7 +212,7 @@ namespace HeavyMetalMachines.Render
 				this._localAnimTime = 0f;
 				this.CurrentState = HelicopterController.State.Leaving;
 			}
-			IL_5DE:
+			IL_5B7:
 			this._lifeTimer += Time.deltaTime;
 		}
 
@@ -238,10 +234,6 @@ namespace HeavyMetalMachines.Render
 		public HoplonParticleSystem HeliCallParticles;
 
 		public HoplonParticleSystem HeliActiveParticles;
-
-		public FMODAsset HeliIntroVO;
-
-		public FMODAsset HeliOutroVO;
 
 		public float IntroTime = 2f;
 

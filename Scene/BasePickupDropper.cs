@@ -62,9 +62,9 @@ namespace HeavyMetalMachines.Scene
 				PickupDropEvent pickupDropEvent = this.CreatePickupDropEvent(spawnReason, unspawnEvent);
 				for (int i = 0; i < num; i++)
 				{
-					Vector3 b = UnityEngine.Random.insideUnitCircle.normalized.ToVector3XZ() * this.DropDistance * (float)i;
+					Vector3 vector = Random.insideUnitCircle.normalized.ToVector3XZ() * this.DropDistance * (float)i;
 					PickupDropEvent pickupDropEvent2 = pickupDropEvent.Clone();
-					pickupDropEvent2.Position += b;
+					pickupDropEvent2.Position += vector;
 					GameHubBehaviour.Hub.Events.TriggerEvent(pickupDropEvent2);
 				}
 			}

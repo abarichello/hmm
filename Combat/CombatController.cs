@@ -2,12 +2,11 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using HeavyMetalMachines.Bank;
 using HeavyMetalMachines.Car;
 using HeavyMetalMachines.Combat.Gadget;
-using HeavyMetalMachines.Combat.GadgetScript;
 using HeavyMetalMachines.Event;
 using HeavyMetalMachines.Infra.Context;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
 using HeavyMetalMachines.Match;
 using HeavyMetalMachines.VFX;
 using Pocketverse;
@@ -21,7 +20,10 @@ namespace HeavyMetalMachines.Combat
 		public static event CombatController.OnInstantModifierAppliedDelegate OnInstantModifierApplied;
 
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		public event CombatController.OnStatusModifierAppliedDelegate OnStatusModifierApplied;
+		public static event CombatController.OnModifierRemovedDelegate OnModifierRemoved;
+
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
+		public static event CombatController.OnStatusModifierAppliedDelegate OnStatusModifierApplied;
 
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatController.OnModifierRenewDelegate OnModifierRenew;
@@ -111,13 +113,21 @@ namespace HeavyMetalMachines.Combat
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatController.OnEPSpent ListenToEP;
 
+		private void Awake()
+		{
+			if (!this.Combat)
+			{
+				this.Combat = base.Id.GetBitComponent<CombatObject>();
+			}
+		}
+
 		private void Update()
 		{
 			if (!GameHubBehaviour.Hub || GameHubBehaviour.Hub.Net.IsClient())
 			{
 				return;
 			}
-			if (this.Combat.SpawnController != null && this.Combat.SpawnController.State != SpawnController.StateType.Spawned)
+			if (this.Combat.SpawnController != null && this.Combat.SpawnController.State != SpawnStateKind.Spawned)
 			{
 				return;
 			}
@@ -151,13 +161,45 @@ namespace HeavyMetalMachines.Combat
 			{
 				return;
 			}
-			for (int i = 0; i < this.TimedEffectsList.Count; i++)
+			this.ApplyTimedEffects(matchTime);
+			this.RemoveExpiredTimedEffects(matchTime);
+		}
+
+		private void RemoveExpiredTimedEffects(int matchTime)
+		{
+			this._temporaryList.Clear();
+			for (int i = this.TimedEffectsList.Count - 1; i >= 0; i--)
 			{
 				ModifierInstance modifierInstance = this.TimedEffectsList[i];
+				if ((float)matchTime >= (float)modifierInstance.StartTime + modifierInstance.Data.LifeTime * 1000f)
+				{
+					this.TimedEffectsList.RemoveAt(i);
+					this._temporaryList.Add(modifierInstance);
+				}
+			}
+			for (int j = 0; j < this._temporaryList.Count; j++)
+			{
+				ModifierInstance modifierInstance2 = this._temporaryList[j];
+				if (CombatController.OnModifierRemoved != null)
+				{
+					CombatController.OnModifierRemoved(modifierInstance2, modifierInstance2.Causer, this.Combat, modifierInstance2.EventId);
+				}
+			}
+		}
+
+		private void ApplyTimedEffects(int matchTime)
+		{
+			this._temporaryList.Clear();
+			for (int i = 0; i < this.TimedEffectsList.Count; i++)
+			{
+				this._temporaryList.Add(this.TimedEffectsList[i]);
+			}
+			for (int j = 0; j < this._temporaryList.Count; j++)
+			{
+				ModifierInstance modifierInstance = this._temporaryList[j];
 				if (modifierInstance.ShouldAccountDebuff())
 				{
-					PlayerStats stats = modifierInstance.Causer.Stats;
-					stats.DebuffTime += Time.deltaTime;
+					modifierInstance.Causer.Stats.IncreaseDebuffTime(Time.deltaTime);
 				}
 				if (modifierInstance.Tick(matchTime))
 				{
@@ -166,11 +208,6 @@ namespace HeavyMetalMachines.Combat
 					{
 						modifierInstance.TaperedTick++;
 					}
-				}
-				if ((float)matchTime >= (float)modifierInstance.StartTime + modifierInstance.Data.LifeTime * 1000f)
-				{
-					this.TimedEffectsList.RemoveAt(i);
-					i--;
 				}
 			}
 		}
@@ -186,8 +223,7 @@ namespace HeavyMetalMachines.Combat
 				ModifierInstance modifierInstance = this.PassiveEffectsList[i];
 				if (modifierInstance.ShouldAccountDebuff())
 				{
-					PlayerStats stats = modifierInstance.Causer.Stats;
-					stats.DebuffTime += Time.deltaTime;
+					modifierInstance.Causer.Stats.IncreaseDebuffTime(Time.deltaTime);
 				}
 				if (modifierInstance.Tick(matchTime))
 				{
@@ -207,8 +243,7 @@ namespace HeavyMetalMachines.Combat
 				ModifierInstance modifierInstance = this.TimedAttrStatusList[i];
 				if (modifierInstance.ShouldAccountDebuff())
 				{
-					PlayerStats stats = modifierInstance.Causer.Stats;
-					stats.DebuffTime += Time.deltaTime;
+					modifierInstance.Causer.Stats.IncreaseDebuffTime(Time.deltaTime);
 				}
 				if ((float)matchTime < (float)modifierInstance.StartTime + modifierInstance.LifeTime * 1000f)
 				{
@@ -225,6 +260,10 @@ namespace HeavyMetalMachines.Combat
 				{
 					this.TimedAttrStatusList.RemoveAt(i);
 					this.Attributes.SetDirty();
+					if (CombatController.OnModifierRemoved != null)
+					{
+						CombatController.OnModifierRemoved(modifierInstance, modifierInstance.Causer, this.Combat, modifierInstance.EventId);
+					}
 					i--;
 				}
 			}
@@ -284,7 +323,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				return false;
 			}
-			if (data == null)
+			if (data == null || this.Combat.NoHit)
 			{
 				return false;
 			}
@@ -306,7 +345,7 @@ namespace HeavyMetalMachines.Combat
 				return false;
 			}
 			bool flag2 = (!causer) ? data.Info.FriendlyFire : (this.Combat.Team == causer.Team);
-			return (!flag2 || flag || data.Info.FriendlyFire) && (flag2 || this.Combat.Team == TeamKind.Zero || this.Combat.IsBomb || !data.Info.NotForEnemies) && (!this.Combat.Attributes.CurrentStatus.HasFlag(StatusKind.Banished) || data.Info.HitBanished) && (data.Info.HitBomb || !this.Combat.IsBomb) && (!data.Info.NotForBuildings || !this.Combat.IsBuilding) && (!data.Info.NotFurTurrets || !this.Combat.IsTurret) && (!data.Info.NotForWards || !this.Combat.IsWard) && (!data.Info.NotForCreeps || !this.Combat.IsCreep) && (!data.Info.NotForPlayers || !this.Combat.IsPlayer);
+			return (!flag2 || flag || data.Info.FriendlyFire) && (flag2 || this.Combat.Team == TeamKind.Zero || this.Combat.IsBomb || !data.Info.NotForEnemies) && (!this.Combat.Attributes.CurrentStatus.HasFlag(StatusKind.Banished) || data.Info.HitBanished) && (data.Info.HitBomb || !this.Combat.IsBomb) && (!data.Info.NotForBuildings || !this.Combat.IsBuilding) && (!data.Info.NotFurTurrets || !this.Combat.IsTurret) && (!data.Info.NotForWards || !this.Combat.IsWard) && (!data.Info.NotForPlayers || !this.Combat.IsPlayer);
 		}
 
 		public void AddModifiers(ModifierData[] datas, ICombatObject causer, int eventId, Vector3 direction, Vector3 position, bool barrierHit)
@@ -339,7 +378,7 @@ namespace HeavyMetalMachines.Combat
 			}
 			if (GameHubBehaviour.Hub.Net.IsServer() && causer != null && combatObject.IsPlayer && !combatObject.IsBot && causer != this.Combat && !flag)
 			{
-				GameHubBehaviour.Hub.afkController.AddModifier(combatObject);
+				this._afkManager.AddModifier(combatObject);
 			}
 			this.Attributes.CheckDirty();
 		}
@@ -364,7 +403,7 @@ namespace HeavyMetalMachines.Combat
 			}
 			if (GameHubBehaviour.Hub.Net.IsServer() && causer != null && combatObject.IsPlayer && !combatObject.IsBot && causer != this.Combat && !flag2)
 			{
-				GameHubBehaviour.Hub.afkController.AddModifier(combatObject);
+				this._afkManager.AddModifier(combatObject);
 			}
 		}
 
@@ -392,14 +431,14 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
-		public void AddModifier(ModifierData data, CombatObject causer, int eventId, bool barrierHit)
+		public void AddModifier(ModifierData data, ICombatObject causer, int eventId, bool barrierHit)
 		{
-			bool flag = CombatController.IsModifierFromPassiveGadget(data, causer);
+			bool flag = CombatController.IsModifierFromPassiveGadget(data, (CombatObject)causer);
 			if (GameHubBehaviour.Hub.Net.IsServer() && causer != null && causer.IsPlayer && !causer.IsBot && causer != this.Combat && !flag)
 			{
-				GameHubBehaviour.Hub.afkController.AddModifier(causer);
+				this._afkManager.AddModifier((CombatObject)causer);
 			}
-			bool flag2 = this.AddModifierInternal(data, causer, eventId, barrierHit);
+			bool flag2 = this.AddModifierInternal(data, (CombatObject)causer, eventId, barrierHit);
 			if (flag2)
 			{
 				this.Attributes.SetDirty();
@@ -409,7 +448,33 @@ namespace HeavyMetalMachines.Combat
 
 		private static bool IsModifierFromPassiveGadget(ModifierData data, CombatObject causer)
 		{
-			return data.GadgetInfo != null && causer != null && causer.PassiveGadget.Info.GadgetId == data.GadgetInfo.GadgetId;
+			return data.GadgetInfo != null && causer != null && causer.PassiveGadget != null && causer.PassiveGadget.Info.GadgetId == data.GadgetInfo.GadgetId;
+		}
+
+		[Conditional("AllowHacks")]
+		private static void LogNullsFromIsModifierFromPassiveGadget(ModifierData data, CombatObject causer)
+		{
+			CombatController.LogIfNull(data, "data", causer);
+			if (causer == null)
+			{
+				return;
+			}
+			if (causer.PassiveGadget != null)
+			{
+				CombatController.LogIfNull(causer.PassiveGadget.Info, "causer.PassiveGadget.Info ", causer);
+			}
+		}
+
+		private static void LogIfNull(object obj, string name, CombatObject causer)
+		{
+			if (obj == null)
+			{
+				CombatController.Log.DebugFormat("'{0}' from '{1}' is null when it shouldn't when calling IsModifierFromPassiveGadget method.", new object[]
+				{
+					name,
+					causer
+				});
+			}
 		}
 
 		private bool AddModifierInternal(ModifierData data, CombatObject causer, int eventId, bool barrierHit)
@@ -444,9 +509,9 @@ namespace HeavyMetalMachines.Combat
 						}
 					}
 					this.TimedAttrStatusList.Add(modifierInstance);
-					if (this.OnStatusModifierApplied != null && num == 0f)
+					if (CombatController.OnStatusModifierApplied != null && num == 0f)
 					{
-						this.OnStatusModifierApplied(modifierInstance, causer, data.Info.LifeTime, eventId);
+						CombatController.OnStatusModifierApplied(modifierInstance, causer, this.Combat, eventId);
 					}
 					this.CheckAddAssist(causer, data);
 					if (this.Attributes.CrowdControlReduction != 0f)
@@ -491,14 +556,14 @@ namespace HeavyMetalMachines.Combat
 			return result;
 		}
 
-		public void AddPassiveModifier(ModifierData data, CombatObject causer, int eventId)
+		public void AddPassiveModifier(ModifierData data, ICombatObject causer, int eventId)
 		{
-			bool flag = CombatController.IsModifierFromPassiveGadget(data, causer);
+			bool flag = CombatController.IsModifierFromPassiveGadget(data, (CombatObject)causer);
 			if (GameHubBehaviour.Hub.Net.IsServer() && causer != null && causer.IsPlayer && !causer.IsBot && causer != this.Combat && !flag)
 			{
-				GameHubBehaviour.Hub.afkController.AddModifier(causer);
+				this._afkManager.AddModifier((CombatObject)causer);
 			}
-			bool flag2 = this.AddPassiveModifierInternal(data, causer, eventId);
+			bool flag2 = this.AddPassiveModifierInternal(data, (CombatObject)causer, eventId);
 			if (flag2)
 			{
 				this.Attributes.SetDirty();
@@ -523,9 +588,9 @@ namespace HeavyMetalMachines.Combat
 				}
 				result = true;
 				this.PassiveAttrStatusList.Add(modifierInstance);
-				if (this.OnStatusModifierApplied != null)
+				if (CombatController.OnStatusModifierApplied != null)
 				{
-					this.OnStatusModifierApplied(modifierInstance, causer, data.Amount, eventId);
+					CombatController.OnStatusModifierApplied(modifierInstance, causer, this.Combat, eventId);
 				}
 				this.CheckAddAssist(causer, data);
 			}
@@ -554,15 +619,17 @@ namespace HeavyMetalMachines.Combat
 				}
 				modifierInstance.FeedbackId = this.Feedback.Add(data.Info.Feedback, eventId, (!causer) ? -1 : causer.Id.ObjId, GameHubBehaviour.Hub.GameTime.GetPlaybackTime(), -1, data.BuffCharges, slot);
 			}
+			data.TriggerOnModifierAppliedEvent(causer, this.Combat, data.Amount);
 			return result;
 		}
 
 		public void RemovePassiveModifier(ModifierData data, CombatObject causer, int eventId)
 		{
 			int num = -1;
+			ModifierInstance modifierInstance;
 			if (data.Info.Effect != EffectKind.None)
 			{
-				ModifierInstance modifierInstance = this.PassiveEffectsList.Find(ModifierInstance.CheckSameModifier(data, causer));
+				modifierInstance = this.PassiveEffectsList.Find(ModifierInstance.CheckSameModifier(data, causer));
 				if (modifierInstance != null)
 				{
 					this.PassiveEffectsList.Remove(modifierInstance);
@@ -572,28 +639,32 @@ namespace HeavyMetalMachines.Combat
 			}
 			else
 			{
-				ModifierInstance modifierInstance2 = this.PassiveAttrStatusList.Find(ModifierInstance.CheckSameModifier(data, causer));
-				if (modifierInstance2 != null)
+				modifierInstance = this.PassiveAttrStatusList.Find(ModifierInstance.CheckSameModifier(data, causer));
+				if (modifierInstance != null)
 				{
-					this.PassiveAttrStatusList.Remove(modifierInstance2);
-					num = modifierInstance2.FeedbackId;
+					this.PassiveAttrStatusList.Remove(modifierInstance);
+					num = modifierInstance.FeedbackId;
 					this.Attributes.SetDirty();
 					this.CheckAddAssist(causer, data);
 				}
 			}
-			if (num == -1)
+			if (num != -1)
 			{
-				return;
+				this.Feedback.Remove(num);
 			}
-			this.Feedback.Remove(num);
+			if (CombatController.OnModifierRemoved != null && modifierInstance != null)
+			{
+				CombatController.OnModifierRemoved(modifierInstance, causer, this.Combat, eventId);
+			}
 		}
 
 		public void RemoveModifier(ModifierData data, CombatObject causer, int eventId)
 		{
 			int num = -1;
+			ModifierInstance modifierInstance;
 			if (data.Info.Effect != EffectKind.None)
 			{
-				ModifierInstance modifierInstance = this.TimedEffectsList.Find(ModifierInstance.CheckSameModifier(data, causer));
+				modifierInstance = this.TimedEffectsList.Find(ModifierInstance.CheckSameModifier(data, causer));
 				if (modifierInstance != null)
 				{
 					this.TimedEffectsList.Remove(modifierInstance);
@@ -603,20 +674,23 @@ namespace HeavyMetalMachines.Combat
 			}
 			else
 			{
-				ModifierInstance modifierInstance2 = this.TimedAttrStatusList.Find(ModifierInstance.CheckSameModifier(data, causer));
-				if (modifierInstance2 != null)
+				modifierInstance = this.TimedAttrStatusList.Find(ModifierInstance.CheckSameModifier(data, causer));
+				if (modifierInstance != null)
 				{
-					this.TimedAttrStatusList.Remove(modifierInstance2);
-					num = modifierInstance2.FeedbackId;
+					this.TimedAttrStatusList.Remove(modifierInstance);
+					num = modifierInstance.FeedbackId;
 					this.Attributes.SetDirty();
 					this.CheckAddAssist(causer, data);
 				}
 			}
-			if (num == -1)
+			if (num != -1)
 			{
-				return;
+				this.Feedback.Remove(num);
 			}
-			this.Feedback.Remove(num);
+			if (CombatController.OnModifierRemoved != null && modifierInstance != null)
+			{
+				CombatController.OnModifierRemoved(modifierInstance, causer, this.Combat, eventId);
+			}
 		}
 
 		private void ApplyInstant(ModifierInstance mod, CombatObject causer, int eventId)
@@ -658,22 +732,23 @@ namespace HeavyMetalMachines.Combat
 				EffectKind effect2 = info.Effect;
 				if (effect2 != EffectKind.HPPureDamage && effect2 != EffectKind.HPPureDamageNL)
 				{
-					if (effect2 != EffectKind.HPLightDamage)
-					{
-						if (effect2 == EffectKind.HPHeavyDamage)
-						{
-							num3 = (float)this.Combat.Data.HPHeavyArmorFinal * this.Combat.Data.Info.ArmorModifier;
-						}
-					}
-					else
+					if (effect2 == EffectKind.HPLightDamage)
 					{
 						num3 = (float)this.Combat.Data.HPLightArmorFinal * this.Combat.Data.Info.ArmorModifier;
+						goto IL_1F4;
+					}
+					if (effect2 == EffectKind.HPHeavyDamage)
+					{
+						num3 = (float)this.Combat.Data.HPHeavyArmorFinal * this.Combat.Data.Info.ArmorModifier;
+						goto IL_1F4;
+					}
+					if (effect2 != EffectKind.NonLethalDamageIgnoringTempHP)
+					{
+						goto IL_1F4;
 					}
 				}
-				else
-				{
-					num3 = (float)this.Combat.Data.HPPureArmor * this.Combat.Data.Info.ArmorModifier;
-				}
+				num3 = (float)this.Combat.Data.HPPureArmor * this.Combat.Data.Info.ArmorModifier;
+				IL_1F4:
 				float num4 = 0f;
 				float num5 = 0f;
 				if (flag2)
@@ -681,26 +756,27 @@ namespace HeavyMetalMachines.Combat
 					EffectKind effect3 = info.Effect;
 					if (effect3 != EffectKind.HPPureDamage && effect3 != EffectKind.HPPureDamageNL)
 					{
-						if (effect3 != EffectKind.HPLightDamage)
-						{
-							if (effect3 == EffectKind.HPHeavyDamage)
-							{
-								num4 = causer.Attributes.HPHeavyDamagePct;
-								num5 = causer.Attributes.HPHeavyDamage;
-							}
-						}
-						else
+						if (effect3 == EffectKind.HPLightDamage)
 						{
 							num4 = causer.Attributes.HPLightDamagePct;
 							num5 = causer.Attributes.HPLightDamage;
+							goto IL_2A1;
+						}
+						if (effect3 == EffectKind.HPHeavyDamage)
+						{
+							num4 = causer.Attributes.HPHeavyDamagePct;
+							num5 = causer.Attributes.HPHeavyDamage;
+							goto IL_2A1;
+						}
+						if (effect3 != EffectKind.NonLethalDamageIgnoringTempHP)
+						{
+							goto IL_2A1;
 						}
 					}
-					else
-					{
-						num4 = causer.Attributes.HPPureDamagePct;
-						num5 = causer.Attributes.HPPureDamage;
-					}
+					num4 = causer.Attributes.HPPureDamagePct;
+					num5 = causer.Attributes.HPPureDamage;
 				}
+				IL_2A1:
 				amount = (amount * (1f + num4) + num5) * (1f - num3);
 			}
 			float num6 = amount;
@@ -738,7 +814,14 @@ namespace HeavyMetalMachines.Combat
 				flag3 = true;
 				flag4 = true;
 				num7 = num10 + num9;
-				num6 = num7;
+				if (this.Attributes.IsInvulnerable)
+				{
+					num6 = 0f;
+				}
+				else
+				{
+					num6 = num7;
+				}
 				break;
 			}
 			case EffectKind.HPPureDamageNL:
@@ -752,7 +835,14 @@ namespace HeavyMetalMachines.Combat
 				flag3 = true;
 				flag4 = true;
 				num7 = num11 + num12;
-				num6 = num7;
+				if (this.Attributes.IsInvulnerable)
+				{
+					num6 = 0f;
+				}
+				else
+				{
+					num6 = num7;
+				}
 				break;
 			}
 			case EffectKind.HPRepair:
@@ -761,7 +851,7 @@ namespace HeavyMetalMachines.Combat
 				{
 					amount = 0f;
 					num6 = 0f;
-					goto IL_11EE;
+					goto IL_1262;
 				}
 				amount -= amount * ((float)this.Combat.Data.HPRepairArmorFinal * this.Combat.Data.Info.ArmorModifier);
 				amount = Mathf.Min(amount, (float)this.Data.HPMax - this.Data.HP);
@@ -784,7 +874,7 @@ namespace HeavyMetalMachines.Combat
 					num2 = 0f;
 				}
 				this.Data.EP = num2;
-				goto IL_11EE;
+				goto IL_1262;
 			case EffectKind.EPRepair:
 				num2 = this.Data.EP + amount;
 				if (num2 > (float)this.Data.EPMax)
@@ -792,16 +882,16 @@ namespace HeavyMetalMachines.Combat
 					num2 = (float)this.Data.EPMax;
 				}
 				this.Data.EP = num2;
-				goto IL_11EE;
+				goto IL_1262;
 			default:
 				if (effect4 == EffectKind.None)
 				{
-					goto IL_11EE;
+					goto IL_1262;
 				}
 				break;
 			case EffectKind.Purge:
 				this.PurgeOrDispelMods((ModifierInstance instance) => instance.IsPurgeable && amount != 0f);
-				goto IL_11EE;
+				goto IL_1262;
 			case EffectKind.CooldownRepair:
 			{
 				int num13 = (int)(amount * 1000f);
@@ -835,7 +925,7 @@ namespace HeavyMetalMachines.Combat
 					break;
 				}
 				this.OnFireModifierEvent(causer, num7, mod.GetDirection(), mod.Position, mod, info.Effect, this.GetGadgetSlot(causer, data));
-				goto IL_11EE;
+				goto IL_1262;
 			}
 			case EffectKind.Impulse:
 			{
@@ -843,24 +933,24 @@ namespace HeavyMetalMachines.Combat
 				if (this.Combat.Attributes.CurrentStatus.HasFlag(StatusKind.Unstoppable) && causer != this.Combat)
 				{
 					this.OnFireModifierEvent(causer, 0f, direction, Vector3.zero, mod, info.Effect, this.GetGadgetSlot(causer, data));
-					goto IL_11EE;
+					goto IL_1262;
 				}
 				if (this.Combat.Movement)
 				{
 					this.Combat.Movement.Push(direction, info.IsPercent, 0f, false);
 				}
 				this.OnFireModifierEvent(causer, amount, direction, Vector3.zero, mod, info.Effect, this.GetGadgetSlot(causer, data));
-				goto IL_11EE;
+				goto IL_1262;
 			}
 			case EffectKind.Dispel:
 				this.PurgeOrDispelMods((ModifierInstance instance) => instance.IsDispellable && amount != 0f);
-				goto IL_11EE;
+				goto IL_1262;
 			case EffectKind.Boost:
 				if (this.Combat.Movement != null && this.Combat.Movement is CarMovement)
 				{
 					(this.Combat.Movement as CarMovement).Boost(amount, info.IsPercent);
 				}
-				goto IL_11EE;
+				goto IL_1262;
 			case EffectKind.OverheatRepair:
 				switch (info.TargetGadget)
 				{
@@ -891,7 +981,7 @@ namespace HeavyMetalMachines.Combat
 					this.Combat.BoostGadget.CurrentHeat -= amount;
 					break;
 				}
-				goto IL_11EE;
+				goto IL_1262;
 			case EffectKind.AddCharge:
 				switch (info.TargetGadget)
 				{
@@ -922,7 +1012,7 @@ namespace HeavyMetalMachines.Combat
 					this.Combat.BoostGadget.ChargeCount = Mathf.Min(this.Combat.BoostGadget.ChargeCount + (int)amount, this.Combat.BoostGadget.MaxChargeCount);
 					break;
 				}
-				goto IL_11EE;
+				goto IL_1262;
 			case EffectKind.ChargeRepair:
 			{
 				int num14 = (int)(amount * 1000f);
@@ -956,25 +1046,37 @@ namespace HeavyMetalMachines.Combat
 					break;
 				}
 				this.OnFireModifierEvent(causer, num7, mod.GetDirection(), mod.Position, mod, info.Effect, this.GetGadgetSlot(causer, data));
-				goto IL_11EE;
+				goto IL_1262;
 			}
 			case EffectKind.HPTemp:
 				this.Data.SetHpTemp(this.Data.HPTemp + data.Amount);
 				this.Data.SetHPTempDelay(info.Delay);
 				flag4 = true;
 				num7 = this.Data.HPTemp - hptemp;
+				if (this.Attributes.IsInvulnerable)
+				{
+					num6 = 0f;
+				}
+				else
+				{
+					num6 = num7;
+				}
+				break;
+			case EffectKind.NonLethalDamageIgnoringTempHP:
+			{
+				float num15 = amount;
+				num15 = Mathf.Min(num15, this.Data.HP - 1f);
+				num15 = Mathf.Max(num15, 0f);
+				num = this.Data.HP - num15;
+				flag3 = true;
+				flag4 = true;
+				num7 = num15;
 				num6 = num7;
 				break;
-			case EffectKind.ModifyParameter:
-			{
-				List<CombatGadget> gadgets = this.GetGadgets(info);
-				for (int i = 0; i < gadgets.Count; i++)
-				{
-					INumericParameter modifiableParameter = gadgets[i].GetModifiableParameter(info.ParameterName);
-					modifiableParameter.SetFloatValue(gadgets[i], modifiableParameter.GetFloatValue(gadgets[i]) + info.Amount);
-				}
-				goto IL_11EE;
 			}
+			case EffectKind.NewEffectModifier:
+				info.NewModifier.Apply(causer, this.Combat, GameHubBehaviour.Hub.GetContext());
+				goto IL_1262;
 			}
 			bool flag5 = mod.Info.Effect == EffectKind.HPGodDamage;
 			if (!this.Attributes.IsInvulnerable || flag5 || !mod.Info.Effect.IsHPDamage())
@@ -989,7 +1091,7 @@ namespace HeavyMetalMachines.Combat
 				}
 				this.Data.HP = num;
 			}
-			IL_11EE:
+			IL_1262:
 			if (info.Effect == EffectKind.HPRepair)
 			{
 				if (flag2)
@@ -1002,9 +1104,9 @@ namespace HeavyMetalMachines.Combat
 			{
 				if (flag2)
 				{
-					causer.PosDamageCaused(data, this.Combat, amount, eventId);
+					causer.PosDamageCaused(data, this.Combat, num6, eventId);
 				}
-				this.Combat.PosDamageTaken(data, causer, amount, eventId);
+				this.Combat.PosDamageTaken(data, causer, num6, eventId);
 			}
 			if (flag3)
 			{
@@ -1026,98 +1128,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				CombatController.OnInstantModifierApplied(mod, causer, this.Combat, num6, eventId);
 			}
-		}
-
-		private List<CombatGadget> GetGadgets(ModifierInfo info)
-		{
-			List<CombatGadget> list = new List<CombatGadget>();
-			switch (info.TargetGadget)
-			{
-			case TargetGadget.Gadget0:
-			{
-				CombatGadget item;
-				if (this.Combat.CustomGadgets.TryGetValue(GadgetSlot.CustomGadget0, out item))
-				{
-					list.Add(item);
-				}
-				break;
-			}
-			case TargetGadget.Gadget1:
-			{
-				CombatGadget item;
-				if (this.Combat.CustomGadgets.TryGetValue(GadgetSlot.CustomGadget1, out item))
-				{
-					list.Add(item);
-				}
-				break;
-			}
-			case TargetGadget.Gadgets01:
-			{
-				CombatGadget item;
-				if (this.Combat.CustomGadgets.TryGetValue(GadgetSlot.CustomGadget0, out item))
-				{
-					list.Add(item);
-				}
-				if (this.Combat.CustomGadgets.TryGetValue(GadgetSlot.CustomGadget1, out item))
-				{
-					list.Add(item);
-				}
-				break;
-			}
-			case TargetGadget.Gadget2:
-			{
-				CombatGadget item;
-				if (this.Combat.CustomGadgets.TryGetValue(GadgetSlot.CustomGadget2, out item))
-				{
-					list.Add(item);
-				}
-				break;
-			}
-			case TargetGadget.Gadgets12:
-			{
-				CombatGadget item;
-				if (this.Combat.CustomGadgets.TryGetValue(GadgetSlot.CustomGadget1, out item))
-				{
-					list.Add(item);
-				}
-				if (this.Combat.CustomGadgets.TryGetValue(GadgetSlot.CustomGadget2, out item))
-				{
-					list.Add(item);
-				}
-				break;
-			}
-			case TargetGadget.GadgetBoost:
-			{
-				CombatGadget item;
-				if (this.Combat.CustomGadgets.TryGetValue(GadgetSlot.BoostGadget, out item))
-				{
-					list.Add(item);
-				}
-				break;
-			}
-			case TargetGadget.All:
-			{
-				CombatGadget item;
-				if (this.Combat.CustomGadgets.TryGetValue(GadgetSlot.CustomGadget0, out item))
-				{
-					list.Add(item);
-				}
-				if (this.Combat.CustomGadgets.TryGetValue(GadgetSlot.CustomGadget1, out item))
-				{
-					list.Add(item);
-				}
-				if (this.Combat.CustomGadgets.TryGetValue(GadgetSlot.CustomGadget2, out item))
-				{
-					list.Add(item);
-				}
-				if (this.Combat.CustomGadgets.TryGetValue(GadgetSlot.BoostGadget, out item))
-				{
-					list.Add(item);
-				}
-				break;
-			}
-			}
-			return list;
+			mod.Data.TriggerOnModifierAppliedEvent(causer, this.Combat, num6);
 		}
 
 		private void SetDamageCausers(CombatObject causer, float resultingHP)
@@ -1196,6 +1207,11 @@ namespace HeavyMetalMachines.Combat
 					if (modifierInstance.FeedbackId != -1)
 					{
 						this.Feedback.Remove(modifierInstance.FeedbackId);
+					}
+					this.Attributes.SetDirty();
+					if (CombatController.OnModifierRemoved != null)
+					{
+						CombatController.OnModifierRemoved(modifierInstance, modifierInstance.Causer, this.Combat, modifierInstance.EventId);
 					}
 					i--;
 				}
@@ -1279,18 +1295,6 @@ namespace HeavyMetalMachines.Combat
 				GameHubBehaviour.Hub.Events.TriggerEvent(playerEvent);
 				return;
 			}
-			if (this.Combat.IsCreep)
-			{
-				CreepRemoveEvent content = new CreepRemoveEvent
-				{
-					Location = base.transform.position,
-					CreepId = base.Id.ObjId,
-					CauserId = this._playerKiller,
-					Reason = SpawnReason.Death
-				};
-				GameHubBehaviour.Hub.Events.TriggerEvent(content);
-				return;
-			}
 		}
 
 		public void OnObjectSpawned(SpawnEvent msg)
@@ -1319,6 +1323,9 @@ namespace HeavyMetalMachines.Combat
 
 		public static readonly BitLogger Log = new BitLogger(typeof(CombatController));
 
+		[InjectOnServer]
+		private IAFKManager _afkManager;
+
 		public readonly ModifierEventHolder ModifierEvents = new ModifierEventHolder();
 
 		public List<ModifierInstance> PassiveEffectsList = new List<ModifierInstance>();
@@ -1332,6 +1339,8 @@ namespace HeavyMetalMachines.Combat
 		public List<ModifierInstance> TimedAttrStatusList = new List<ModifierInstance>();
 
 		public List<ModifierInstance> UnstableAttrStatusList = new List<ModifierInstance>();
+
+		private List<ModifierInstance> _temporaryList = new List<ModifierInstance>(30);
 
 		private readonly Dictionary<int, int> _assists = new Dictionary<int, int>();
 
@@ -1351,7 +1360,9 @@ namespace HeavyMetalMachines.Combat
 
 		public delegate void OnInstantModifierAppliedDelegate(ModifierInstance mod, CombatObject causer, CombatObject target, float amount, int eventId);
 
-		public delegate void OnStatusModifierAppliedDelegate(ModifierInstance mod, CombatObject causer, float amount, int eventId);
+		public delegate void OnModifierRemovedDelegate(ModifierInstance modInstance, ICombatObject causer, ICombatObject target, int eventId);
+
+		public delegate void OnStatusModifierAppliedDelegate(ModifierInstance mod, ICombatObject causer, ICombatObject target, int eventId);
 
 		public delegate void OnModifierRenewDelegate(ModifierInstance instance, CombatObject causer, float previousLifeTime, float lifeTime);
 

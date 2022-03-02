@@ -4,12 +4,23 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using Assets.Standard_Assets.Scripts.HMM.GameStates.MainMenu.Progression;
 using HeavyMetalMachines.Utils;
+using Hoplon.Input.UiNavigation;
+using Hoplon.Input.UiNavigation.AxisSelector;
+using UniRx;
 using UnityEngine;
 
 namespace HeavyMetalMachines.EndMatch.Battlepass
 {
 	public class EndMatchBattlepassMissionWindow : MonoBehaviour
 	{
+		private UiNavigationGroupHolder UiNavigationGroupHolder
+		{
+			get
+			{
+				return this._uiNavigationGroupHolder;
+			}
+		}
+
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		private event EndMatchBattlepassMissionWindow.OnHideDelegate _onHideEvent;
 
@@ -25,6 +36,11 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 				childList[i].GetComponent<EndMatchBattlepassMissionSlot>().Dispose();
 			}
 			base.StopAllCoroutines();
+			if (this._navigationSelectionDisposable != null)
+			{
+				this._navigationSelectionDisposable.Dispose();
+				this._navigationSelectionDisposable = null;
+			}
 			this._missionsGrid.onCustomSort = null;
 			this._onHideEvent = null;
 			this._onLevelUpDetected = null;
@@ -40,8 +56,28 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 			this.SetupMissionSlots(missionSlotDatas);
 			this._missionsTitleGameObject.SetActive(!this._isPlayerLeaver && missionSlotDatas.Count > 0);
 			this._noActiveMissionsGameObject.SetActive(!this._isPlayerLeaver && missionSlotDatas.Count == 0);
-			this._okButtonAnimation.gameObject.GetComponent<NGUIWidgetAlpha>().alpha = 0f;
+			this._okButtonAnimation.gameObject.GetComponent<NGUIWidgetAlpha>().Alpha = 0f;
+			this._okButtonCollider.enabled = false;
 			this._levelUpTriggered = false;
+			this._navigationSelectionDisposable = ObservableExtensions.Subscribe<int>(Observable.Do<int>(this._uiNavigationAxisSelector.ObserveNavigationSelectionId(), new Action<int>(this.EnableSubGroupOnSelectionTransfor)));
+		}
+
+		private void EnableSubGroupOnSelectionTransfor(int selectedTransformId)
+		{
+			List<Transform> childList = this._missionsGrid.GetChildList();
+			for (int i = 0; i < childList.Count; i++)
+			{
+				EndMatchBattlepassMissionSlot component = childList[i].GetComponent<EndMatchBattlepassMissionSlot>();
+				int instanceID = component.GamepadFeedbackSelectionButton.transform.GetInstanceID();
+				if (instanceID == selectedTransformId)
+				{
+					component.UiNavigationSubGroupHolder.SubGroupFocusGet();
+				}
+				else
+				{
+					component.UiNavigationSubGroupHolder.SubGroupFocusRelease();
+				}
+			}
 		}
 
 		private void SetupMissionSlots(List<EndMatchBattlepassMissionSlot.MissionSlotData> missionSlotDatas)
@@ -109,6 +145,7 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 
 		public void Show()
 		{
+			this.UiNavigationGroupHolder.AddGroup();
 			this._windowAnimation.Play("mission_complete_in");
 			base.StartCoroutine(this.AnimateSlots());
 		}
@@ -117,7 +154,7 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 		{
 			if (this._isPlayerLeaver)
 			{
-				this.AnimateShowOkButton();
+				this.AnimateShowOkButtonAndEnableCollider();
 				yield break;
 			}
 			yield return new WaitForSeconds(this._delayBeforeFlipSlotTimeInSec);
@@ -150,13 +187,17 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 			yield return new WaitForSeconds(this._delayBeforeTransferAnimationTimeInSec);
 			float transferAnimationTimeInSec = Mathf.Max(this._transferAnimationMinTimeInSec, (float)this._header.GetTotalXpGain() / (float)this._transferAnimationXpPerSecond);
 			yield return base.StartCoroutine(this._header.PlayRewardTransferAnimationCoroutine(transferAnimationTimeInSec, new EndMatchBattlepassViewHeader.OnLevelUpDetected(this.OnLevelUpDetected)));
-			this.AnimateShowOkButton();
+			this.AnimateShowOkButtonAndEnableCollider();
+			this._uiNavigationAxisSelector.RebuildAndSelect();
 			yield break;
 		}
 
 		private void OnLevelUpDetected(int level)
 		{
-			this._onLevelUpDetected(level);
+			if (this._onLevelUpDetected != null)
+			{
+				this._onLevelUpDetected(level);
+			}
 			if (!this._levelUpTriggered)
 			{
 				this._windowAnimation.Play("mission_complete_transition");
@@ -166,8 +207,13 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 
 		public void Hide()
 		{
+			this.UiNavigationGroupHolder.RemoveGroup();
 			this._windowAnimation.Play("mission_complete_out");
-			this._onHideEvent();
+			this._okButtonCollider.enabled = false;
+			if (this._onHideEvent != null)
+			{
+				this._onHideEvent();
+			}
 		}
 
 		public void OnOkButtonClick()
@@ -175,9 +221,10 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 			this.Hide();
 		}
 
-		private void AnimateShowOkButton()
+		private void AnimateShowOkButtonAndEnableCollider()
 		{
 			this._okButtonAnimation.Play("mission_complete_button_in");
+			this._okButtonCollider.enabled = true;
 		}
 
 		private void AnimateHideOkButton()
@@ -196,6 +243,9 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 
 		[SerializeField]
 		private UIGrid _missionsGrid;
+
+		[SerializeField]
+		private BoxCollider _okButtonCollider;
 
 		[SerializeField]
 		private Animation _okButtonAnimation;
@@ -243,9 +293,18 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 		[SerializeField]
 		private int _transferAnimationXpPerSecond = 1000;
 
+		[Header("[Ui Navigation]")]
+		[SerializeField]
+		private UiNavigationGroupHolder _uiNavigationGroupHolder;
+
+		[SerializeField]
+		private UiNavigationAxisSelector _uiNavigationAxisSelector;
+
 		private bool _isPlayerLeaver;
 
 		private bool _levelUpTriggered;
+
+		private IDisposable _navigationSelectionDisposable;
 
 		public delegate void OnHideDelegate();
 	}

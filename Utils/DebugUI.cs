@@ -7,11 +7,17 @@ namespace HeavyMetalMachines.Utils
 {
 	public class DebugUI
 	{
-		[DllImport("NativeRendering.dll")]
+		[DllImport("particlesystem.plugin")]
 		private static extern void DebugUISetActive(bool value);
 
-		[DllImport("NativeRendering.dll")]
+		[DllImport("particlesystem.plugin")]
 		private static extern IntPtr DebugUIGetRenderEventPtr();
+
+		[DllImport("particlesystem.plugin")]
+		private static extern void DebugUIPauseHistogram();
+
+		[DllImport("particlesystem.plugin")]
+		private static extern void DebugUIResumeHistogram();
 
 		public static void Toggle()
 		{
@@ -32,15 +38,25 @@ namespace HeavyMetalMachines.Utils
 				{
 					return;
 				}
-				DebugUI._cachedCamera.AddCommandBuffer(CameraEvent.AfterEverything, DebugUI._cmdBuffer);
+				DebugUI._cachedCamera.AddCommandBuffer(20, DebugUI._cmdBuffer);
 			}
 			else
 			{
-				DebugUI._cachedCamera.RemoveCommandBuffer(CameraEvent.AfterEverything, DebugUI._cmdBuffer);
+				DebugUI._cachedCamera.RemoveCommandBuffer(20, DebugUI._cmdBuffer);
 				DebugUI._cachedCamera = null;
 			}
 			DebugUI._enabled = !DebugUI._enabled;
 			DebugUI.DebugUISetActive(DebugUI._enabled);
+		}
+
+		public static void PauseHistogram()
+		{
+			DebugUI.DebugUIPauseHistogram();
+		}
+
+		public static void ResumeHistogram()
+		{
+			DebugUI.DebugUIResumeHistogram();
 		}
 
 		private static CommandBuffer _cmdBuffer;

@@ -3,6 +3,7 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.VFX
 {
+	[HelpURL("https://confluence.hoplon.com/display/HMM/Mesh+Fade+VFX")]
 	internal class MeshFadeVFX : BaseVFX
 	{
 		public override int Priority
@@ -16,6 +17,10 @@ namespace HeavyMetalMachines.VFX
 		private void Awake()
 		{
 			this._colorPropertyId = Shader.PropertyToID("_Color");
+			if (this.enableSpecularIntensity)
+			{
+				this._specularIntendityPropertyId = Shader.PropertyToID("Gloss");
+			}
 			this._materialPropertyBlock = new MaterialPropertyBlock();
 			this._rendererData = new MeshFadeVFX.RendererControlData[this.renderers.Length + ((!this.GetRendererDuringRuntime) ? 0 : 1)];
 			base.enabled = (this.GetRendererDuringRuntime || (this.renderers != null && this.renderers.Length > 0));
@@ -39,6 +44,13 @@ namespace HeavyMetalMachines.VFX
 				if (this._alpha > 1f)
 				{
 					this._alpha = 1f;
+					if (this.hasLifeFixedDuration)
+					{
+						this.fadeOutDelay = this.lifeFixedDuration;
+						this._deactivateTime = Time.time;
+						this._currentState = MeshFadeVFX.States.Deactivating;
+						return;
+					}
 					if (this.spawnStage == BaseVFX.SpawnState.OnActivate)
 					{
 						this._currentState = MeshFadeVFX.States.Idle;
@@ -76,6 +88,10 @@ namespace HeavyMetalMachines.VFX
 				color.a *= this._alpha;
 				this.renderers[i].GetPropertyBlock(this._materialPropertyBlock);
 				this._materialPropertyBlock.SetColor(this._colorPropertyId, color);
+				if (this.enableSpecularIntensity)
+				{
+					this._materialPropertyBlock.SetFloat(this._specularIntendityPropertyId, this.SpecularIntensity * this._alpha);
+				}
 				this.renderers[i].SetPropertyBlock(this._materialPropertyBlock);
 				this.renderers[i].enabled = true;
 			}
@@ -85,6 +101,10 @@ namespace HeavyMetalMachines.VFX
 				color2.a *= this._alpha;
 				this._runtimeRenderer.GetPropertyBlock(this._materialPropertyBlock);
 				this._materialPropertyBlock.SetColor(this._colorPropertyId, color2);
+				if (this.enableSpecularIntensity)
+				{
+					this._materialPropertyBlock.SetFloat(this._specularIntendityPropertyId, this.SpecularIntensity * this._alpha);
+				}
 				this._runtimeRenderer.SetPropertyBlock(this._materialPropertyBlock);
 				this._runtimeRenderer.enabled = true;
 			}
@@ -201,6 +221,14 @@ namespace HeavyMetalMachines.VFX
 
 		private float _deactivateTime;
 
+		[Tooltip("It will fade out after a fixed duration, instead of the default 'On destroy' fade out.")]
+		[SerializeField]
+		private bool hasLifeFixedDuration;
+
+		[Tooltip("Fixed duration time, it'll only be considered if 'Has Life Fixed Duration' is selected.")]
+		[SerializeField]
+		private float lifeFixedDuration;
+
 		[Tooltip("Time in seconds to fade in.")]
 		public float fadeInTime;
 
@@ -214,6 +242,15 @@ namespace HeavyMetalMachines.VFX
 		public bool GetRendererDuringRuntime;
 
 		private Renderer _runtimeRenderer;
+
+		[Header("Additional properties animation")]
+		private int _specularIntendityPropertyId;
+
+		[SerializeField]
+		private bool enableSpecularIntensity;
+
+		[SerializeField]
+		private float SpecularIntensity = 0.75f;
 
 		private enum States
 		{

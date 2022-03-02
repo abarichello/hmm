@@ -1,5 +1,5 @@
 ﻿using System;
-using HeavyMetalMachines.Character;
+using HeavyMetalMachines.Characters;
 using HeavyMetalMachines.VFX;
 using UnityEngine;
 
@@ -22,7 +22,7 @@ namespace HeavyMetalMachines.Frontend
 			this.CharacterLevelProgressBar.transform.parent.gameObject.SetActive(visible);
 		}
 
-		public void SetInfo(float level, float normalizedLevelInfo, HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind role)
+		public void SetInfo(float level, float normalizedLevelInfo, DriverRoleKind role)
 		{
 			this.CharacterLevelProgressBar.value = normalizedLevelInfo;
 			level += 1f;
@@ -57,7 +57,7 @@ namespace HeavyMetalMachines.Frontend
 			this.ButtonEventListener.IntParameter = id;
 		}
 
-		public HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind GetRole()
+		public DriverRoleKind GetRole()
 		{
 			return this._role;
 		}
@@ -116,6 +116,6 @@ namespace HeavyMetalMachines.Frontend
 
 		private float _normalizedLevelInfo;
 
-		private HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind _role;
+		private DriverRoleKind _role;
 	}
 }

@@ -12,11 +12,6 @@ namespace HeavyMetalMachines.Swordfish
 			GameHubObject.Hub.ClientApi.customws.ExecuteCustomWSWithReturn(null, "ServerEquipCharacter", bag.ToString(), onSuccess, onError);
 		}
 
-		public static void ServerUpdateCharacterStats(CharacterBag bag, object state, SwordfishClientApi.ParameterizedCallback<string> onSuccess, SwordfishClientApi.ErrorCallback onError)
-		{
-			GameHubObject.Hub.ClientApi.customws.ExecuteCustomWSWithReturn(state, "ServerUpdateCharacterStats", bag.ToString(), onSuccess, onError);
-		}
-
 		public static void EquipCharacter(CharacterBag bag, SwordfishClientApi.ParameterizedCallback<string> onSuccess, SwordfishClientApi.ErrorCallback onError)
 		{
 			GameHubObject.Hub.ClientApi.customws.ExecuteCustomWSWithReturn(null, "EquipCharacter", bag.ToString(), onSuccess, onError);

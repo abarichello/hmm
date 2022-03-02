@@ -1,30 +1,89 @@
 ﻿using System;
 using System.Collections.Generic;
 using HeavyMetalMachines.Combat.GadgetScript.Block;
-using HeavyMetalMachines.Utils;
 using Hoplon.GadgetScript;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Combat.GadgetScript
 {
-	public class GadgetEvent : IHMMEventContext, IBitStreamSerializable, IEventContext, INodeHolder, IParameterContext
+	public class GadgetEvent : IHMMEventContext, IBitStreamSerializable, IEventContext
 	{
-		public GadgetEvent(int blockIndex, IGadgetContext context)
+		private GadgetEvent()
 		{
-			this._gadgetContext = (IHMMGadgetContext)context;
-			this.Id = this._gadgetContext.GetNewEventId();
-			this.BlockIndex = blockIndex;
-			this.CreationTime = this._gadgetContext.CurrentTime;
-			this.ShouldBeSent = false;
-			this.PreviousEventId = -1;
 		}
 
-		public GadgetEvent(int blockIndex, IGadgetContext context, List<BaseParameter> parameters) : this(blockIndex, context)
+		public static GadgetEvent GetInstance(int blockIndex, IHMMGadgetContext context)
 		{
-			this._numInitialParameters = parameters.Count;
+			GadgetEvent gadgetEvent;
+			if (GadgetEvent.Pool.Count > 0)
+			{
+				gadgetEvent = GadgetEvent.Pool.Pop();
+				GadgetEvent._freedEvents.Remove(gadgetEvent);
+			}
+			else
+			{
+				gadgetEvent = new GadgetEvent();
+			}
+			gadgetEvent._gadgetContext = context;
+			gadgetEvent.Id = gadgetEvent._gadgetContext.GetNewEventId();
+			gadgetEvent.BlockIndex = blockIndex;
+			gadgetEvent.CreationTime = gadgetEvent._gadgetContext.CurrentTime;
+			gadgetEvent.ShouldBeSent = false;
+			gadgetEvent.PreviousEventId = -1;
+			return gadgetEvent;
+		}
+
+		public static GadgetEvent GetInstance(int blockIndex, IHMMGadgetContext context, List<BaseParameter> parameters)
+		{
+			GadgetEvent instance = GadgetEvent.GetInstance(blockIndex, context);
+			instance._numInitialParameters = parameters.Count;
 			for (int i = 0; i < parameters.Count; i++)
 			{
-				parameters[i].WriteToBitStreamWithContentId(context, this._parametersStream);
+				parameters[i].WriteToBitStreamWithContentId(context, instance._parametersStream);
+			}
+			return instance;
+		}
+
+		public static void Free(GadgetEvent gadgetEvent)
+		{
+			if (GadgetEvent._freedEvents.Contains(gadgetEvent))
+			{
+				GadgetEvent.Log.ErrorFormat("Trying to remove GadgetEvent twice! GadgetContext: {0} Block: {1}", new object[]
+				{
+					gadgetEvent._gadgetContext,
+					gadgetEvent.RootBlock
+				});
+				return;
+			}
+			GadgetEvent._freedEvents.Add(gadgetEvent);
+			for (int i = 0; i < gadgetEvent._executionPointsWithInnerEvent.Count; i++)
+			{
+				int key = gadgetEvent._executionPointsWithInnerEvent[i];
+				for (int j = 0; j < gadgetEvent._innerEvents[key].Count; j++)
+				{
+					IEventContext eventContext = gadgetEvent._innerEvents[key][j];
+					GadgetEvent.Free((GadgetEvent)eventContext);
+				}
+			}
+			GadgetEvent.Clear(gadgetEvent);
+			GadgetEvent.Pool.Push(gadgetEvent);
+		}
+
+		private static void Clear(GadgetEvent gadgetEvent)
+		{
+			gadgetEvent._parentEvent = null;
+			gadgetEvent._executedBlock = 0;
+			gadgetEvent._innerEventsExecutedInPoint = 0;
+			gadgetEvent._bodies.Clear();
+			gadgetEvent._removedBodies.Clear();
+			gadgetEvent._parametersStream.ResetBitsRead();
+			gadgetEvent._parametersStream.ResetBitsWritten();
+			gadgetEvent._executionPointsWithInnerEvent.Clear();
+			gadgetEvent._innerEvents.Clear();
+			gadgetEvent._numInitialParameters = 0;
+			if (gadgetEvent._byteArrayData != null)
+			{
+				gadgetEvent._parametersStream.FreeCachedByteArray(gadgetEvent._byteArrayData);
 			}
 		}
 
@@ -32,7 +91,15 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 
 		public int BlockIndex { get; private set; }
 
-		public int CreationTime { get; private set; }
+		public IBlock RootBlock
+		{
+			get
+			{
+				return BaseBlock.GetBlock(this.BlockIndex);
+			}
+		}
+
+		public int CreationTime { get; set; }
 
 		public bool ShouldBeSent { get; private set; }
 
@@ -46,39 +113,19 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 			}
 		}
 
-		public int FirstEventBodyId
-		{
-			get
-			{
-				return (this._bodies.Count <= 0) ? 0 : this._bodies[0];
-			}
-		}
-
-		public int[] NodeIds { get; private set; }
-
-		public int[] NodeRemovals { get; private set; }
-
-		public bool ShouldCreateBody
-		{
-			get
-			{
-				if (this._bodies.Count == 0)
-				{
-					return false;
-				}
-				int key = this._bodies[0];
-				bool flag = this._bodyDestructionEvent.ContainsKey(key) && this._bodyDestructionEvent[key].CreationTime < this._gadgetContext.CurrentTime;
-				return !this._gadgetContext.Bodies.ContainsKey(key) && !flag;
-			}
-		}
-
-		public void TryConsumeFirstBody()
+		public bool ConsumeBody()
 		{
 			if (this._bodies.Count == 0)
 			{
-				return;
+				return false;
 			}
+			int num = this._bodies[0];
 			this._bodies.RemoveAt(0);
+			this._gadgetContext.SetLastBodyId(num);
+			int num2;
+			bool flag = this._gadgetContext.TryGetBodyDestructionTime(num, out num2);
+			bool flag2 = flag && num2 < this._gadgetContext.CurrentTime;
+			return !this._gadgetContext.Bodies.ContainsKey(num) && !flag2;
 		}
 
 		public void LoadInitialParameters()
@@ -87,11 +134,6 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 			{
 				BaseParameter.ReadParameterFromBitStreamWithContentId(this._gadgetContext, this._parametersStream);
 			}
-		}
-
-		public void SetBodyDestructionEvent(int bodyId, IEventContext ev)
-		{
-			this._bodyDestructionEvent[bodyId] = ev;
 		}
 
 		public void SaveParameter(BaseParameter parameter)
@@ -112,7 +154,7 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 			}
 			else if (this.PreviousEventId != -1 && this.PreviousEventId != eventId && eventId != this.Id)
 			{
-				GadgetEvent.Log.FatalFormat("Trying to set LastFrameId when it was already set. (Is event trying to destroy multiple Bodies from different events?) Gadget={0} - Root Block={1} Prev={2} Id={3} Eve={4}", new object[]
+				GadgetEvent.Log.WarnFormat("Trying to set LastFrameId when it was already set. (Is event trying to destroy multiple Bodies from different events?) Gadget={0} - Root Block={1} LastFrameId={2} | Current Event Id: {3} | Trying to set to:{4}", new object[]
 				{
 					((BaseGadget)this._gadgetContext).name,
 					((BaseBlock)BaseBlock.GetBlock(this.BlockIndex)).name,
@@ -130,6 +172,14 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 		public void SendToClient()
 		{
 			this.ShouldBeSent = true;
+			foreach (int key in this._bodies)
+			{
+				IGadgetBody gadgetBody;
+				if (this._gadgetContext.Bodies.TryGetValue(key, out gadgetBody))
+				{
+					gadgetBody.WasSentToClient = true;
+				}
+			}
 		}
 
 		public void SetParentEvent(IEventContext eventContext)
@@ -148,16 +198,11 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 			this._innerEvents[this._executedBlock].Add(eventContext);
 		}
 
-		public IEventContext GetInnerEvent()
+		public IList<IEventContext> GetInnerEvents()
 		{
-			if (this._executionPointsWithInnerEvent.Contains(this._executedBlock) && this._innerEvents[this._executedBlock].Count > this._innerEventsExecutedInPoint)
-			{
-				IEventContext result = this._innerEvents[this._executedBlock][this._innerEventsExecutedInPoint];
-				this._innerEventsExecutedInPoint++;
-				return result;
-			}
-			this._innerEventsExecutedInPoint = 0;
-			return null;
+			List<IEventContext> result;
+			this._innerEvents.TryGetValue(this._executedBlock, out result);
+			return result;
 		}
 
 		public void BlockExecuted()
@@ -200,7 +245,6 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 
 		public void WriteToBitStream(BitStream bs)
 		{
-			this.ConvertBodiesToNodes();
 			bs.WriteInt(this.Id);
 			bs.WriteInt(this.BlockIndex);
 			bs.WriteInt(this.CreationTime);
@@ -225,32 +269,71 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 			this.Id = bs.ReadInt();
 			this.BlockIndex = bs.ReadInt();
 			this.CreationTime = bs.ReadInt();
-			this._bodies = new List<int>(bs.ReadIntArray());
-			this._removedBodies = new List<int>(bs.ReadIntArray());
+			int[] array = bs.CachedReadIntArray();
+			int[] array2 = bs.CachedReadIntArray();
+			this._bodies.Clear();
+			this._bodies.AddRange(array);
+			this._removedBodies.Clear();
+			this._removedBodies.AddRange(array2);
 			this._numInitialParameters = bs.ReadInt();
-			this._parametersStream = new BitStream(bs.ReadByteArray());
-			this._executionPointsWithInnerEvent.AddRange(bs.ReadIntArray());
+			this._byteArrayData = bs.CachedReadByteArray();
+			this._parametersStream.ByteArray = this._byteArrayData;
+			int[] array3 = bs.CachedReadIntArray();
+			this._executionPointsWithInnerEvent.AddRange(array3);
 			for (int i = 0; i < this._executionPointsWithInnerEvent.Count; i++)
 			{
 				int num = bs.ReadInt();
-				List<IEventContext> list = new List<IEventContext>();
+				List<IEventContext> list = new List<IEventContext>(8);
 				this._innerEvents.Add(this._executionPointsWithInnerEvent[i], list);
 				for (int j = 0; j < num; j++)
 				{
-					GadgetEvent gadgetEvent = new GadgetEvent(-1, this._gadgetContext);
-					list.Add(gadgetEvent);
-					gadgetEvent.ReadFromBitStream(bs);
+					GadgetEvent instance = GadgetEvent.GetInstance(-1, this._gadgetContext);
+					list.Add(instance);
+					instance.ReadFromBitStream(bs);
+				}
+			}
+			bs.FreeCachedIntArray(array);
+			bs.FreeCachedIntArray(array2);
+			bs.FreeCachedIntArray(array3);
+		}
+
+		public void GetBodies(out List<int> created, out List<int> removed)
+		{
+			created = new List<int>(this._bodies.ToArray());
+			removed = new List<int>(this._removedBodies.ToArray());
+			this.RecursiveFillBodyArrays(ref created, ref removed);
+		}
+
+		private void RecursiveFillBodyArrays(ref List<int> bodies, ref List<int> removes)
+		{
+			for (int i = 0; i < this._executionPointsWithInnerEvent.Count; i++)
+			{
+				int key = this._executionPointsWithInnerEvent[i];
+				List<IEventContext> list;
+				this._innerEvents.TryGetValue(key, out list);
+				if (list != null)
+				{
+					for (int j = 0; j < list.Count; j++)
+					{
+						IHMMEventContext ihmmeventContext = list[j] as IHMMEventContext;
+						if (ihmmeventContext != null)
+						{
+							List<int> collection;
+							List<int> collection2;
+							ihmmeventContext.GetBodies(out collection, out collection2);
+							bodies.AddRange(collection);
+							removes.AddRange(collection2);
+						}
+					}
 				}
 			}
 		}
 
-		private void ConvertBodiesToNodes()
-		{
-			this.NodeIds = this._bodies.ToArray();
-			this.NodeRemovals = this._removedBodies.ToArray();
-		}
-
 		private static readonly BitLogger Log = new BitLogger(typeof(GadgetEvent));
+
+		private static readonly Stack<GadgetEvent> Pool = new Stack<GadgetEvent>(1024);
+
+		private static readonly HashSet<GadgetEvent> _freedEvents = new HashSet<GadgetEvent>();
 
 		private IEventContext _parentEvent;
 
@@ -260,18 +343,18 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 
 		private int _numInitialParameters;
 
-		private List<int> _bodies = new List<int>();
+		private readonly List<int> _bodies = new List<int>(32);
 
-		private List<int> _removedBodies = new List<int>();
+		private readonly List<int> _removedBodies = new List<int>(32);
 
-		private Dictionary<int, IEventContext> _bodyDestructionEvent = new Dictionary<int, IEventContext>();
+		private readonly BitStream _parametersStream = new BitStream();
 
-		private BitStream _parametersStream = new BitStream();
+		private IHMMGadgetContext _gadgetContext;
 
-		private readonly IHMMGadgetContext _gadgetContext;
+		private readonly List<int> _executionPointsWithInnerEvent = new List<int>(32);
 
-		private readonly List<int> _executionPointsWithInnerEvent = new List<int>();
+		private readonly Dictionary<int, List<IEventContext>> _innerEvents = new Dictionary<int, List<IEventContext>>(32);
 
-		private readonly Dictionary<int, List<IEventContext>> _innerEvents = new Dictionary<int, List<IEventContext>>();
+		private byte[] _byteArrayData;
 	}
 }

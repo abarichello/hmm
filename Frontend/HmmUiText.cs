@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Globalization;
+using HeavyMetalMachines.Localization;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -45,7 +46,7 @@ namespace HeavyMetalMachines.Frontend
 
 		public void ApplyTranslationText()
 		{
-			this.text = ((this.TranslationSheet != TranslationSheets.All) ? Language.Get(this.TranslationDraft, this.TranslationSheet) : Language.Get(this.TranslationDraft));
+			this.text = Language.Get(this.TranslationDraft, this.TranslationSheet);
 		}
 
 		public HmmUiText.TextStyles TextStyle;

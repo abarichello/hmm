@@ -5,6 +5,7 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.VFX
 {
+	[HelpURL("https://confluence.hoplon.com/display/HMM/Attach+VFX")]
 	public class AttachVFX : BaseVFX
 	{
 		public override int Priority
@@ -63,6 +64,26 @@ namespace HeavyMetalMachines.VFX
 			{
 				this._attachTransform = this._targetFXInfo.Owner.transform;
 			}
+			if (this.hasRandomRotation)
+			{
+				this.rotationRandomAdd = Random.Range(-1f, 1f) * this.rotationRandom;
+			}
+			if (this.hasRandomPosition)
+			{
+				this.positionRandomAdd = Random.Range(-1f, 1f) * this.positionRandom;
+			}
+			if (this.syncWithLineVFX)
+			{
+				this.hmmTeamLineVFX = base.gameObject.GetComponent<HMMTeamLineVFX>();
+			}
+			if (this.syncWithLineVFX && !this.hmmTeamLineVFX)
+			{
+				this.hmmTeamLineVFX = base.gameObject.GetComponentInParent<HMMTeamLineVFX>();
+			}
+			if (this.syncRotation == AttachVFX.SynchRotationType.FixedToWorld)
+			{
+				this.GetCamera();
+			}
 			if (this._attachTransform)
 			{
 				Transform dummyTransform2 = this.GetDummyTransform(this._attachTransform, this.dummyType, this.customDummyName);
@@ -93,6 +114,11 @@ namespace HeavyMetalMachines.VFX
 			}
 		}
 
+		private void GetCamera()
+		{
+			this.playerCamera = Object.FindObjectOfType<Camera>().gameObject;
+		}
+
 		private Transform GetDummyTransform(Transform transform, CDummy.DummyKind dummyKind, string customDummyName = "")
 		{
 			if (!transform || dummyKind == CDummy.DummyKind.None)
@@ -104,7 +130,7 @@ namespace HeavyMetalMachines.VFX
 			{
 				return null;
 			}
-			return componentInChildren.GetDummy(dummyKind, customDummyName);
+			return componentInChildren.GetDummy(dummyKind, customDummyName, this);
 		}
 
 		protected virtual void OnDisable()
@@ -123,6 +149,10 @@ namespace HeavyMetalMachines.VFX
 		{
 			if (this._attachTransform != null && this._attachTransform.gameObject.activeInHierarchy)
 			{
+				if (this.playerCamera == null)
+				{
+					this.GetCamera();
+				}
 				this.SynchTransform();
 			}
 		}
@@ -141,7 +171,29 @@ namespace HeavyMetalMachines.VFX
 			}
 			if (this.syncRotation != AttachVFX.SynchRotationType.Disabled)
 			{
-				base.transform.rotation = ((this.syncRotation != AttachVFX.SynchRotationType.Attached) ? Quaternion.LookRotation(this._synchRotationTransform.position - this._attachTransform.position) : this._attachTransform.rotation);
+				if (this.syncRotation == AttachVFX.SynchRotationType.Attached)
+				{
+					base.transform.rotation = this._attachTransform.rotation;
+				}
+				else if (this.syncRotation == AttachVFX.SynchRotationType.FixedToWorld && this.playerCamera)
+				{
+					this.worldFixedOrientation = new Vector3(0f, this.playerCamera.transform.eulerAngles.y, 0f);
+					this.worldFixedOrientation += this.worldFixedOrientationOffset;
+					base.transform.eulerAngles = this.worldFixedOrientation;
+				}
+				else if (this._synchRotationTransform.position - this._attachTransform.position != Vector3.zero)
+				{
+					base.transform.rotation = Quaternion.LookRotation(this._synchRotationTransform.position - this._attachTransform.position);
+				}
+			}
+			if (this.hasOffset)
+			{
+				base.transform.Rotate(this.rotationOffset + this.rotationRandomAdd);
+				base.transform.localPosition += this.positionOffSet + this.positionRandomAdd;
+			}
+			if (this.syncWithLineVFX && this.hmmTeamLineVFX)
+			{
+				base.transform.position += this.hmmTeamLineVFX.arcOffset;
 			}
 		}
 
@@ -180,11 +232,41 @@ namespace HeavyMetalMachines.VFX
 
 		public AttachVFX.SynchRotationType syncRotation;
 
+		public Vector3 worldFixedOrientationOffset;
+
+		public Vector3 worldFixedOrientation;
+
+		private GameObject playerCamera;
+
 		private Transform _attachTransform;
 
 		private Transform _synchRotationTransform;
 
 		public bool detachOnDeactivate;
+
+		private bool followLineVFX;
+
+		public bool hasOffset;
+
+		public Vector3 positionOffSet;
+
+		public Vector3 rotationOffset;
+
+		public bool hasRandomPosition;
+
+		public Vector3 positionRandom;
+
+		public bool hasRandomRotation;
+
+		public Vector3 rotationRandom;
+
+		private Vector3 rotationRandomAdd;
+
+		private Vector3 positionRandomAdd;
+
+		public bool syncWithLineVFX;
+
+		private HMMTeamLineVFX hmmTeamLineVFX;
 
 		public enum AttachType
 		{
@@ -206,7 +288,8 @@ namespace HeavyMetalMachines.VFX
 			Attached,
 			FromAttachedToOwner,
 			FromAttachedToTarget,
-			FromAttachedToEffect
+			FromAttachedToEffect,
+			FixedToWorld
 		}
 	}
 }

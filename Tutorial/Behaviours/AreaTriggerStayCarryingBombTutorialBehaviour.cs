@@ -6,7 +6,6 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Tutorial.Behaviours
 {
-	[RequireComponent(typeof(Collider))]
 	public class AreaTriggerStayCarryingBombTutorialBehaviour : InGameTutorialBehaviourBase
 	{
 		private void OnTriggerStay(Collider coll)

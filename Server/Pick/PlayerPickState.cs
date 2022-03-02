@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using HeavyMetalMachines.Character;
+using HeavyMetalMachines.Characters;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Server.Apis;
 using HeavyMetalMachines.Server.Pick.Apis;
 using UnityEngine;
 
@@ -9,7 +10,7 @@ namespace HeavyMetalMachines.Server.Pick
 {
 	public class PlayerPickState : IPickModeState
 	{
-		public PlayerPickState(CharacterService pickService, BotPickController botPick, MatchPlayers players, float availableBotPickTime)
+		public PlayerPickState(CharacterService pickService, IBotPickController botPick, MatchPlayers players, float availableBotPickTime)
 		{
 			this._pickService = pickService;
 			this._botPick = botPick;
@@ -56,9 +57,10 @@ namespace HeavyMetalMachines.Server.Pick
 				}
 				if (playerData.GridIndex < 0)
 				{
-					playerData.autoDesiredGrid = playerData.Character.PreferedGridPosition;
-					playerData.autoGridPriority = playerData.Character.PreferedGridPosition;
-					this._pickService.ServerConfirmSkin(playerData, playerData.Character.CharacterItemTypeGuid, playerData.Customizations.SelectedSkin);
+					int characterPreferredGridPosition = playerData.GetCharacterPreferredGridPosition();
+					playerData.autoDesiredGrid = characterPreferredGridPosition;
+					playerData.autoGridPriority = characterPreferredGridPosition;
+					this._pickService.ServerConfirmSkin(playerData, playerData.CharacterItemType.Id, playerData.Customizations.GetGuidBySlot(59));
 				}
 			}
 			this._pickService.CheckAllConfirmed();
@@ -66,7 +68,7 @@ namespace HeavyMetalMachines.Server.Pick
 
 		private readonly CharacterService _pickService;
 
-		private readonly BotPickController _botPick;
+		private readonly IBotPickController _botPick;
 
 		private readonly MatchPlayers _players;
 

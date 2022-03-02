@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
+using HeavyMetalMachines.DataTransferObjects.Server;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Swordfish
@@ -15,7 +16,7 @@ namespace HeavyMetalMachines.Swordfish
 		}
 
 		[DllImport("Hoplon.ClusterManager.Comm.dll")]
-		public static extern void UpdateOnlineUsers(long jobId, int count);
+		private static extern void UpdateOnlineUsers(long jobId, int count);
 
 		[DllImport("Hoplon.ClusterManager.Comm.dll")]
 		private static extern void Heartbeat(long jobId);
@@ -33,7 +34,15 @@ namespace HeavyMetalMachines.Swordfish
 		public static extern int GetJobId();
 
 		[DllImport("Hoplon.ClusterManager.Comm.dll")]
-		public static extern void UpdateGameServerStatus(long jobId, string bag);
+		private static extern void UpdateGameServerStatus(long jobId, string bag);
+
+		[DllImport("Hoplon.ClusterManager.Comm.dll")]
+		private static extern long GetCurrentRegionId();
+
+		public void UpdateOnlineUsers(int count)
+		{
+			SwordfishComm.UpdateOnlineUsers(this.JobId, count);
+		}
 
 		public void UpdateGameServerStatus(ServerStatusBag bag)
 		{
@@ -45,6 +54,14 @@ namespace HeavyMetalMachines.Swordfish
 			SwordfishComm.RaisePriority(this.JobId);
 		}
 
+		public void LowerPriority()
+		{
+			using (Process currentProcess = Process.GetCurrentProcess())
+			{
+				currentProcess.PriorityClass = ProcessPriorityClass.BelowNormal;
+			}
+		}
+
 		public void JobDone()
 		{
 			SwordfishComm.JobDone(this.JobId);
@@ -53,6 +70,11 @@ namespace HeavyMetalMachines.Swordfish
 		public int GetPort()
 		{
 			return SwordfishComm.GetPort(this.JobId);
+		}
+
+		public long GetRegionId()
+		{
+			return SwordfishComm.GetCurrentRegionId();
 		}
 
 		public void Tick()
@@ -92,7 +114,7 @@ namespace HeavyMetalMachines.Swordfish
 				}
 				catch (Exception e)
 				{
-					SwordfishComm.Log.Fatal("Exception during Swordfish's Heartbeat:\n", e);
+					SwordfishComm.Log.Warn("Exception during Swordfish's Heartbeat:\n", e);
 				}
 				int tick = this._tick;
 				if (tick != num)
@@ -106,7 +128,10 @@ namespace HeavyMetalMachines.Swordfish
 					{
 						this._unityThread.IsAlive
 					});
+					this.LowerPriority();
+					this.JobDone();
 					Process.GetCurrentProcess().Kill();
+					this._running = false;
 				}
 			}
 		}
@@ -116,7 +141,6 @@ namespace HeavyMetalMachines.Swordfish
 			this._running = false;
 			this._heartbeat.Join();
 			this._heartbeat = null;
-			this.JobDone();
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(SwordfishComm));

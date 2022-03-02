@@ -11,7 +11,7 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 
 		public void ExecuteTaskOnClient(int teleportPlayerTask, float taskDuration)
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1014, 2, base.IsReliable, new object[]
+			base.Dispatch(base.DispatchDestination(), base.OID, 1015, 2, base.IsReliable, new object[]
 			{
 				teleportPlayerTask,
 				taskDuration
@@ -20,7 +20,7 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 
 		public void TaskFinishedOnClient(int teleportPlayerTask)
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1014, 3, base.IsReliable, new object[]
+			base.Dispatch(base.DispatchDestination(), base.OID, 1015, 3, base.IsReliable, new object[]
 			{
 				teleportPlayerTask
 			});

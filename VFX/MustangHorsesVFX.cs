@@ -89,7 +89,7 @@ namespace HeavyMetalMachines.VFX
 
 			public void OnActivate(MustangHorsesVFX parent)
 			{
-				this.delay = UnityEngine.Random.Range(0f, parent.maxSpawnTimeVariation);
+				this.delay = Random.Range(0f, parent.maxSpawnTimeVariation);
 				this.animation.Stop();
 				Color color = this.renderer.material.color;
 				color.a = 0f;
@@ -109,7 +109,7 @@ namespace HeavyMetalMachines.VFX
 				{
 					AnimationState animationState = this.animation["run"];
 					animationState.speed = this.speed;
-					float a = Mathf.Lerp(0.5f, 1f, Mathf.Sin(animationState.normalizedTime * 3.14159274f));
+					float a = Mathf.Lerp(0.5f, 1f, Mathf.Sin(animationState.normalizedTime * 3.1415927f));
 					Color color = this.renderer.material.color;
 					color.a = a;
 					this.renderer.material.color = color;
@@ -120,7 +120,7 @@ namespace HeavyMetalMachines.VFX
 					if (this.delay <= 0f)
 					{
 						this.animation.Play();
-						this.speed = UnityEngine.Random.Range(1f - parent.maxAnimationVariation, 1f + parent.maxAnimationVariation);
+						this.speed = Random.Range(1f - parent.maxAnimationVariation, 1f + parent.maxAnimationVariation);
 					}
 					Color color2 = this.renderer.material.color;
 					color2.a = 0f;

@@ -28,12 +28,12 @@ namespace HeavyMetalMachines
 				num |= 4194304;
 			}
 			RaycastHit raycastHit;
-			bool flag = Physics.Raycast(from, vector, out raycastHit, magnitude, num);
+			bool flag = Physics.Raycast(from, vector, ref raycastHit, magnitude, num);
 			if (flag)
 			{
 				return from + vector * (raycastHit.distance - radius);
 			}
-			bool flag2 = Physics.SphereCast(from, radius, vector, out raycastHit, magnitude, num);
+			bool flag2 = Physics.SphereCast(from, radius, vector, ref raycastHit, magnitude, num);
 			if (!flag2)
 			{
 				return to;

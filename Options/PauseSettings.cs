@@ -1,12 +1,12 @@
 ﻿using System;
-using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Matches.DataTransferObjects;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Options
 {
 	public class PauseSettings : ScriptableObject
 	{
-		public PauseSettings.PauseData GetPauseData(MatchData.MatchKind matchKind)
+		public PauseSettings.PauseData GetPauseData(MatchKind matchKind)
 		{
 			PauseSettings.PauseData pauseData = null;
 			if (this.pauseSettingsData != null)
@@ -39,7 +39,7 @@ namespace HeavyMetalMachines.Options
 		[Serializable]
 		public class PauseData
 		{
-			public MatchData.MatchKind matchKind;
+			public MatchKind matchKind;
 
 			public float EnemyDelayToUnpause = 30f;
 
@@ -50,6 +50,14 @@ namespace HeavyMetalMachines.Options
 			public float PauseCountDownTime = 3f;
 
 			public float UnpauseCountDownTime = 3f;
+
+			public bool ShouldUseTimePool;
+
+			public float InitialTimePoolForTeam = float.MaxValue;
+
+			public bool ShouldCheckActivationLimit;
+
+			public int MaxActivationsPerTeam = int.MaxValue;
 		}
 	}
 }

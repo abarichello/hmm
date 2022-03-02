@@ -60,9 +60,9 @@ namespace HeavyMetalMachines.Utils
 					}
 				}
 			}
-			Texture2D texture2D = new Texture2D(width, height, TextureFormat.RGBA32, false, false);
+			Texture2D texture2D = new Texture2D(width, height, 4, false, false);
 			texture2D.SetPixels32(array);
-			texture2D.filterMode = FilterMode.Bilinear;
+			texture2D.filterMode = 1;
 			texture2D.Apply();
 			return texture2D;
 		}

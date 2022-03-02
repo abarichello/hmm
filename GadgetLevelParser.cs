@@ -4,10 +4,11 @@ using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Combat.Gadget;
 using HeavyMetalMachines.Match;
 using Pocketverse;
+using Zenject;
 
 namespace HeavyMetalMachines
 {
-	public class GadgetLevelParser : KeyFrameParser
+	public class GadgetLevelParser : KeyFrameParser, IGadgetLevelDispatcher
 	{
 		public override KeyFrameType Type
 		{
@@ -21,7 +22,7 @@ namespace HeavyMetalMachines
 		{
 			int num = stream.ReadCompressedInt();
 			int num2 = stream.ReadCompressedInt();
-			Identifiable @object = GameHubObject.Hub.ObjectCollection.GetObject(num);
+			Identifiable @object = this._objectCollection.GetObject(num);
 			if (@object == null)
 			{
 				GadgetLevelParser.Log.ErrorFormat("Failed to find object id={0} to read {1} upgrades for.", new object[]
@@ -41,7 +42,7 @@ namespace HeavyMetalMachines
 				});
 				return;
 			}
-			GadgetLevelParser.GadgetLevelData gadgetLevelData = default(GadgetLevelParser.GadgetLevelData);
+			GadgetLevelData gadgetLevelData = default(GadgetLevelData);
 			for (int i = 0; i < num2; i++)
 			{
 				gadgetLevelData.ReadFromStream(stream);
@@ -60,7 +61,7 @@ namespace HeavyMetalMachines
 			BitStream stream = base.GetStream();
 			stream.WriteCompressedInt(objectId);
 			stream.WriteCompressedInt(1);
-			new GadgetLevelParser.GadgetLevelData
+			new GadgetLevelData
 			{
 				Slot = slot,
 				Level = level,
@@ -72,12 +73,12 @@ namespace HeavyMetalMachines
 
 		public void SendFullData(byte address)
 		{
-			List<PlayerData> playersAndBots = GameHubObject.Hub.Players.PlayersAndBots;
+			List<PlayerData> playersAndBots = this._players.PlayersAndBots;
 			for (int i = 0; i < playersAndBots.Count; i++)
 			{
 				PlayerData playerData = playersAndBots[i];
 				CombatObject bitComponent = playerData.CharacterInstance.GetBitComponent<CombatObject>();
-				List<GadgetLevelParser.GadgetLevelData> list = new List<GadgetLevelParser.GadgetLevelData>();
+				List<GadgetLevelData> list = new List<GadgetLevelData>(16);
 				this.AddGadget(bitComponent.CustomGadget0, list);
 				this.AddGadget(bitComponent.CustomGadget1, list);
 				this.AddGadget(bitComponent.CustomGadget2, list);
@@ -101,7 +102,7 @@ namespace HeavyMetalMachines
 			}
 		}
 
-		private void AddGadget(GadgetBehaviour gadget, List<GadgetLevelParser.GadgetLevelData> list)
+		private void AddGadget(GadgetBehaviour gadget, List<GadgetLevelData> list)
 		{
 			if (gadget == null)
 			{
@@ -109,7 +110,7 @@ namespace HeavyMetalMachines
 			}
 			for (int i = 0; i < gadget.Upgrades.Length; i++)
 			{
-				GadgetLevelParser.GadgetLevelData item = new GadgetLevelParser.GadgetLevelData
+				GadgetLevelData item = new GadgetLevelData
 				{
 					Slot = gadget.Slot,
 					Level = gadget.Upgrades[i].Level,
@@ -121,27 +122,10 @@ namespace HeavyMetalMachines
 
 		public static readonly BitLogger Log = new BitLogger(typeof(GadgetLevelParser));
 
-		public struct GadgetLevelData
-		{
-			public void WriteToStream(BitStream stream)
-			{
-				stream.WriteString(this.UpgradeName);
-				stream.WriteBits(6, (int)this.Slot);
-				stream.WriteBits(2, this.Level);
-			}
+		[Inject]
+		private IIdentifiableCollection _objectCollection;
 
-			public void ReadFromStream(BitStream stream)
-			{
-				this.UpgradeName = stream.ReadString();
-				this.Slot = (GadgetSlot)stream.ReadBits(6);
-				this.Level = stream.ReadBits(2);
-			}
-
-			public GadgetSlot Slot;
-
-			public int Level;
-
-			public string UpgradeName;
-		}
+		[Inject]
+		private IMatchPlayers _players;
 	}
 }

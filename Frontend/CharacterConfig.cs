@@ -1,6 +1,9 @@
 ﻿using System;
-using HeavyMetalMachines.Character;
+using Assets.ClientApiObjects;
+using HeavyMetalMachines.Presenting;
+using HeavyMetalMachines.Presenting.NGui;
 using HeavyMetalMachines.VFX;
+using JetBrains.Annotations;
 using Pocketverse;
 using UnityEngine;
 
@@ -8,6 +11,14 @@ namespace HeavyMetalMachines.Frontend
 {
 	public class CharacterConfig : GameHubBehaviour
 	{
+		public IImage LockedInCompetitiveImage
+		{
+			get
+			{
+				return this._lockedInCompetitiveImage;
+			}
+		}
+
 		public void OnCharacterIconHoverOver()
 		{
 			this.GlowSelectIconRef.gameObject.SetActive(true);
@@ -19,10 +30,7 @@ namespace HeavyMetalMachines.Frontend
 		}
 
 		[NonSerialized]
-		public HeavyMetalMachines.Character.CharacterInfo CharInfo;
-
-		[NonSerialized]
-		public PickModeGUI PickModeGUI;
+		public IItemType CharItemType;
 
 		public UIEventTrigger UIeventTrigger;
 
@@ -34,7 +42,7 @@ namespace HeavyMetalMachines.Frontend
 
 		public UI2DSprite GlowSelectIconRef;
 
-		public HMM2DSpriteAnimation Animation;
+		public GameObject SelectionAnimationGameObject;
 
 		public UI2DSprite EmptyBorder;
 
@@ -47,6 +55,10 @@ namespace HeavyMetalMachines.Frontend
 		public UI2DSprite SupportRing;
 
 		public UI2DSprite RecommendedIcon;
+
+		[SerializeField]
+		[UsedImplicitly]
+		private NGuiImage _lockedInCompetitiveImage;
 
 		public bool IsSelected;
 

@@ -19,16 +19,6 @@ namespace HeavyMetalMachines.Combat.Gadget
 			base.SetInfo(info);
 			GameHubBehaviour.Hub.Events.Players.ListenToObjectUnspawn += this.ListenToObjectUnspawn;
 			GameHubBehaviour.Hub.Events.Bots.ListenToObjectUnspawn += this.ListenToObjectUnspawn;
-			GameHubBehaviour.Hub.Events.Creeps.ListenToCreepUnspawn += this.CreepsOnListenToCreepUnspawn;
-		}
-
-		private void CreepsOnListenToCreepUnspawn(CreepRemoveEvent data)
-		{
-			if (GameHubBehaviour.Hub.Match.LevelIsTutorial() && this.Combat.IsBot)
-			{
-				return;
-			}
-			this.FireGadget(base.CannonInfo.ExtraEffect, ModifierData.CopyData(this._damage), data.Location);
 		}
 
 		private void ListenToObjectUnspawn(PlayerEvent data)
@@ -51,7 +41,6 @@ namespace HeavyMetalMachines.Combat.Gadget
 		{
 			GameHubBehaviour.Hub.Events.Players.ListenToObjectUnspawn -= this.ListenToObjectUnspawn;
 			GameHubBehaviour.Hub.Events.Bots.ListenToObjectUnspawn -= this.ListenToObjectUnspawn;
-			GameHubBehaviour.Hub.Events.Creeps.ListenToCreepUnspawn -= this.CreepsOnListenToCreepUnspawn;
 			base.OnDestroy();
 		}
 	}

@@ -73,7 +73,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			return num;
 		}
 
-		protected override void InnerOnDestroyEffect(DestroyEffect evt)
+		protected override void InnerOnDestroyEffect(DestroyEffectMessage evt)
 		{
 			base.InnerOnDestroyEffect(evt);
 			if (!GameHubBehaviour.Hub || GameHubBehaviour.Hub.Net.IsClient())

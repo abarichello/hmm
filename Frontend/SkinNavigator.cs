@@ -4,8 +4,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using Assets.ClientApiObjects;
 using Assets.ClientApiObjects.Components;
-using HeavyMetalMachines.Swordfish.Player;
+using HeavyMetalMachines.DataTransferObjects.Inventory;
+using HeavyMetalMachines.Localization;
 using HeavyMetalMachines.Utils;
+using Hoplon.Serialization;
 using ModelViewer;
 using Pocketverse;
 using UnityEngine;
@@ -27,9 +29,8 @@ namespace HeavyMetalMachines.Frontend
 		public void OpenSkinWindow(CollectionScriptableObject collection, Guid characterGuid)
 		{
 			ItemTypeScriptableObject itemTypeScriptableObject = collection.AllItemTypes[characterGuid];
-			CharacterItemTypeComponent component = itemTypeScriptableObject.GetComponent<CharacterItemTypeComponent>();
 			int num = 0;
-			CharacterItemTypeBag characterItemTypeBag = (CharacterItemTypeBag)((JsonSerializeable<T>)itemTypeScriptableObject.Bag);
+			CharacterItemTypeBag characterItemTypeBag = (CharacterItemTypeBag)((JsonSerializeable<!0>)itemTypeScriptableObject.Bag);
 			List<Guid> list = collection.CharacterToSkinGuids[itemTypeScriptableObject.Id];
 			for (int i = 0; i < list.Count; i++)
 			{
@@ -39,30 +40,29 @@ namespace HeavyMetalMachines.Frontend
 					bool flag = characterItemTypeBag.DefaultSkinGuid == itemTypeScriptableObject2.Id;
 					if (flag || SkinNavigator._hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish) || SkinNavigator._hub.User.Inventory.HasItemOfType(itemTypeScriptableObject2.Id))
 					{
-						SkinPrefabItemTypeComponent component2 = itemTypeScriptableObject2.GetComponent<SkinPrefabItemTypeComponent>();
-						GameObject gameObject = UnityEngine.Object.Instantiate<GameObject>(this.CardPrefab);
+						SkinPrefabItemTypeComponent component = itemTypeScriptableObject2.GetComponent<SkinPrefabItemTypeComponent>();
+						GameObject gameObject = Object.Instantiate<GameObject>(this.CardPrefab);
 						gameObject.SetActive(true);
 						gameObject.name = itemTypeScriptableObject2.name;
 						gameObject.transform.parent = this.TargetGameObject.transform;
 						gameObject.transform.localPosition = Vector3.zero;
 						gameObject.transform.localScale = this.CardPrefab.transform.localScale;
-						SkinConfig component3 = gameObject.GetComponent<SkinConfig>();
-						component3.CharacterName = itemTypeScriptableObject.Name;
-						component3.Item = itemTypeScriptableObject2;
-						component3.IsDefault = flag;
-						component3.Eventlistener.IntParameter = num;
-						component3.OnHoverOverAction = new Action<int>(this.MoveToChosenSkin);
-						component3.SkinSprite.SpriteName = itemTypeScriptableObject2.Name;
-						component3.CardSkinName.text = Language.Get(component2.CardSkinDraft, TranslationSheets.Items);
-						component3.CharacterNameLabel.text = Language.Get(component.MainAttributes.DraftName, TranslationSheets.CharactersBaseInfo);
-						GameObject gameObject2 = UnityEngine.Object.Instantiate<GameObject>(this.SkinIndicatorPrefab.gameObject);
+						SkinConfig component2 = gameObject.GetComponent<SkinConfig>();
+						component2.CharacterName = itemTypeScriptableObject.Name;
+						component2.Item = itemTypeScriptableObject2;
+						component2.IsDefault = flag;
+						component2.Eventlistener.IntParameter = num;
+						component2.OnHoverOverAction = new Action<int>(this.MoveToChosenSkin);
+						component2.SkinSprite.SpriteName = itemTypeScriptableObject2.Name;
+						component2.CardSkinName.text = Language.Get(component.CardSkinDraft, TranslationContext.Items);
+						GameObject gameObject2 = Object.Instantiate<GameObject>(this.SkinIndicatorPrefab.gameObject);
 						gameObject2.name = i.ToString("000");
 						gameObject2.transform.parent = this.SkinIndicatorParentGrid.transform;
 						gameObject2.transform.localPosition = Vector3.zero;
 						gameObject2.transform.localScale = this.SkinIndicatorPrefab.transform.localScale;
-						UI2DSprite component4 = gameObject2.GetComponent<UI2DSprite>();
-						this._skinIndicatorList.Add(component4);
-						this._skins.Add(component3);
+						UI2DSprite component3 = gameObject2.GetComponent<UI2DSprite>();
+						this._skinIndicatorList.Add(component3);
+						this._skins.Add(component2);
 						num++;
 					}
 				}
@@ -191,25 +191,23 @@ namespace HeavyMetalMachines.Frontend
 				});
 				return;
 			}
-			this._skins[this.CurrentChosenSkinIndex].SkinRarity.SpriteName = "1_skin_Default";
-			this._skins[this.CurrentChosenSkinIndex].SkinName.text = Language.Get(string.Format("{0}_name", this._skins[this.CurrentChosenSkinIndex].Item.Name), TranslationSheets.Items);
-			this._twoPI = 6.28318548f;
+			this._twoPI = 6.2831855f;
 			this._itemsInterval = 1f / (float)this._skins.Count;
 			this._targetAngle = -this._itemsInterval * (float)this.CurrentChosenSkinIndex - this.Tunning;
-			float f = (float)this._skins.Count * 0.5f;
-			int a = Mathf.Abs(this.TargetChosenSkinIndex - this.CurrentChosenSkinIndex) + 1;
-			float time = 1f / (float)Mathf.Max(a, 1);
-			float duration = this.SkinsRotationCurveSpeed.Evaluate(time);
+			float num = (float)this._skins.Count * 0.5f;
+			int num2 = Mathf.Abs(this.TargetChosenSkinIndex - this.CurrentChosenSkinIndex) + 1;
+			float num3 = 1f / (float)Mathf.Max(num2, 1);
+			float duration = this.SkinsRotationCurveSpeed.Evaluate(num3);
 			for (int i = 0; i < this._skins.Count; i++)
 			{
 				SkinConfig skinConfig = this._skins[i];
 				NGUITools.MarkParentAsChanged(skinConfig.gameObject);
-				float f2 = this.StartAngle + this.Curve.Evaluate(this._targetAngle + (float)i * this._itemsInterval) * this._twoPI;
-				float num = Mathf.Sin(f2);
-				skinConfig.Panel.depth = ((this.CurrentChosenSkinIndex != i) ? (50 - (int)((num + 1f) * Mathf.Abs(f))) : 51);
+				float num4 = this.StartAngle + this.Curve.Evaluate(this._targetAngle + (float)i * this._itemsInterval) * this._twoPI;
+				float num5 = Mathf.Sin(num4);
+				skinConfig.Panel.depth = ((this.CurrentChosenSkinIndex != i) ? (50 - (int)((num5 + 1f) * Mathf.Abs(num))) : 51);
 				TweenPosition tweenPosition = skinConfig.TweenPosition;
 				tweenPosition.SetStartToCurrentValue();
-				tweenPosition.to = new Vector3(Mathf.Cos(f2) * this.CircleSize, (num + 1f) * (float)this.HeightDiffSize, 0f);
+				tweenPosition.to = new Vector3(Mathf.Cos(num4) * this.CircleSize, (num5 + 1f) * (float)this.HeightDiffSize, 0f);
 				tweenPosition.duration = duration;
 				tweenPosition.ResetToBeginning();
 				tweenPosition.PlayForward();
@@ -219,7 +217,8 @@ namespace HeavyMetalMachines.Frontend
 			{
 				this.ListenToSkinSelectionChanged(this._skins[this.CurrentChosenSkinIndex]);
 			}
-			this._carModelViewer.ModelName = string.Format("{0}_shop", this._skins[this.CurrentChosenSkinIndex].Item.Name);
+			InventoryItemTypeComponent component = this._skins[this.CurrentChosenSkinIndex].Item.GetComponent<InventoryItemTypeComponent>();
+			this._carModelViewer.ModelName = component.InventoryPreviewName;
 			this.UpdateActiveSkinIndicator();
 		}
 

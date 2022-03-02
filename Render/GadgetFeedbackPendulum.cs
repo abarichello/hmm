@@ -5,9 +5,9 @@ namespace HeavyMetalMachines.Render
 {
 	internal class GadgetFeedbackPendulum : BaseGadgetFeedback
 	{
-		private new void Start()
+		protected override void InitializeGadgetFeedback()
 		{
-			base.Start();
+			base.InitializeGadgetFeedback();
 			this.currentStatePosition = new Vector3(0f, -this.ropeLength, this.ropeLength / 2f);
 			this.lastCarPosition = this.targetGameObject.transform.parent.position;
 		}
@@ -18,8 +18,8 @@ namespace HeavyMetalMachines.Render
 			this.gravityDirection = this.forceDirection.normalized;
 			this.currentVelocity += this.gravityDirection * this.gravityForce * dt;
 			Vector3 vector = this.currentStatePosition;
-			Vector3 b = this.currentVelocity * dt;
-			float num = Vector3.Magnitude(vector + b);
+			Vector3 vector2 = this.currentVelocity * dt;
+			float num = Vector3.Magnitude(vector + vector2);
 			if (num > this.ropeLength || Mathf.Approximately(num, this.ropeLength))
 			{
 				this.tensionDirection = (-vector).normalized;
@@ -27,14 +27,14 @@ namespace HeavyMetalMachines.Render
 				this.pendulumSideDirection.Scale(new Vector3(1f, 0f, 1f));
 				this.pendulumSideDirection.Normalize();
 				float num2 = Vector3.Angle(vector, this.gravityDirection);
-				this.tensionForce = this.mass * this.gravityDirection.magnitude * Mathf.Cos(0.0174532924f * num2);
+				this.tensionForce = this.mass * this.gravityDirection.magnitude * Mathf.Cos(0.017453292f * num2);
 				float num3 = this.mass * Mathf.Pow(this.currentVelocity.magnitude, 2f) / this.ropeLength;
 				this.tensionForce += num3 * this.swingDampening;
 				this.currentVelocity += this.tensionDirection * this.tensionForce * dt;
 			}
-			Vector3 b2 = this.currentVelocity * dt;
-			float num4 = Vector3.Magnitude(currentStatePosition + b2);
-			return (currentStatePosition + b2).normalized * ((num4 > this.ropeLength) ? this.ropeLength : num4);
+			Vector3 vector3 = this.currentVelocity * dt;
+			float num4 = Vector3.Magnitude(currentStatePosition + vector3);
+			return (currentStatePosition + vector3).normalized * ((num4 > this.ropeLength) ? this.ropeLength : num4);
 		}
 
 		protected override void UpdateImpl()
@@ -44,17 +44,17 @@ namespace HeavyMetalMachines.Render
 				return;
 			}
 			Vector3 position = this.targetGameObject.transform.parent.position;
-			Vector3 a = (position - this.lastCarPosition) / Time.deltaTime;
-			Vector3 a2 = this.forceMultiplier * (a - this.lastCarVelocity) / Time.deltaTime;
+			Vector3 vector = (position - this.lastCarPosition) / Time.deltaTime;
+			Vector3 vector2 = this.forceMultiplier * (vector - this.lastCarVelocity) / Time.deltaTime;
 			this.lastCarPosition = position;
-			this.lastCarVelocity = a;
-			if (a2.magnitude > 1f)
+			this.lastCarVelocity = vector;
+			if (vector2.magnitude > 1f)
 			{
-				a2.Normalize();
+				vector2.Normalize();
 			}
-			Vector3 vector = -a2 - Vector3.up;
-			vector = this.targetGameObject.transform.parent.InverseTransformDirection(vector);
-			this.forceDirection = Vector3.Lerp(this.forceDirection, vector, 0.2f);
+			Vector3 vector3 = -vector2 - Vector3.up;
+			vector3 = this.targetGameObject.transform.parent.InverseTransformDirection(vector3);
+			this.forceDirection = Vector3.Lerp(this.forceDirection, vector3, 0.2f);
 			if (this.gadgetState == null || this.gadgetState.GadgetState == this.activateState)
 			{
 				float num = Time.deltaTime;
@@ -66,9 +66,9 @@ namespace HeavyMetalMachines.Render
 					num -= num2;
 				}
 				float num3 = num / num2;
-				Vector3 forward = this.currentStatePosition * num3 + this.previousStatePosition * (1f - num3);
-				forward.Normalize();
-				this.targetGameObject.transform.localRotation = Quaternion.LookRotation(forward, Vector3.right);
+				Vector3 vector4 = this.currentStatePosition * num3 + this.previousStatePosition * (1f - num3);
+				vector4.Normalize();
+				this.targetGameObject.transform.localRotation = Quaternion.LookRotation(vector4, Vector3.right);
 			}
 		}
 

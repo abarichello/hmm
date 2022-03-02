@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Combat.Gadget;
 using Pocketverse;
@@ -77,6 +78,8 @@ namespace HeavyMetalMachines
 			}
 		}
 
+		private static readonly BitLogger Log = new BitLogger(typeof(ModifierEventHolder));
+
 		private const int EventListCapacity = 42;
 
 		internal List<ModifierEventHolder.EventData> _events = new List<ModifierEventHolder.EventData>(42);
@@ -87,10 +90,13 @@ namespace HeavyMetalMachines
 			{
 				this.OtherId = otherId;
 				this.Slot = slot;
+				this.threadName = Thread.CurrentThread.Name;
+				this.managedThreadId = Thread.CurrentThread.ManagedThreadId;
 			}
 
 			public void Clear()
 			{
+				this.CheckLogCurrentThread("Clear");
 				this.Count = 0;
 				this.Effects.Clear();
 				this.Amounts.Clear();
@@ -98,6 +104,7 @@ namespace HeavyMetalMachines
 
 			public void Add(ModifierEvent evt)
 			{
+				this.CheckLogCurrentThread("Add");
 				int num = this.Effects.IndexOf((int)evt.Effect);
 				if (num >= 0)
 				{
@@ -131,12 +138,35 @@ namespace HeavyMetalMachines
 
 			public void ReadFromBitStream(BitStream bs)
 			{
+				this.CheckLogCurrentThread("ReadFromBitStream");
 				this.Clear();
 				this.Count = bs.ReadCompressedInt();
 				for (int i = 0; i < this.Count; i++)
 				{
 					this.Effects.Add(bs.ReadEffectKindAsInt());
 					this.Amounts.Add(bs.ReadCompressedFloat());
+				}
+			}
+
+			private void CheckLogCurrentThread(string call)
+			{
+				if (this.threadName != Thread.CurrentThread.Name)
+				{
+					ModifierEventHolder.Log.ErrorFormat("QAHMM-27524 [{2}] threadName: {0} Thread.CurrentThread.Name: {1}", new object[]
+					{
+						this.threadName,
+						Thread.CurrentThread.Name,
+						call
+					});
+				}
+				if (this.managedThreadId != Thread.CurrentThread.ManagedThreadId)
+				{
+					ModifierEventHolder.Log.ErrorFormat("QAHMM-27524 [{2}] managedThreadId: {0} Thread.CurrentThread.ManagedThreadId: {1}", new object[]
+					{
+						this.managedThreadId,
+						Thread.CurrentThread.ManagedThreadId,
+						call
+					});
 				}
 			}
 
@@ -148,9 +178,13 @@ namespace HeavyMetalMachines
 
 			public int Count;
 
-			private List<int> Effects = new List<int>(16);
+			private readonly List<int> Effects = new List<int>(16);
 
-			private List<float> Amounts = new List<float>(16);
+			private readonly List<float> Amounts = new List<float>(16);
+
+			private readonly string threadName;
+
+			private readonly int managedThreadId;
 		}
 	}
 }

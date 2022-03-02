@@ -4,12 +4,20 @@ using Assets.Standard_Assets.Scripts.HMM.PlotKids.Infra;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids.Social;
 using ClientAPI;
 using ClientAPI.Objects;
+using HeavyMetalMachines.DataTransferObjects.Result;
 using HeavyMetalMachines.Frontend;
+using HeavyMetalMachines.Players.Business;
+using HeavyMetalMachines.PlayerSummary.Presenting.Group;
+using HeavyMetalMachines.Presenting.Tooltip;
+using HeavyMetalMachines.Social.Avatar.Business;
 using HeavyMetalMachines.Swordfish;
 using HeavyMetalMachines.VFX.PlotKids;
-using HeavyMetalMachines.VFX.PlotKids.VoiceChat;
+using HeavyMetalMachines.VoiceChat.Business;
+using Hoplon.Serialization;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.VFX
 {
@@ -27,36 +35,38 @@ namespace HeavyMetalMachines.VFX
 		{
 			if (groupMember == null)
 			{
-				this.UpdateCurrentSlotGroup(GroupMemberGuiItem.GroupSlotState.Available);
+				this.UpdateCurrentSlotGroup(0);
+				this._groupMember = new Player();
 				return;
 			}
+			this._groupMember = groupMember.ConvertToPlayer();
 			if (groupMember.GroupId.Equals(Guid.Empty))
 			{
-				this.UpdateCurrentSlotGroup(GroupMemberGuiItem.GroupSlotState.Pending);
+				this.UpdateCurrentSlotGroup(1);
 				return;
 			}
-			this.UpdateCurrentSlotGroup(GroupMemberGuiItem.GroupSlotState.Filled);
+			this.UpdateCurrentSlotGroup(2);
 		}
 
-		private void UpdateCurrentSlotGroup(GroupMemberGuiItem.GroupSlotState targetGroupSlotState)
+		private void UpdateCurrentSlotGroup(GroupSlotState targetGroupSlotState)
 		{
 			if (!string.Equals(this._currentUniversalID, (base.ReferenceObject != null) ? base.ReferenceObject.UniversalID : null))
 			{
-				this._steamIconLoader.ResetPlayerIcon();
+				this.SetLoadingIconActive(false);
 			}
 			this._currentUniversalID = ((base.ReferenceObject != null) ? base.ReferenceObject.UniversalID : null);
 			this._currentState = targetGroupSlotState;
 			bool flag = ManagerController.Get<GroupManager>().GetSelfGroupStatus() == GroupStatus.Owner;
-			this._timerGameObject.SetActive(this._currentState == GroupMemberGuiItem.GroupSlotState.Pending);
-			this._addPlayerGameObject.SetActive(this._currentState == GroupMemberGuiItem.GroupSlotState.Available || this._currentState == GroupMemberGuiItem.GroupSlotState.Null);
-			this._playerAvatarPlayerGameObject.SetActive(this._currentState == GroupMemberGuiItem.GroupSlotState.Pending || this._currentState == GroupMemberGuiItem.GroupSlotState.Filled);
+			this._timerGameObject.SetActive(this._currentState == 1);
+			this.SetLoadingIconActive(this._currentState == 1);
+			this._addPlayerGameObject.SetActive(this._currentState == null || this._currentState == -1);
+			this._playerAvatarPlayerGameObject.SetActive(this._currentState == 1 || this._currentState == 2);
 			this._founderSprite.gameObject.SetActive(false);
-			this._removeFromPartyButtonGameObject.SetActive(!this.IsCurrentUser && flag && targetGroupSlotState != GroupMemberGuiItem.GroupSlotState.Available);
-			if (targetGroupSlotState != GroupMemberGuiItem.GroupSlotState.Available)
+			this._removeFromPartyButtonGameObject.SetActive(!this.IsCurrentUser && flag && targetGroupSlotState != 0);
+			if (targetGroupSlotState != null)
 			{
-				if (targetGroupSlotState != GroupMemberGuiItem.GroupSlotState.Pending)
+				if (targetGroupSlotState != 1)
 				{
-					this._steamIconLoader.UpdatePlayerIcon(base.ReferenceObject.UniversalID);
 					if (this._hmmTooltipTrigger != null)
 					{
 						this._hmmTooltipTrigger.TooltipText = base.ReferenceObject.PlayerName;
@@ -65,7 +75,6 @@ namespace HeavyMetalMachines.VFX
 				else
 				{
 					this.TryUpdatePendingInviteTime();
-					this._steamIconLoader.UpdatePlayerIcon(base.ReferenceObject.UniversalID);
 					if (this._hmmTooltipTrigger != null)
 					{
 						this._hmmTooltipTrigger.TooltipText = base.ReferenceObject.PlayerName;
@@ -74,15 +83,34 @@ namespace HeavyMetalMachines.VFX
 			}
 			else
 			{
-				this._steamIconLoader.ResetPlayerIcon();
+				this.SetLoadingIconActive(false);
 			}
 			this._groupLeader2DSprite.enabled = (base.ReferenceObject != null && base.ReferenceObject.IsOwner);
+			this.UpdateSocialComponents();
 			this.TryUpdatePortraitInfo();
+		}
+
+		private void UpdateSocialComponents()
+		{
+			if (base.ReferenceObject == null)
+			{
+				return;
+			}
+			if (this._disposables != null)
+			{
+				this._disposables.Dispose();
+			}
+			this._disposables = new CompositeDisposable();
+			IDisposable disposable = ObservableExtensions.Subscribe<string>(Observable.Do<string>(this._getPlayerAvatarIconName.GetSmallIcon(base.ReferenceObject.PlayerId), delegate(string spriteName)
+			{
+				this._avatarIcon.TextureName = spriteName;
+			}));
+			this._disposables.Add(disposable);
 		}
 
 		public void EnableRemoveFromGroupButton()
 		{
-			if (this._currentState == GroupMemberGuiItem.GroupSlotState.Filled || this._currentState == GroupMemberGuiItem.GroupSlotState.Pending)
+			if (this._currentState == 2 || this._currentState == 1)
 			{
 				this._removeFromPartyButtonGameObject.SetActive(true);
 			}
@@ -90,10 +118,15 @@ namespace HeavyMetalMachines.VFX
 
 		public void DisableRemoveFromGroupButton()
 		{
-			if (this._currentState == GroupMemberGuiItem.GroupSlotState.Filled || this._currentState == GroupMemberGuiItem.GroupSlotState.Pending)
+			if (this._currentState == 2 || this._currentState == 1)
 			{
 				this._removeFromPartyButtonGameObject.SetActive(false);
 			}
+		}
+
+		private void SetLoadingIconActive(bool active)
+		{
+			this._loadinGameObject.SetActive(active);
 		}
 
 		private void TryUpdatePortraitInfo()
@@ -108,7 +141,7 @@ namespace HeavyMetalMachines.VFX
 
 		private void OnGetPlayerPortraitSuccess(object state, string obj)
 		{
-			NetResult netResult = (NetResult)((JsonSerializeable<T>)obj);
+			NetResult netResult = (NetResult)((JsonSerializeable<!0>)obj);
 			if (!netResult.Success)
 			{
 				string text = (base.ReferenceObject != null) ? base.ReferenceObject.PlayerName : "null";
@@ -138,13 +171,9 @@ namespace HeavyMetalMachines.VFX
 
 		private void TryUpdatePendingInviteTime()
 		{
-			if (this._currentState != GroupMemberGuiItem.GroupSlotState.Pending)
+			if (this._currentState != 1)
 			{
 				return;
-			}
-			if (!this._steamIconLoader.loading_ico.activeSelf)
-			{
-				this._steamIconLoader.loading_ico.SetActive(true);
 			}
 			float pendingInviteRemainingTime = ManagerController.Get<GroupManager>().GetPendingInviteRemainingTime(base.ReferenceObject.UniversalID);
 			this._timerLabel.text = this.FloatToTime(pendingInviteRemainingTime);
@@ -176,11 +205,12 @@ namespace HeavyMetalMachines.VFX
 		public void OnButtonClick_GroupMemberRemove()
 		{
 			SingletonMonoBehaviour<ManagerController>.Instance.GetManager<GroupManager>().TryKickMemberOrCancelInvite(base.ReferenceObject);
+			GameHubBehaviour.Hub.Swordfish.Log.BILogClient(76, true);
 		}
 
 		private void TryAlertMemberSpeaking()
 		{
-			if (this._currentState != GroupMemberGuiItem.GroupSlotState.Filled)
+			if (this._currentState != 2)
 			{
 				if (this._voiceAlertObject.activeSelf)
 				{
@@ -188,7 +218,7 @@ namespace HeavyMetalMachines.VFX
 				}
 				return;
 			}
-			bool flag = SingletonMonoBehaviour<VoiceChatController>.Instance.IsUserSpeaking(base.ReferenceObject.UniversalID);
+			bool flag = this._isPlayerSpeakingOnVoice.IsSpeaking(this._groupMember);
 			if (flag == this._voiceAlertObject.activeSelf)
 			{
 				return;
@@ -198,7 +228,13 @@ namespace HeavyMetalMachines.VFX
 
 		protected static readonly BitLogger Log = new BitLogger(typeof(GroupMemberGuiItem));
 
-		private GroupMemberGuiItem.GroupSlotState _currentState = GroupMemberGuiItem.GroupSlotState.Null;
+		[Inject]
+		private IGetPlayerAvatarIconName _getPlayerAvatarIconName;
+
+		[SerializeField]
+		private NGuiNewTooltipTrigger _tooltipTrigger;
+
+		private GroupSlotState _currentState = -1;
 
 		[Header("Group Member GUI Item Properties")]
 		[SerializeField]
@@ -208,10 +244,13 @@ namespace HeavyMetalMachines.VFX
 		private GameObject _playerAvatarPlayerGameObject;
 
 		[SerializeField]
+		private GameObject _loadinGameObject;
+
+		[SerializeField]
 		private UI2DSprite _groupLeader2DSprite;
 
 		[SerializeField]
-		private SteamIconLoader _steamIconLoader;
+		private HMMUI2DDynamicTexture _avatarIcon;
 
 		[SerializeField]
 		private GameObject _timerGameObject;
@@ -233,15 +272,17 @@ namespace HeavyMetalMachines.VFX
 		[SerializeField]
 		private GameObject _removeFromPartyButtonGameObject;
 
+		private CompositeDisposable _disposables;
+
+		private IPlayer _groupMember;
+
+		[Inject]
+		private DiContainer _diContainer;
+
+		[Inject]
+		private IIsPlayerSpeakingOnVoiceChat _isPlayerSpeakingOnVoice;
+
 		[SerializeField]
 		private SocialModalGUI _parentUI;
-
-		public enum GroupSlotState
-		{
-			Null = -1,
-			Available,
-			Pending,
-			Filled
-		}
 	}
 }

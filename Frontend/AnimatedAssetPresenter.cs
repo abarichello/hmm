@@ -1,5 +1,7 @@
 ﻿using System;
+using HeavyMetalMachines.Presenting;
 using SharedUtils.Loading;
+using UniRx;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Frontend
@@ -46,7 +48,7 @@ namespace HeavyMetalMachines.Frontend
 				return;
 			}
 			this.CurrentState = AnimatedAssetPresenter.State.FadingOut;
-			this._fadeOutAnimation.Play();
+			ObservableExtensions.Subscribe<Unit>(this._fadeOutAnimation.Play());
 		}
 
 		private void UpdateWhenFadingOut()
@@ -75,7 +77,7 @@ namespace HeavyMetalMachines.Frontend
 				return;
 			}
 			this._modelView.ShowAsset(asset, assetName);
-			this._fadeInAnimation.Play();
+			ObservableExtensions.Subscribe<Unit>(this._fadeInAnimation.Play());
 			this.CurrentState = AnimatedAssetPresenter.State.FadingIn;
 		}
 

@@ -1,5 +1,5 @@
 ﻿using System;
-using HeavyMetalMachines.Character;
+using HeavyMetalMachines.Characters;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Match;
 using Pocketverse;
@@ -89,6 +89,11 @@ namespace HeavyMetalMachines.Car
 			}
 		}
 
+		private void OnDestroy()
+		{
+			this.Char = null;
+		}
+
 		private void GetInput()
 		{
 			if (GameHubBehaviour.Hub.Global.LockAllPlayers || this.Combat.Attributes.CurrentStatus.HasFlag(StatusKind.Immobilized))
@@ -111,32 +116,23 @@ namespace HeavyMetalMachines.Car
 
 		private float SetAngularVelocity()
 		{
-			float num2;
-			if (Mathf.Abs(this.VAxis) > 0f)
+			float num = 0f;
+			if (this._carInput.IsThrottling)
 			{
-				float num = Mathf.Min(Mathf.Max(this._lastSpeedFraction, this.CarInfo.MinimumTurningRate), 1f);
-				if (num >= this.CarInfo.SpeedToMaximumTurningRate)
-				{
-					num = 1f;
-				}
-				num2 = num * this.HAxis * this._body.maxAngularVelocity;
+				num = this.HAxis * this._body.maxAngularVelocity;
 			}
-			else
+			if (Mathf.Approximately(this.Combat.Attributes.ForcedAngularPush, 0f))
 			{
-				num2 = Mathf.Min(this._lastSpeedFraction, 1f) * this.HAxis * this._body.maxAngularVelocity;
-			}
-			if (Mathf.Abs(this.Combat.Attributes.ForcedAngularPush) < 1.401298E-45f)
-			{
-				this._lastAngularVelocity.y = num2;
+				this._lastAngularVelocity.y = num;
 				this._body.angularVelocity = this._lastAngularVelocity;
 			}
 			else
 			{
-				Vector3 vector = this._body.angularVelocity + Vector3.up * (this.Combat.Attributes.ForcedAngularPush * 0.0174532924f);
+				Vector3 vector = this._body.angularVelocity + Vector3.up * (this.Combat.Attributes.ForcedAngularPush * 0.017453292f);
 				this._body.angularVelocity = vector;
 				this._lastAngularVelocity = vector;
 			}
-			return num2;
+			return num;
 		}
 
 		protected override void MovementFixedUpdate()
@@ -152,55 +148,57 @@ namespace HeavyMetalMachines.Car
 			}
 			this.GetInput();
 			float angVel = this.SetAngularVelocity();
-			float f = Vector3.Dot(this._trans.forward, this._body.velocity);
-			float num = Vector3.Dot(this._trans.right, this._body.velocity);
+			float num = Vector3.Dot(this._trans.forward, this._body.velocity);
+			float num2 = Vector3.Dot(this._trans.right, this._body.velocity);
 			this._driftDirection = Vector3.Dot(this._body.velocity, this._trans.forward * Mathf.Sign(this.VAxis));
-			bool flag = (!Mathf.Approximately(this.VAxis, 0f) && Mathf.Sign(this.VAxis) != Mathf.Sign(f)) || this.IsDrifting || this.DoesTurnCausesDrift(angVel);
+			bool flag = (!Mathf.Approximately(this.VAxis, 0f) && Mathf.Sign(this.VAxis) != Mathf.Sign(num)) || this.IsDrifting || this.DoesTurnCausesDrift(angVel);
 			if (!flag)
 			{
-				this._body.AddRelativeForce(num * -1f * Vector3.right, ForceMode.VelocityChange);
-				this._body.AddRelativeForce((this._lastSpeed - Mathf.Abs(f)) * Mathf.Sign(this.VAxis) * Vector3.forward, ForceMode.VelocityChange);
-				num = 0f;
-				f = this._lastSpeed * Mathf.Sign(this.VAxis);
+				this._body.AddRelativeForce(num2 * -1f * Vector3.right, 2);
+				this._body.AddRelativeForce((this._lastSpeed - Mathf.Abs(num)) * Mathf.Sign(this.VAxis) * Vector3.forward, 2);
+				num2 = 0f;
+				num = this._lastSpeed * Mathf.Sign(this.VAxis);
 			}
-			float num2;
+			float num3;
 			if (this.VAxis > 0f)
 			{
-				num2 = this.VAxis * Mathf.Max(0f, (this.CarInfo.ForwardAcceleration + this.Combat.Attributes.AccelerationMod) * (1f + this.Combat.Attributes.AccelerationModPct));
+				num3 = this.VAxis * Mathf.Max(0f, (this.CarInfo.ForwardAcceleration + this.Combat.Attributes.AccelerationMod) * (1f + this.Combat.Attributes.AccelerationModPct));
 			}
 			else
 			{
-				num2 = this.VAxis * Mathf.Max(0f, (this.CarInfo.BackwardAcceleration + this.Combat.Attributes.BackAccelMod) * (1f + this.Combat.Attributes.BackAccelModPct));
+				num3 = this.VAxis * Mathf.Max(0f, (this.CarInfo.BackwardAcceleration + this.Combat.Attributes.BackAccelMod) * (1f + this.Combat.Attributes.BackAccelModPct));
 			}
 			if (!flag)
 			{
-				num2 += Mathf.Max(0f, ((this.VAxis <= 0f) ? this.Combat.Attributes.GripExtraBackAccelMod : this.Combat.Attributes.GripExtraFwdAccelMod) * (float)Math.Sign(this.VAxis)) * Mathf.Max(0f, 1f + ((this.VAxis <= 0f) ? this.Combat.Attributes.GripExtraBackAccelModPct : this.Combat.Attributes.GripExtraFwdAccelModPct));
+				num3 += Mathf.Max(0f, ((this.VAxis <= 0f) ? this.Combat.Attributes.GripExtraBackAccelMod : this.Combat.Attributes.GripExtraFwdAccelMod) * (float)Math.Sign(this.VAxis)) * Mathf.Max(0f, 1f + ((this.VAxis <= 0f) ? this.Combat.Attributes.GripExtraBackAccelModPct : this.Combat.Attributes.GripExtraFwdAccelModPct));
 			}
-			this._lastAccel = num2;
-			if (!Mathf.Approximately(num2, 0f))
+			this._lastAccel = num3;
+			if (!Mathf.Approximately(num3, 0f))
 			{
-				this._body.AddRelativeForce(num2 * Vector3.forward, ForceMode.Acceleration);
+				this._body.AddRelativeForce(num3 * Vector3.forward, 5);
 			}
 			else
 			{
-				float num3 = Mathf.Max(0f, (this.CarInfo.BrakeAcceleration + this.Combat.Attributes.BrakeAccelMod) * (1f + this.Combat.Attributes.BrakeAccelModPct));
-				if (this._lastSpeed < num3 * Time.deltaTime)
+				float num4 = Mathf.Max(0f, (this.CarInfo.BrakeAcceleration + this.Combat.Attributes.BrakeAccelMod) * (1f + this.Combat.Attributes.BrakeAccelModPct));
+				if (this._lastSpeed < num4 * Time.deltaTime)
 				{
 					this._body.velocity = Vector3.zero;
-					num = 0f;
+					num2 = 0f;
 				}
 				else
 				{
-					this._body.AddRelativeForce(Mathf.Sign(f) * num3 * -1f * Vector3.forward, ForceMode.Acceleration);
+					this._body.AddRelativeForce(Mathf.Sign(num) * num4 * -1f * Vector3.forward, 5);
 				}
 			}
-			float num4 = Mathf.Max(0f, Math.Max(0f, (this.CarInfo.LateralFriction + this.Combat.Attributes.LateralFriction) * (1f + this.Combat.Attributes.LateralFrictionPct)));
-			if (Mathf.Abs(num) < num4 * Time.deltaTime)
+			float num5 = Mathf.Max(0f, Math.Max(0f, (this.CarInfo.LateralFriction + this.Combat.Attributes.LateralFriction) * (1f + this.Combat.Attributes.LateralFrictionPct)));
+			if (Mathf.Abs(num2) < num5 * Time.deltaTime)
 			{
-				this._body.AddRelativeForce(num * -1f * Vector3.right, ForceMode.VelocityChange);
-				return;
+				this._body.AddRelativeForce(num2 * -1f * Vector3.right, 2);
 			}
-			this._body.AddRelativeForce(Mathf.Sign(num) * num4 * -1f * Vector3.right, ForceMode.Acceleration);
+			else
+			{
+				this._body.AddRelativeForce(Mathf.Sign(num2) * num5 * -1f * Vector3.right, 5);
+			}
 		}
 
 		protected override void ApplyDrag(AnimationCurve dragCurve, float dragMod, float dragModPct)
@@ -221,16 +219,16 @@ namespace HeavyMetalMachines.Car
 			{
 				return;
 			}
-			float d;
+			float num;
 			if (pct)
 			{
-				d = base.LastVelocity.magnitude * amount;
+				num = base.LastVelocity.magnitude * amount;
 			}
 			else
 			{
-				d = amount;
+				num = amount;
 			}
-			this._body.AddRelativeForce(d * Vector3.forward, ForceMode.VelocityChange);
+			this._body.AddRelativeForce(num * Vector3.forward, 2);
 		}
 
 		public override void OnObjectUnspawned(UnspawnEvent msg)
@@ -270,7 +268,7 @@ namespace HeavyMetalMachines.Car
 
 		public static readonly BitLogger Log = new BitLogger(typeof(CarMovement));
 
-		public HeavyMetalMachines.Character.CharacterInfo Char;
+		public CharacterInfo Char;
 
 		public float HAxis;
 

@@ -2,10 +2,12 @@
 using System.Collections.Generic;
 using Assets.ClientApiObjects;
 using Assets.ClientApiObjects.Components;
-using HeavyMetalMachines.Character;
+using HeavyMetalMachines.DataTransferObjects.Progression;
+using HeavyMetalMachines.Localization;
 using HeavyMetalMachines.Swordfish.Player;
 using HeavyMetalMachines.Utils;
-using HeavyMetalMachines.VFX;
+using Hoplon.Input.UiNavigation;
+using Hoplon.Input.UiNavigation.AxisSelector;
 using Pocketverse;
 using UnityEngine;
 
@@ -13,6 +15,22 @@ namespace HeavyMetalMachines.Frontend
 {
 	public class MainMenuProfileMachines : MainMenuProfileWindow
 	{
+		private IUiNavigationSubGroupHolder UiNavigationSubGroupHolder
+		{
+			get
+			{
+				return this._uiNavigationSubGroupHolder;
+			}
+		}
+
+		private IUiNavigationRebuilder UiNavigationAxisSelectorRebuilder
+		{
+			get
+			{
+				return this._uiNavigationAxisSelector;
+			}
+		}
+
 		public override void OnLoading()
 		{
 			UIGrid charactersGrid = this.CharactersGrid;
@@ -62,37 +80,45 @@ namespace HeavyMetalMachines.Frontend
 				this.CreatePoolFromUpdateData();
 				return;
 			}
+			if (this._charactersCreated)
+			{
+				return;
+			}
 			this.CharactersGrid.hideInactive = false;
+			UIGrid.Sorting sorting = this.CharactersGrid.sorting;
+			this.CharactersGrid.sorting = UIGrid.Sorting.None;
 			List<Transform> childList = this.CharactersGrid.GetChildList();
+			this.CharactersGrid.sorting = sorting;
 			for (int i = 0; i < childList.Count; i++)
 			{
 				childList[i].gameObject.SetActive(false);
 			}
-			List<ItemTypeScriptableObject> allCharacters = GameHubBehaviour.Hub.InventoryColletion.GetAllCharacters();
+			List<IItemType> allCharacters = GameHubBehaviour.Hub.InventoryColletion.GetAllCharacters();
+			allCharacters.Sort(new Comparison<IItemType>(this.SortCharacterItemTypes));
 			int num = 0;
 			int num2 = 0;
 			while (num < allCharacters.Count && num2 < childList.Count)
 			{
-				CharacterItemTypeComponent component = allCharacters[num].GetComponent<CharacterItemTypeComponent>();
-				HeavyMetalMachines.Character.CharacterInfo mainAttributes = component.MainAttributes;
-				if (allCharacters[num].IsActive)
+				IItemType itemType = allCharacters[num];
+				CharacterItemTypeComponent component = itemType.GetComponent<CharacterItemTypeComponent>();
+				if (itemType.IsActive)
 				{
 					MainMenuProfileCharacterCard component2 = childList[num2].GetComponent<MainMenuProfileCharacterCard>();
-					component2.SetCharacterName(mainAttributes.LocalizedName);
-					component2.SetButtonEventListener(mainAttributes.CharacterId);
-					component2.SetCharacterSprite(HudUtils.GetPlayerIconName(GameHubBehaviour.Hub, allCharacters[num].Id, HudUtils.PlayerIconSize.Size128));
+					component2.SetCharacterName(component.GetCharacterLocalizedName());
+					component2.SetButtonEventListener(component.CharacterId);
+					component2.SetCharacterSprite(HudUtils.GetPlayerIconName(GameHubBehaviour.Hub, itemType.Id, HudUtils.PlayerIconSize.Size128));
 					component2.SetLockGroupVisibility(true);
 					component2.SetCharacterLevelProgressBarVisibility(true);
 					CharacterBag characterBag;
-					if (HudUtils.TryToGetCharacterBag(GameHubBehaviour.Hub, mainAttributes.CharacterItemTypeGuid, out characterBag))
+					if (HudUtils.TryToGetCharacterBag(GameHubBehaviour.Hub, itemType.Id, out characterBag))
 					{
 						int levelForXP = GameHubBehaviour.Hub.SharedConfigs.CharacterProgression.GetLevelForXP(characterBag.Xp);
-						component2.SetInfo((float)levelForXP, HudUtils.GetNormalizedLevelInfo(GameHubBehaviour.Hub.SharedConfigs.CharacterProgression, levelForXP, characterBag.Xp), mainAttributes.Role);
+						component2.SetInfo((float)levelForXP, HudUtils.GetNormalizedLevelInfo(GameHubBehaviour.Hub.SharedConfigs.CharacterProgression, levelForXP, characterBag.Xp), component.Role);
 					}
 					else
 					{
-						UnityEngine.Debug.Log(string.Format("(UpdateData) - CharacterBag not found for char typeId:[{0}]", mainAttributes.CharacterItemTypeGuid));
-						component2.SetInfo(0f, 0f, mainAttributes.Role);
+						Debug.Log(string.Format("(UpdateData) - CharacterBag not found for char typeId:[{0}]", itemType.Id));
+						component2.SetInfo(0f, 0f, component.Role);
 					}
 					component2.SetCornerVisibility(false);
 					component2.gameObject.SetActive(true);
@@ -106,10 +132,24 @@ namespace HeavyMetalMachines.Frontend
 			{
 				this.FilterSetTitleLabel(this.FilterComponents[this._filterCurrentIndex]);
 			}
+			this._charactersCreated = true;
+			if (this._visible)
+			{
+				this.UiNavigationSubGroupHolder.SubGroupFocusGet();
+			}
+			this.UiNavigationAxisSelectorRebuilder.RebuildAndSelect();
+		}
+
+		private int SortCharacterItemTypes(IItemType x, IItemType y)
+		{
+			CharacterItemTypeComponent component = x.GetComponent<CharacterItemTypeComponent>();
+			CharacterItemTypeComponent component2 = y.GetComponent<CharacterItemTypeComponent>();
+			return string.Compare(component.GetCharacterLocalizedName(), component2.GetCharacterLocalizedName(), StringComparison.OrdinalIgnoreCase);
 		}
 
 		public override void SetWindowVisibility(bool visible)
 		{
+			this._visible = visible;
 			base.StopCoroutineSafe(this.disableCoroutine);
 			if (visible)
 			{
@@ -124,8 +164,27 @@ namespace HeavyMetalMachines.Frontend
 				this.disableCoroutine = base.StartCoroutine(GUIUtils.WaitAndDisable(this.ScreenAlphaAnimation.clip.length, base.gameObject));
 			}
 			this.DetailsGameObject.SetActive(false);
-			this.MainBackButtonGameObject.SetActive(true);
 			this._returnToProfileSummary = false;
+			this.SetUiNavigationFocus(visible);
+		}
+
+		private void SetUiNavigationFocus(bool focused)
+		{
+			if (focused)
+			{
+				if (this._charactersCreated)
+				{
+					this.UiNavigationSubGroupHolder.SubGroupFocusGet();
+				}
+			}
+			else
+			{
+				this.UiNavigationSubGroupHolder.SubGroupFocusRelease();
+			}
+		}
+
+		public override void OnPreBackToMainMenu()
+		{
 		}
 
 		public override void OnBackToMainMenu()
@@ -135,7 +194,6 @@ namespace HeavyMetalMachines.Frontend
 
 		public void OnClickBackToMachinesButton()
 		{
-			this.MainBackButtonGameObject.SetActive(true);
 			if (this._returnToProfileSummary)
 			{
 				this.MainMenuProfileController.ShowWindow(MainMenuProfileController.ProfileWindowType.Summary).LeftButton.Set(true, true);
@@ -156,7 +214,6 @@ namespace HeavyMetalMachines.Frontend
 			this.UpdateDetails(id);
 			this.MachinesGameObject.SetActive(false);
 			this.DetailsGameObject.SetActive(true);
-			this.MainBackButtonGameObject.SetActive(false);
 		}
 
 		public void OnCharacterClickFromProfileSummary(int id)
@@ -167,30 +224,33 @@ namespace HeavyMetalMachines.Frontend
 
 		private void UpdateDetails(int id)
 		{
-			HeavyMetalMachines.Character.CharacterInfo characterInfoByCharacterId = GameHubBehaviour.Hub.InventoryColletion.GetCharacterInfoByCharacterId(id);
-			this.DetailsGui.CarNameLabel.text = characterInfoByCharacterId.LocalizedName;
-			this.DetailsGui.CarSprite.SpriteName = characterInfoByCharacterId.Asset + "_skin_00";
+			Debug.Log("CharacterId: " + id);
+			IItemType itemType;
+			GameHubBehaviour.Hub.InventoryColletion.AllCharactersByCharacterId.TryGetValue(id, out itemType);
+			CharacterItemTypeComponent component = itemType.GetComponent<CharacterItemTypeComponent>();
+			this.DetailsGui.CarNameLabel.text = component.GetCharacterLocalizedName();
+			this.DetailsGui.CarSprite.SpriteName = component.AssetPrefix + "_skin_00";
 			this.DetailsGui.RewardsGrid.hideInactive = false;
 			List<Transform> childList = this.DetailsGui.RewardsGrid.GetChildList();
 			List<MainMenuProfileMachineRewardSlot.MachineRewardSlotInfo> list = new List<MainMenuProfileMachineRewardSlot.MachineRewardSlotInfo>(childList.Count);
 			CharacterBag characterBag;
 			int num;
-			if (HudUtils.TryToGetCharacterBag(GameHubBehaviour.Hub, characterInfoByCharacterId.CharacterItemTypeGuid, out characterBag))
+			if (HudUtils.TryToGetCharacterBag(GameHubBehaviour.Hub, itemType.Id, out characterBag))
 			{
-				this.DetailsGui.UpdateCharacterInfo(characterBag);
+				this.DetailsGui.UpdateCharacterInfo(GameHubBehaviour.Hub, characterBag);
 				num = GameHubBehaviour.Hub.SharedConfigs.CharacterProgression.GetLevelForXP(characterBag.Xp);
 			}
 			else
 			{
-				UnityEngine.Debug.Log(string.Format("(UpdateDetails) - CharacterBag not found for char typeId:[{0}]", characterInfoByCharacterId.CharacterItemTypeGuid));
+				Debug.Log(string.Format("(UpdateDetails) - CharacterBag not found for char typeId:[{0}]", itemType.Id));
 				num = 0;
-				this.DetailsGui.UpdateCharacterInfo(null);
+				this.DetailsGui.UpdateCharacterInfo(GameHubBehaviour.Hub, null);
 			}
 			string empty = string.Empty;
 			ProgressionInfo.Level[] levels = GameHubBehaviour.Hub.SharedConfigs.CharacterProgression.Levels;
 			for (int i = 0; i < levels.Length; i++)
 			{
-				if (levels[i].Kind != ProgressionInfo.RewardKind.None)
+				if (levels[i].Kind != null)
 				{
 					HudUtils.TryToGetPlayerUnlockRewardIconSpriteName(GameHubBehaviour.Hub.SharedConfigs.CharacterProgression, i, out empty);
 					string rewardName;
@@ -261,8 +321,6 @@ namespace HeavyMetalMachines.Frontend
 			return t1.GetComponent<MainMenuProfileCharacterCard>().Compare(filterType, t2.GetComponent<MainMenuProfileCharacterCard>());
 		}
 
-		public GameObject MainBackButtonGameObject;
-
 		public GameObject MachinesGameObject;
 
 		public GameObject DetailsGameObject;
@@ -276,6 +334,14 @@ namespace HeavyMetalMachines.Frontend
 		[SerializeField]
 		protected MainMenuProfileMachines.FilterComponent[] FilterComponents;
 
+		public MainMenuProfileMachinesDetailsGuiComponents DetailsGui;
+
+		[SerializeField]
+		private UiNavigationSubGroupHolder _uiNavigationSubGroupHolder;
+
+		[SerializeField]
+		private UiNavigationAxisSelector _uiNavigationAxisSelector;
+
 		private int _filterCurrentIndex;
 
 		private bool _creatingPool;
@@ -284,11 +350,13 @@ namespace HeavyMetalMachines.Frontend
 
 		private int _characterIdOpenAfterPool;
 
+		private bool _charactersCreated;
+
 		private bool _returnToProfileSummary;
 
-		public MainMenuProfileMachines.DetailsGuiComponents DetailsGui;
-
 		private Coroutine disableCoroutine;
+
+		private bool _visible;
 
 		public enum FilterType
 		{
@@ -306,221 +374,6 @@ namespace HeavyMetalMachines.Frontend
 			public TranslationSheets TranslationSheet;
 
 			public string TranslationDraft;
-		}
-
-		[Serializable]
-		public struct DetailsGuiComponents
-		{
-			public void UpdateCharacterInfo(CharacterBag characterBag)
-			{
-				if (characterBag == null)
-				{
-					this.CharacterXpLabel.text = string.Format("0/{0}", GameHubBehaviour.Hub.SharedConfigs.CharacterProgression.GetXPForLevel(1));
-					this.LevelLabel.text = "1";
-					this.LevelProgressBar.value = 0f;
-					return;
-				}
-				int levelForXP = GameHubBehaviour.Hub.SharedConfigs.CharacterProgression.GetLevelForXP(characterBag.Xp);
-				int num;
-				int num2;
-				GameHubBehaviour.Hub.SharedConfigs.CharacterProgression.GetXpForSegment(characterBag.Xp, levelForXP, out num, out num2);
-				this.CharacterXpLabel.text = string.Format("{0}/{1}", num, num2);
-				this.LevelLabel.text = (levelForXP + 1).ToString("0");
-				this.LevelProgressBar.value = HudUtils.GetNormalizedLevelInfo(GameHubBehaviour.Hub.SharedConfigs.CharacterProgression, levelForXP, characterBag.Xp);
-			}
-
-			public void UpdateRewards(List<MainMenuProfileMachineRewardSlot.MachineRewardSlotInfo> slotInfos)
-			{
-				this.RewardsGrid.hideInactive = false;
-				this.DisableGrid(this.RewardsGrid);
-				for (int i = 0; i < slotInfos.Count; i++)
-				{
-					this.AddRewardInfo(slotInfos[i]);
-				}
-				this.RewardsGrid.hideInactive = true;
-				this.RewardsGrid.Reposition();
-			}
-
-			private void AddRewardInfo(MainMenuProfileMachineRewardSlot.MachineRewardSlotInfo rewardSlotInfo)
-			{
-				List<Transform> childList = this.RewardsGrid.GetChildList();
-				for (int i = 0; i < childList.Count; i++)
-				{
-					MainMenuProfileMachineRewardSlot component = childList[i].GetComponent<MainMenuProfileMachineRewardSlot>();
-					if (!component.gameObject.activeSelf)
-					{
-						component.Setup(rewardSlotInfo);
-						component.gameObject.SetActive(true);
-						break;
-					}
-				}
-			}
-
-			public void UpdateStatisticsGrid(CharacterBag characterBag)
-			{
-				this.StatisticsGrid.hideInactive = false;
-				this.DisableGrid(this.StatisticsGrid);
-				for (int i = 0; i < this.StatisticsInfoList.Length; i++)
-				{
-					MainMenuProfileStatisticsSlot.StatisticsSlotInfo statisticsSlotInfo = this.GetStatisticsSlotInfo(characterBag, this.StatisticsInfoList[i]);
-					if (statisticsSlotInfo.Show)
-					{
-						this.AddStatisticsGridInfo(statisticsSlotInfo);
-					}
-				}
-				this.StatisticsGrid.hideInactive = true;
-				this.StatisticsGrid.Reposition();
-			}
-
-			private MainMenuProfileStatisticsSlot.StatisticsSlotInfo GetStatisticsSlotInfo(CharacterBag characterBag, MainMenuProfileMachines.DetailsGuiComponents.StatisticsInfo statisticsInfo)
-			{
-				MainMenuProfileStatisticsSlot.StatisticsSlotInfo result = default(MainMenuProfileStatisticsSlot.StatisticsSlotInfo);
-				result.Show = statisticsInfo.Show;
-				result.IconSprite = statisticsInfo.IconSprite;
-				result.Title = Language.Get(statisticsInfo.TranslationDraft, statisticsInfo.TranslationSheet);
-				if (characterBag == null)
-				{
-					result.Total = 0;
-					result.Average = 0f;
-					return result;
-				}
-				switch (statisticsInfo.Type)
-				{
-				case MainMenuProfileMachines.DetailsGuiComponents.StatisticsInfoType.BombStolen:
-					result.Total = characterBag.BombStolenCount;
-					break;
-				case MainMenuProfileMachines.DetailsGuiComponents.StatisticsInfoType.BombLost:
-					result.Total = characterBag.BombLostCount;
-					break;
-				case MainMenuProfileMachines.DetailsGuiComponents.StatisticsInfoType.BombDelivered:
-					result.Total = characterBag.BombDeliveredCount;
-					break;
-				case MainMenuProfileMachines.DetailsGuiComponents.StatisticsInfoType.Wins:
-					result.Total = characterBag.WinsCount;
-					break;
-				case MainMenuProfileMachines.DetailsGuiComponents.StatisticsInfoType.Defeats:
-					result.Total = characterBag.DefeatsCount;
-					break;
-				case MainMenuProfileMachines.DetailsGuiComponents.StatisticsInfoType.Kills:
-					result.Total = characterBag.KillsCount;
-					break;
-				case MainMenuProfileMachines.DetailsGuiComponents.StatisticsInfoType.Deaths:
-					result.Total = characterBag.DeathsCount;
-					break;
-				case MainMenuProfileMachines.DetailsGuiComponents.StatisticsInfoType.Matches:
-					result.Total = characterBag.MatchesCount;
-					break;
-				case MainMenuProfileMachines.DetailsGuiComponents.StatisticsInfoType.TotalDamage:
-					result.Total = characterBag.TotalDamage;
-					break;
-				case MainMenuProfileMachines.DetailsGuiComponents.StatisticsInfoType.TotalRepair:
-					result.Total = characterBag.TotalRepair;
-					break;
-				case MainMenuProfileMachines.DetailsGuiComponents.StatisticsInfoType.TravelledDistance:
-					result.Total = characterBag.TravelledDistance;
-					break;
-				case MainMenuProfileMachines.DetailsGuiComponents.StatisticsInfoType.SpeedBoost:
-					result.Total = characterBag.SpeedBoostCount;
-					break;
-				case MainMenuProfileMachines.DetailsGuiComponents.StatisticsInfoType.ScrapCollected:
-					result.Total = characterBag.ScrapCollectedCount;
-					break;
-				default:
-					return result;
-				}
-				float num = Convert.ToSingle(result.Total);
-				result.Average = ((result.Total != 0 && characterBag.MatchesCount != 0) ? (num / (float)characterBag.MatchesCount) : 0f);
-				return result;
-			}
-
-			private void AddStatisticsGridInfo(MainMenuProfileStatisticsSlot.StatisticsSlotInfo statisticsSlotInfo)
-			{
-				List<Transform> childList = this.StatisticsGrid.GetChildList();
-				for (int i = 0; i < childList.Count; i++)
-				{
-					MainMenuProfileStatisticsSlot component = childList[i].GetComponent<MainMenuProfileStatisticsSlot>();
-					if (!component.gameObject.activeSelf)
-					{
-						component.SetInfo(statisticsSlotInfo);
-						component.gameObject.SetActive(true);
-						break;
-					}
-				}
-			}
-
-			private void DisableGrid(UIGrid grid)
-			{
-				List<Transform> childList = grid.GetChildList();
-				for (int i = 0; i < childList.Count; i++)
-				{
-					childList[i].gameObject.SetActive(false);
-				}
-			}
-
-			public UILabel CarNameLabel;
-
-			public HMMUI2DDynamicSprite CarSprite;
-
-			public UILabel LevelLabel;
-
-			public UIProgressBar LevelProgressBar;
-
-			public int RewardsGridQuantity;
-
-			public UIGrid RewardsGrid;
-
-			public UILabel VictoriesLabel;
-
-			public UILabel DefeatsLabel;
-
-			public UIScrollView StatisticsScrollView;
-
-			public UIScrollBar StatisticsScrollBar;
-
-			public UIGrid StatisticsGrid;
-
-			public UILabel CharacterXpLabel;
-
-			[Header("[Next Reward]")]
-			public GameObject NextRewardGroupGameObject;
-
-			public HMMUI2DDynamicSprite NextRewardIconSprite;
-
-			public GameObject NextRewardNoRewardLabel;
-
-			[SerializeField]
-			internal MainMenuProfileMachines.DetailsGuiComponents.StatisticsInfo[] StatisticsInfoList;
-
-			internal enum StatisticsInfoType
-			{
-				BombStolen,
-				BombLost,
-				BombDelivered,
-				Wins,
-				Defeats,
-				Kills,
-				Deaths,
-				Matches,
-				TotalDamage,
-				TotalRepair,
-				TravelledDistance,
-				SpeedBoost,
-				ScrapCollected
-			}
-
-			[Serializable]
-			internal struct StatisticsInfo
-			{
-				public bool Show;
-
-				public Sprite IconSprite;
-
-				public MainMenuProfileMachines.DetailsGuiComponents.StatisticsInfoType Type;
-
-				public TranslationSheets TranslationSheet;
-
-				public string TranslationDraft;
-			}
 		}
 	}
 }

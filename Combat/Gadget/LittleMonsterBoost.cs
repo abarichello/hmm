@@ -35,7 +35,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			return base.FireGadget();
 		}
 
-		protected override void InnerOnDestroyEffect(DestroyEffect evt)
+		protected override void InnerOnDestroyEffect(DestroyEffectMessage evt)
 		{
 			BaseFX baseFx = GameHubBehaviour.Hub.Effects.GetBaseFx(this._reflectionEffectId);
 			if (baseFx != null)

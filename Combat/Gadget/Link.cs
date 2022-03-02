@@ -107,13 +107,15 @@ namespace HeavyMetalMachines.Combat.Gadget
 			vector.Normalize();
 			Vector3 vector2 = Vector3.Cross(vector, Vector3.up);
 			Vector3 vector3 = vector2 * -1f;
-			Vector3 inPoint = position + vector2 * (searchLength / 2f);
-			Vector3 inPoint2 = position + vector3 * (searchLength / 2f);
-			Plane plane = new Plane(vector3, inPoint2);
-			Plane plane2 = new Plane(vector2, inPoint);
-			float radius = Mathf.Sqrt(Mathf.Pow(range / 2f, 2f) + Mathf.Pow(searchLength / 2f, 2f));
-			Vector3 position2 = position + vector * (Mathf.Max(range, searchLength) / 2f);
-			Collider[] array = Physics.OverlapSphere(position2, radius, 1077058560);
+			Vector3 vector4 = position + vector2 * (searchLength / 2f);
+			Vector3 vector5 = position + vector3 * (searchLength / 2f);
+			Plane plane;
+			plane..ctor(vector3, vector5);
+			Plane plane2;
+			plane2..ctor(vector2, vector4);
+			float num = Mathf.Sqrt(Mathf.Pow(range / 2f, 2f) + Mathf.Pow(searchLength / 2f, 2f));
+			Vector3 vector6 = position + vector * (Mathf.Max(range, searchLength) / 2f);
+			Collider[] array = Physics.OverlapSphere(vector6, num, 1077054464);
 			List<CombatObject> list = new List<CombatObject>();
 			List<CombatObject> list2 = new List<CombatObject>();
 			foreach (Collider collider in array)
@@ -140,40 +142,40 @@ namespace HeavyMetalMachines.Combat.Gadget
 					}
 				}
 			}
-			int num = -1;
-			float num2 = 0f;
+			int num2 = -1;
+			float num3 = 0f;
 			for (int j = 0; j < list.Count; j++)
 			{
 				CombatObject combatObject = list[j];
 				float sqrMagnitude = (combatObject.transform.position - position).sqrMagnitude;
-				if (num == -1 || sqrMagnitude < num2)
+				if (num2 == -1 || sqrMagnitude < num3)
 				{
-					num = combatObject.Id.ObjId;
-					num2 = sqrMagnitude;
+					num2 = combatObject.Id.ObjId;
+					num3 = sqrMagnitude;
 				}
 			}
-			if (num != -1)
+			if (num2 != -1)
 			{
-				this.CreateLinkToTarget(num);
+				this.CreateLinkToTarget(num2);
 				return;
 			}
 			for (int k = 0; k < list2.Count; k++)
 			{
 				CombatObject combatObject2 = list2[k];
 				float sqrMagnitude2 = (combatObject2.transform.position - position).sqrMagnitude;
-				if (num == -1 || sqrMagnitude2 < num2)
+				if (num2 == -1 || sqrMagnitude2 < num3)
 				{
-					num = combatObject2.Id.ObjId;
-					num2 = sqrMagnitude2;
+					num2 = combatObject2.Id.ObjId;
+					num3 = sqrMagnitude2;
 				}
 			}
-			if (num != -1)
+			if (num2 != -1)
 			{
-				this.CreateLinkToTarget(num);
+				this.CreateLinkToTarget(num2);
 			}
 		}
 
-		protected override void InnerOnDestroyEffect(DestroyEffect evt)
+		protected override void InnerOnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (evt.RemoveData.TargetEventId == this._currentProjectileEffectId)
 			{

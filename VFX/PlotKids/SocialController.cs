@@ -1,13 +1,14 @@
 ﻿using System;
 using System.Collections;
-using Assets.Standard_Assets.Scripts.HMM.PlotKids.CustomMatch;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids.Infra;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids.Social;
 using Assets.Standard_Assets.Scripts.Infra.GUI.Hints;
 using ClientAPI.Objects;
 using HeavyMetalMachines.Frontend;
+using HeavyMetalMachines.Localization;
 using Pocketverse;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.VFX.PlotKids
 {
@@ -29,9 +30,7 @@ namespace HeavyMetalMachines.VFX.PlotKids
 				SingletonMonoBehaviour<SocialController>.Log.Error("[Social Controller] Hub should not be null!");
 			}
 			this._socialUiFeedbackDispatcher = ScriptableObject.CreateInstance<SocialUiFeedbackDispatcher>();
-			this._socialUiFeedbackDispatcher.Init(this._hub, SingletonMonoBehaviour<PanelController>.Instance, ManagerController.Get<GroupManager>());
-			this._matchUiFeedbackDispatcher = ScriptableObject.CreateInstance<MatchUiFeedbackDispatcher>();
-			this._matchUiFeedbackDispatcher.Init(this._hub, SingletonMonoBehaviour<PanelController>.Instance, ManagerController.Get<MatchManager>());
+			this._socialUiFeedbackDispatcher.Init(this._hub, SingletonMonoBehaviour<PanelController>.Instance, ManagerController.Get<GroupManager>(), this._diContainer);
 			this._chatUiFeedbackDispatcher = ScriptableObject.CreateInstance<ChatUiFeedbackDispatcher>();
 			base.StartCoroutine(this.WaitHudWindowInit());
 		}
@@ -48,6 +47,7 @@ namespace HeavyMetalMachines.VFX.PlotKids
 
 		public void OpenSteamFriendInvite(string universalID)
 		{
+			SingletonMonoBehaviour<SocialController>.Log.Debug(string.Format("OpenSteamFriendInvite: {0}", universalID));
 			if (!this.CheckOverlayEnabled())
 			{
 				return;
@@ -57,6 +57,7 @@ namespace HeavyMetalMachines.VFX.PlotKids
 
 		public void OpenSteamChatWithFriend(UserFriend userFriend)
 		{
+			SingletonMonoBehaviour<SocialController>.Log.Debug(string.Format("OpenSteamChatWithFriend: {0}", userFriend.UniversalID));
 			if (!this.CheckOverlayEnabled())
 			{
 				return;
@@ -66,6 +67,7 @@ namespace HeavyMetalMachines.VFX.PlotKids
 
 		public void OpenSteamPlayerProfile(string universalID)
 		{
+			SingletonMonoBehaviour<SocialController>.Log.Debug(string.Format("OpenSteamProfile: {0}", universalID));
 			if (!this.CheckOverlayEnabled())
 			{
 				return;
@@ -79,7 +81,7 @@ namespace HeavyMetalMachines.VFX.PlotKids
 			{
 				return true;
 			}
-			SingletonMonoBehaviour<PanelController>.Instance.SendSystemMessage(Language.Get("STEAM_OVERLAY_NOT_ENABLED", TranslationSheets.Friends), "SystemMessage", true, false, StackableHintKind.None, HintColorScheme.Refused);
+			SingletonMonoBehaviour<PanelController>.Instance.SendSystemMessage(Language.Get("STEAM_OVERLAY_NOT_ENABLED", TranslationContext.Friends), "SystemMessage", true, false, StackableHintKind.None, HintColorScheme.Refused);
 			return false;
 		}
 
@@ -87,10 +89,11 @@ namespace HeavyMetalMachines.VFX.PlotKids
 
 		public SocialConfig SocialConfiguration;
 
-		private MatchUiFeedbackDispatcher _matchUiFeedbackDispatcher;
-
 		private SocialUiFeedbackDispatcher _socialUiFeedbackDispatcher;
 
 		private ChatUiFeedbackDispatcher _chatUiFeedbackDispatcher;
+
+		[Inject]
+		private DiContainer _diContainer;
 	}
 }

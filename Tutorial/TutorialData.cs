@@ -1,5 +1,4 @@
 ﻿using System;
-using HeavyMetalMachines.Options;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Tutorial
@@ -15,7 +14,7 @@ namespace HeavyMetalMachines.Tutorial
 
 		internal bool IsObjective()
 		{
-			return this.dialogType == TutorialData.DialogTypes.Objective || this.dialogType == TutorialData.DialogTypes.ObjectiveRight;
+			return this.dialogType == TutorialData.DialogTypes.Objective;
 		}
 
 		[ReadOnly]
@@ -23,41 +22,14 @@ namespace HeavyMetalMachines.Tutorial
 
 		public string Name;
 
-		public string Tip;
-
 		public string Title;
 
-		public string DescMouse;
-
-		public string DescJoystick;
-
-		[Header("[ControlAction for DescMouse/DescJoystick]")]
-		public ControlAction ControlAction1;
-
-		public ControlAction ControlAction2;
-
-		public ControlAction ControlAction3;
-
-		public ControlAction ControlAction4;
-
-		[Tooltip("Use direct joystick code here if needed (i.e. [Y]).")]
-		public string DirectControlJoyAction1;
-
-		[Tooltip("Use direct joystick code here if needed (i.e. [Y]).")]
-		public string DirectControlJoyAction2;
-
-		[Tooltip("Use direct joystick code here if needed (i.e. [Y]).")]
-		public string DirectControlJoyAction3;
-
-		[Tooltip("Use direct joystick code here if needed (i.e. [Y]).")]
-		public string DirectControlJoyAction4;
+		public TutorialDataDescription[] Descriptions;
 
 		[Tooltip("Warning description (with optional mouse buttons).")]
 		public string DescWarning;
 
 		[Tooltip("If enabled, will show mouse and joystick icons")]
-		public bool MouseAndJoystickIcons;
-
 		public bool Redo;
 
 		public bool SaveRightNow;
@@ -65,10 +37,6 @@ namespace HeavyMetalMachines.Tutorial
 		public string targetRootName;
 
 		public string targetPath;
-
-		public Vector3 arrowOffsets;
-
-		public float arrowAngles;
 
 		public float ShowDelay;
 
@@ -80,22 +48,11 @@ namespace HeavyMetalMachines.Tutorial
 
 		public float tutorialGuyLifetime;
 
-		public bool EnableArrowPanel;
-
-		public bool EnableWButton;
-
-		public bool EnableAButton;
-
-		public bool EnableDButton;
-
-		public bool EnableDriftButton;
-
 		public enum DialogTypes
 		{
 			TutorialGuy,
 			Informative,
-			Objective,
-			ObjectiveRight
+			Objective
 		}
 	}
 }

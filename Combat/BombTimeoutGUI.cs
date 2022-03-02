@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.Infra.Context;
 using Pocketverse;
 using UnityEngine;
 
@@ -26,8 +27,8 @@ namespace HeavyMetalMachines.Combat
 			this.Info.Timeout = 0L;
 			this._lastSecondsUiUpdate = -1;
 			bool flag = false;
-			BombScoreBoard.State currentBombGameState = GameHubBehaviour.Hub.BombManager.CurrentBombGameState;
-			if (currentBombGameState == BombScoreBoard.State.PreBomb)
+			BombScoreboardState currentBombGameState = GameHubBehaviour.Hub.BombManager.CurrentBombGameState;
+			if (currentBombGameState == BombScoreboardState.PreBomb)
 			{
 				this.Info.BombIconSprite.enabled = false;
 				this.Info.Timeout = GameHubBehaviour.Hub.BombManager.ScoreBoard.Timeout;

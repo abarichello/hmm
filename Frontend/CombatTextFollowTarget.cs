@@ -1,4 +1,6 @@
 ﻿using System;
+using HeavyMetalMachines.GameCamera;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
 using Pocketverse;
 using UnityEngine;
 
@@ -11,7 +13,7 @@ namespace HeavyMetalMachines.Frontend
 			Canvas[] componentsInParent = base.GetComponentsInParent<Canvas>();
 			this._mainCanvasRectTransform = componentsInParent[componentsInParent.Length - 1].GetComponent<RectTransform>();
 			this._localTransform = base.transform;
-			this._gameCamera = CarCamera.Singleton.GetComponent<Camera>();
+			this._camera = this._gameCameraEngine.UnityCamera;
 			this._offsetFromCenterX = this.CombatTextSettings.TargetOffsetFromCenterX;
 			this._offsetFromCenterY = this.CombatTextSettings.TargetOffsetFromCenterY;
 		}
@@ -22,12 +24,13 @@ namespace HeavyMetalMachines.Frontend
 			{
 				return;
 			}
-			Vector3 vector = this._gameCamera.WorldToViewportPoint(this._targetTransform.position);
+			Vector3 vector = this._camera.WorldToViewportPoint(this._targetTransform.position);
 			Vector2 sizeDelta = this._mainCanvasRectTransform.sizeDelta;
-			Vector2 v = new Vector2(vector.x * sizeDelta.x, vector.y * sizeDelta.y);
-			v.x += (float)this._offsetFromCenterX;
-			v.y += (float)this._offsetFromCenterY;
-			this._localTransform.localPosition = v;
+			Vector2 vector2;
+			vector2..ctor(vector.x * sizeDelta.x, vector.y * sizeDelta.y);
+			vector2.x += (float)this._offsetFromCenterX;
+			vector2.y += (float)this._offsetFromCenterY;
+			this._localTransform.localPosition = vector2;
 		}
 
 		public void SetTargetTransform(Transform targetTransform)
@@ -51,7 +54,10 @@ namespace HeavyMetalMachines.Frontend
 
 		private int _offsetFromCenterY;
 
-		private Camera _gameCamera;
+		[InjectOnClient]
+		private IGameCameraEngine _gameCameraEngine;
+
+		private Camera _camera;
 
 		private Transform _localTransform;
 

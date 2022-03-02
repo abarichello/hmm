@@ -1,17 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
+using HeavyMetalMachines.Playback;
 using HeavyMetalMachines.UpdateStream;
 using Pocketverse;
+using Zenject;
 
 namespace HeavyMetalMachines
 {
-	public class TransformParser : KeyFrameParser
+	public class TransformParser : KeyFrameParser, ITransformDispatcher
 	{
-		public TransformParser()
-		{
-			this._temporaryStream = new BitStream();
-		}
-
 		private int MaxUpdateMessageSize
 		{
 			get
@@ -33,14 +30,10 @@ namespace HeavyMetalMachines
 			while (stream.ReadBool())
 			{
 				int num = stream.ReadCompressedInt();
-				this._temporaryStream.ByteArray = stream.ReadByteArray();
-				StreamObject streamObject;
+				byte[] array = stream.CachedReadByteArray();
+				this._temporaryStream.ByteArray = array;
 				MovementStream movementStream;
-				if (GameHubObject.Hub.UpdateManager.StreamObjectsMap.TryGetValue(num, out streamObject))
-				{
-					streamObject.StreamRead(true, this._temporaryStream, GameHubObject.Hub.GameTime.RewindedTimeMillis);
-				}
-				else if (GameHubObject.Hub.UpdateManager.MovementStreamsById.TryGetValue(num, out movementStream))
+				if (GameHubObject.Hub.UpdateManager.MovementStreamsById.TryGetValue(num, out movementStream))
 				{
 					double offset = (double)GameHubObject.Hub.GameTime.RewindedTimeMillis / 1000.0;
 					movementStream.Read(this._temporaryStream, offset);
@@ -52,52 +45,16 @@ namespace HeavyMetalMachines
 						num
 					});
 				}
-			}
-			float time = stream.ReadCompressedFloat();
-			int synch = stream.ReadCompressedInt();
-			if (GameHubObject.Hub.playbackSystem.State != PlaybackSystem.PlaybackState.Replay)
-			{
-				GameHubObject.Hub.Clock.FixDelta(time, synch);
-			}
-		}
-
-		public void SendData()
-		{
-			BitStream stream = base.GetStream();
-			List<StreamObject> streamObjects = GameHubObject.Hub.UpdateManager.StreamObjects;
-			this._lastFrameId = -1;
-			bool flag = false;
-			for (int i = 0; i < streamObjects.Count; i++)
-			{
-				StreamObject streamObject = streamObjects[i];
-				if (streamObject.gameObject.activeInHierarchy)
-				{
-					int num = streamObject.StreamWrite(ref TransformParser._sendBuff);
-					if (flag && stream.GetWrittenSize() + num + 5 >= this.MaxUpdateMessageSize)
-					{
-						this.SendFrame(stream);
-						stream = base.GetStream();
-					}
-					flag = true;
-					stream.WriteBool(true);
-					stream.WriteCompressedInt(streamObject.Id.ObjId);
-					stream.WriteByteArray(TransformParser._sendBuff, num);
-				}
-			}
-			if (flag)
-			{
-				this.SendFrame(stream);
+				ByteArrayCache.Free(array);
 			}
 		}
 
 		private void SendFrame(BitStream stream)
 		{
-			int num = GameHubObject.Hub.PlaybackManager.NextId();
+			int nextFrameId = this._serverDispatcher.GetNextFrameId();
 			stream.WriteBool(false);
-			stream.WriteCompressedFloat(GameHubObject.Hub.GameTime.GetPlaybackUnityTime());
-			stream.WriteCompressedInt(GameHubObject.Hub.GameTime.GetSynchTime());
-			GameHubObject.Hub.PlaybackManager.SendKeyFrame(this.Type, false, num, this._lastFrameId, stream.ToArray());
-			this._lastFrameId = num;
+			this._serverDispatcher.SendFrame(this.Type.Convert(), false, nextFrameId, this._lastFrameId, stream.ToArray());
+			this._lastFrameId = nextFrameId;
 		}
 
 		public void SendMovementData(List<MovementStream> movementStreams)
@@ -130,11 +87,14 @@ namespace HeavyMetalMachines
 			}
 		}
 
-		private static readonly BitLogger Log = new BitLogger(typeof(TransformParser));
+		[Inject]
+		private IServerPlaybackDispatcher _serverDispatcher;
+
+		protected static readonly BitLogger Log = new BitLogger(typeof(TransformParser));
 
 		public const int RpcHeaderSizeInBytes = 32;
 
-		private BitStream _temporaryStream;
+		private BitStream _temporaryStream = new BitStream();
 
 		private static byte[] _sendBuff = new byte[256];
 

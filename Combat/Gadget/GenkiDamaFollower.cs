@@ -19,9 +19,9 @@ namespace HeavyMetalMachines.Combat.Gadget
 		{
 			int num = 0;
 			Vector3 vector = this.Combat.transform.forward.normalized * this.ColliderRadius.Get();
-			Vector3 a = -this.Combat.transform.forward.normalized * this.ColliderRadius.Get();
-			Vector3 a2 = this.Combat.transform.right.normalized * this.ColliderRadius.Get();
-			Vector3 a3 = -this.Combat.transform.right.normalized * this.ColliderRadius.Get();
+			Vector3 vector2 = -this.Combat.transform.forward.normalized * this.ColliderRadius.Get();
+			Vector3 vector3 = this.Combat.transform.right.normalized * this.ColliderRadius.Get();
+			Vector3 vector4 = -this.Combat.transform.right.normalized * this.ColliderRadius.Get();
 			for (int i = 0; i < this.MyInfo.EffectsToSpawnCount; i++)
 			{
 				EffectEvent effectEvent = base.GetEffectEvent(this.MyInfo.Effect);
@@ -44,15 +44,15 @@ namespace HeavyMetalMachines.Combat.Gadget
 				{
 					if (i % 2 == 0)
 					{
-						Vector3 vector2 = vector + a3 * (float)i + a * (float)i;
-						effectEvent.Origin = this.DummyPosition() + vector2;
-						effectEvent.Target = vector2;
+						Vector3 vector5 = vector + vector4 * (float)i + vector2 * (float)i;
+						effectEvent.Origin = this.DummyPosition() + vector5;
+						effectEvent.Target = vector5;
 					}
 					else
 					{
-						Vector3 vector3 = vector + a2 * (float)(i + 1) + a * (float)(i + 1);
-						effectEvent.Origin = this.DummyPosition() + vector3;
-						effectEvent.Target = vector3;
+						Vector3 vector6 = vector + vector3 * (float)(i + 1) + vector2 * (float)(i + 1);
+						effectEvent.Origin = this.DummyPosition() + vector6;
+						effectEvent.Target = vector6;
 					}
 					GameHubBehaviour.Hub.Events.TriggerEvent(effectEvent);
 				}

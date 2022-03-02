@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using EnhancedUI.EnhancedScroller;
 using HeavyMetalMachines.Frontend;
 using UnityEngine;
@@ -8,6 +9,30 @@ namespace HeavyMetalMachines.Battlepass
 {
 	public class UnityUiBattlepassMissionsListMissionCellView : EnhancedScrollerCellView
 	{
+		public Text GetObjectiveTextLabel
+		{
+			get
+			{
+				return this._objectivesDescriptionList[0];
+			}
+		}
+
+		public Text GetMissionTitleLabel
+		{
+			get
+			{
+				return this._titleText;
+			}
+		}
+
+		public Text GetObjectiveProgressTextLabel
+		{
+			get
+			{
+				return this._objectiveProgressBarList[0].ProgressText;
+			}
+		}
+
 		public void Setup(UnityUiBattlepassMissionsListMissionsGroupPresenter.MissionSlotData data, UnityUiBattlepassMissionsListMissionCellView.OnUnlockPremiumClickDelegate onUnlockPremiumClick)
 		{
 			this._onUnlockPremiumClick = onUnlockPremiumClick;
@@ -23,33 +48,25 @@ namespace HeavyMetalMachines.Battlepass
 			this._completedIconGameObject.SetActive(data.IsCompleted);
 			if (data.IsEmpty)
 			{
-				this._bgRawImage.texture = this._assets.BgEmptyTexture;
+				this._bgImage.sprite = this._assets.BgEmptyTexture;
+				this.DisableUnusedObjectivesCells(data);
 			}
 			else
 			{
 				this._titleText.text = data.TitleText;
-				this._descriptionText.text = data.DescriptionText;
 				this._xpText.text = data.XpAmount.ToString("0");
-				string text = HudUtils.RGBToHex(this._progressCurrentValueTextColor);
-				string text2 = HudUtils.RGBToHex((!data.IsPremium) ? this._progressTotalValueFreeTextColor : this._progressTotalValuePremiumTextColor);
-				this._progressText.text = string.Format("<color=#{0}>{1}</color><color=#{2}> / {3}</color>", new object[]
-				{
-					(!data.IsCompleted) ? text : text2,
-					data.ProgressCurrentValue,
-					text2,
-					data.ProgressTotalValue
-				});
-				this._progressImage.fillAmount = ((data.ProgressTotalValue != 0) ? ((float)data.ProgressCurrentValue / (float)data.ProgressTotalValue) : 1f);
-				this._progressImage.sprite = ((!data.IsPremium) ? this._assets.FreeProgressBarSprite : this._assets.PremiumProgressBarSprite);
-				this._progressBgImage.color = ((!data.IsPremium) ? this._progressBarBgFreeColor : this._progressBarBgPremiumColor);
+				this.CreateNewsObjectivesCells(data);
+				string currentTextColor = HudUtils.RGBToHex(this._progressCurrentValueTextColor);
+				string totalTextColor = HudUtils.RGBToHex((!data.IsPremium) ? this._progressTotalValueFreeTextColor : this._progressTotalValuePremiumTextColor);
+				this.FillObjectivesCells(data, totalTextColor, currentTextColor);
 				this._ticketRawImage.texture = ((!data.IsPremium) ? this._assets.TicketFreeTexture : this._assets.TicketPremiumTexture);
 				if (data.IsPremium)
 				{
-					this._bgRawImage.texture = ((!data.IsLocked) ? this._assets.BgPremiumTexture : this._assets.BgPremiumLockedTexture);
+					this._bgImage.sprite = ((!data.IsLocked) ? this._assets.BgPremiumTexture : this._assets.BgPremiumLockedTexture);
 				}
 				else
 				{
-					this._bgRawImage.texture = this._assets.BgFreeTexture;
+					this._bgImage.sprite = this._assets.BgFreeTexture;
 				}
 			}
 			this._unlockPremiumButton.interactable = true;
@@ -68,6 +85,91 @@ namespace HeavyMetalMachines.Battlepass
 			}
 		}
 
+		private void FillObjectivesCells(UnityUiBattlepassMissionsListMissionsGroupPresenter.MissionSlotData data, string totalTextColor, string currentTextColor)
+		{
+			UnityUiBattlepassMissionsListMissionsGroupPresenter.ObjectiveSlotData[] array = this.OrdenateMissionObjectives(data);
+			for (int i = 0; i < array.Length; i++)
+			{
+				Text text = this._objectivesDescriptionList[i];
+				MissionObjectiveProgressBar missionObjectiveProgressBar = this._objectiveProgressBarList[i];
+				text.gameObject.SetActive(true);
+				missionObjectiveProgressBar.gameObject.SetActive(true);
+				int num = Math.Min(array[i].ProgressCurrentValue, array[i].ProgressTotalValue);
+				missionObjectiveProgressBar.ProgressText.text = string.Format("<color=#{0}>{1}</color><color=#{2}> / {3}</color>", new object[]
+				{
+					(!data.IsCompleted) ? currentTextColor : totalTextColor,
+					num,
+					totalTextColor,
+					array[i].ProgressTotalValue
+				});
+				missionObjectiveProgressBar.ProgressImage.fillAmount = ((array[i].ProgressTotalValue != 0) ? ((float)array[i].ProgressCurrentValue / (float)array[i].ProgressTotalValue) : 1f);
+				missionObjectiveProgressBar.ProgressImage.sprite = ((!data.IsPremium) ? this._assets.FreeProgressBarSprite : this._assets.PremiumProgressBarSprite);
+				missionObjectiveProgressBar.ProgressBgImage.color = ((!data.IsPremium) ? this._progressBarBgFreeColor : this._progressBarBgPremiumColor);
+				text.text = array[i].DescriptionText;
+				this.EnableSeparatorObjectiveObject(i);
+			}
+			this.DisableUnusedObjectivesCells(data);
+		}
+
+		private UnityUiBattlepassMissionsListMissionsGroupPresenter.ObjectiveSlotData[] OrdenateMissionObjectives(UnityUiBattlepassMissionsListMissionsGroupPresenter.MissionSlotData data)
+		{
+			UnityUiBattlepassMissionsListMissionsGroupPresenter.ObjectiveSlotData[] array = (UnityUiBattlepassMissionsListMissionsGroupPresenter.ObjectiveSlotData[])data.ObjectiveList.Clone();
+			Array.Sort<UnityUiBattlepassMissionsListMissionsGroupPresenter.ObjectiveSlotData>(array, new Comparison<UnityUiBattlepassMissionsListMissionsGroupPresenter.ObjectiveSlotData>(this.CompareGreatestProgress));
+			return array;
+		}
+
+		private int CompareGreatestProgress(UnityUiBattlepassMissionsListMissionsGroupPresenter.ObjectiveSlotData objectiveSlotData, UnityUiBattlepassMissionsListMissionsGroupPresenter.ObjectiveSlotData slotData)
+		{
+			float value = (objectiveSlotData.ProgressTotalValue != 0) ? ((float)objectiveSlotData.ProgressCurrentValue / (float)objectiveSlotData.ProgressTotalValue) : 1f;
+			return ((slotData.ProgressTotalValue != 0) ? ((float)slotData.ProgressCurrentValue / (float)slotData.ProgressTotalValue) : 1f).CompareTo(value);
+		}
+
+		private void EnableSeparatorObjectiveObject(int currentIndex)
+		{
+			if (currentIndex != 0)
+			{
+				this._objectiveSeparatorList[currentIndex].SetActive(true);
+				return;
+			}
+			this._objectiveSeparatorList[currentIndex].SetActive(false);
+		}
+
+		private void DisableUnusedObjectivesCells(UnityUiBattlepassMissionsListMissionsGroupPresenter.MissionSlotData data)
+		{
+			if (data.ObjectiveList.Length >= this._objectivesDescriptionList.Count)
+			{
+				return;
+			}
+			for (int i = data.ObjectiveList.Length; i < this._objectivesDescriptionList.Count; i++)
+			{
+				Text text = this._objectivesDescriptionList[i];
+				MissionObjectiveProgressBar missionObjectiveProgressBar = this._objectiveProgressBarList[i];
+				text.gameObject.SetActive(false);
+				missionObjectiveProgressBar.gameObject.SetActive(false);
+			}
+			for (int j = data.ObjectiveList.Length; j < this._objectiveSeparatorList.Count; j++)
+			{
+				this._objectiveSeparatorList[j].SetActive(false);
+			}
+		}
+
+		private void CreateNewsObjectivesCells(UnityUiBattlepassMissionsListMissionsGroupPresenter.MissionSlotData data)
+		{
+			if (data.ObjectiveList.Length <= 1 || this._objectivesDescriptionList.Count >= data.ObjectiveList.Length)
+			{
+				return;
+			}
+			for (int i = 1; i < data.ObjectiveList.Length; i++)
+			{
+				GameObject item = Object.Instantiate<GameObject>(this._objectiveSeparatorList[0], this._objectiveGridTransform);
+				this._objectiveSeparatorList.Add(item);
+				Text item2 = Object.Instantiate<Text>(this._objectivesDescriptionList[0], this._objectiveGridTransform);
+				this._objectivesDescriptionList.Add(item2);
+				MissionObjectiveProgressBar item3 = Object.Instantiate<MissionObjectiveProgressBar>(this._objectiveProgressBarList[0], this._objectiveGridTransform);
+				this._objectiveProgressBarList.Add(item3);
+			}
+		}
+
 		protected void OnEnable()
 		{
 			if (this._showUnlockAnimationOnEnable)
@@ -75,6 +177,13 @@ namespace HeavyMetalMachines.Battlepass
 				this._showUnlockAnimationOnEnable = false;
 				this._unlockPremiumAnimation.Play();
 			}
+		}
+
+		public void SetBorderCellSize(float height)
+		{
+			Vector2 sizeDelta;
+			sizeDelta..ctor(this._bgImage.rectTransform.sizeDelta.x, height);
+			this._bgImage.rectTransform.sizeDelta = sizeDelta;
 		}
 
 		[UnityUiComponentCall]
@@ -102,7 +211,7 @@ namespace HeavyMetalMachines.Battlepass
 		private UnityUiBattlepassMissionsListMissionCellView.MissionCellViewAssets _assets;
 
 		[SerializeField]
-		private RawImage _bgRawImage;
+		private Image _bgImage;
 
 		[SerializeField]
 		private GameObject _emptyTextGameObject;
@@ -120,28 +229,28 @@ namespace HeavyMetalMachines.Battlepass
 		private Text _titleText;
 
 		[SerializeField]
-		private Text _descriptionText;
-
-		[SerializeField]
 		private GameObject _completedIconGameObject;
 
 		[SerializeField]
 		private RawImage _ticketRawImage;
 
 		[SerializeField]
-		private Text _progressText;
-
-		[SerializeField]
-		private Image _progressImage;
-
-		[SerializeField]
-		private Image _progressBgImage;
-
-		[SerializeField]
 		private Animation _unlockPremiumAnimation;
 
 		[SerializeField]
 		private Button _unlockPremiumButton;
+
+		[SerializeField]
+		private RectTransform _objectiveGridTransform;
+
+		[SerializeField]
+		private List<Text> _objectivesDescriptionList;
+
+		[SerializeField]
+		private List<GameObject> _objectiveSeparatorList;
+
+		[SerializeField]
+		private List<MissionObjectiveProgressBar> _objectiveProgressBarList;
 
 		private UnityUiBattlepassMissionsListMissionCellView.OnUnlockPremiumClickDelegate _onUnlockPremiumClick;
 
@@ -152,13 +261,13 @@ namespace HeavyMetalMachines.Battlepass
 		[Serializable]
 		private struct MissionCellViewAssets
 		{
-			public Texture BgEmptyTexture;
+			public Sprite BgEmptyTexture;
 
-			public Texture BgFreeTexture;
+			public Sprite BgFreeTexture;
 
-			public Texture BgPremiumLockedTexture;
+			public Sprite BgPremiumLockedTexture;
 
-			public Texture BgPremiumTexture;
+			public Sprite BgPremiumTexture;
 
 			public Texture TicketFreeTexture;
 

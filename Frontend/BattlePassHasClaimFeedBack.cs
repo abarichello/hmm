@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.DataTransferObjects.Progression;
 using HeavyMetalMachines.Infra.ScriptableObjects;
 using Pocketverse;
 using UnityEngine;
@@ -9,18 +10,17 @@ namespace HeavyMetalMachines.Frontend
 	{
 		private void OnEnable()
 		{
-			BattlepassProgressScriptableObject.OnBattlepassProgressSet = (Action)Delegate.Combine(BattlepassProgressScriptableObject.OnBattlepassProgressSet, new Action(this.OnBattlepassProgressSet));
+			BattlepassProgressScriptableObject.OnBattlepassProgressSet += this.OnBattlepassProgressSet;
 		}
 
 		private void OnDisable()
 		{
-			BattlepassProgressScriptableObject.OnBattlepassProgressSet = (Action)Delegate.Remove(BattlepassProgressScriptableObject.OnBattlepassProgressSet, new Action(this.OnBattlepassProgressSet));
+			BattlepassProgressScriptableObject.OnBattlepassProgressSet -= this.OnBattlepassProgressSet;
 		}
 
-		private void OnBattlepassProgressSet()
+		private void OnBattlepassProgressSet(BattlepassProgress battlepassProgress)
 		{
-			BattlepassProgress progress = this._battlepassProgressScriptableObject.Progress;
-			this._metalpassFeedbackObject.SetActive(progress.HasRewardToClaim(this._sharedConfigs.Battlepass));
+			this._metalpassFeedbackObject.SetActive(battlepassProgress.HasRewardToClaim(this._sharedConfigs.Battlepass));
 		}
 
 		[SerializeField]

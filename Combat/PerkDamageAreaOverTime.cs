@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using HeavyMetalMachines.Combat.Gadget;
+using HeavyMetalMachines.Match;
 using Pocketverse;
 using UnityEngine;
 
@@ -28,16 +29,17 @@ namespace HeavyMetalMachines.Combat
 				return;
 			}
 			int playbackTime = GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
-			int num = playbackTime - this._lastPlaybackTime;
+			int lastPlaybackTime = this._lastPlaybackTime;
+			int num = playbackTime - lastPlaybackTime;
 			this._lastPlaybackTime = playbackTime;
 			float num2 = (float)num / 1000f;
-			if (num2 < 0f)
+			if (num2 < 0f && GameHubBehaviour.Hub.Match.State.IsRunning())
 			{
-				PerkDamageAreaOverTime.Log.ErrorFormat("Negative Damage: amount {0} now {1} latPlaybackTime {2}", new object[]
+				PerkDamageAreaOverTime.Log.ErrorFormat("Negative Damage: amount {0} now {1} lastPlaybackTime {2}", new object[]
 				{
 					num2,
 					playbackTime,
-					this._lastPlaybackTime
+					lastPlaybackTime
 				});
 			}
 			this.DamageArea(num2);
@@ -58,7 +60,7 @@ namespace HeavyMetalMachines.Combat
 				if (detectionKind != PerkDamageAreaOverTime.CollisionDetectionKind.OverlapSphere)
 				{
 				}
-				BarrierUtils.OverlapSphereThenFilter(center, num, this.Effect.Data.EffectInfo.PrioritizeBarrier, rayOrigin, 1077058560, this._areaHits);
+				BarrierUtils.OverlapSphereThenFilter(center, num, this.Effect.Data.EffectInfo.PrioritizeBarrier, rayOrigin, 1077054464, this._areaHits);
 			}
 			else
 			{
@@ -130,7 +132,7 @@ namespace HeavyMetalMachines.Combat
 			this._trans = msg.Target;
 		}
 
-		public static readonly BitLogger Log = new BitLogger(typeof(PerkDamageAreaOnTick));
+		public static readonly BitLogger Log = new BitLogger(typeof(PerkDamageAreaOverTime));
 
 		public float Range;
 

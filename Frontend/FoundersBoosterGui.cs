@@ -1,6 +1,8 @@
 ﻿using System;
+using HeavyMetalMachines.DataTransferObjects.Player;
+using HeavyMetalMachines.DataTransferObjects.Progression;
+using HeavyMetalMachines.Localization;
 using HeavyMetalMachines.Match;
-using HeavyMetalMachines.Swordfish.Player;
 using HeavyMetalMachines.Utils;
 using HeavyMetalMachines.VFX;
 
@@ -15,13 +17,13 @@ namespace HeavyMetalMachines.Frontend
 
 		public static bool HasFounderBooster(FounderLevel founderLevel)
 		{
-			return founderLevel.CheckHasFlag(FounderLevel.Gold) || founderLevel.CheckHasFlag(FounderLevel.Silver) || founderLevel.CheckHasFlag(FounderLevel.Bronze);
+			return FounderLevelEx.CheckHasFlag(founderLevel, 4) || FounderLevelEx.CheckHasFlag(founderLevel, 2) || FounderLevelEx.CheckHasFlag(founderLevel, 1);
 		}
 
 		public static string GetSpriteName(FounderLevel founderLevel, FoundersBoosterGui.SpriteType spriteType)
 		{
 			string result = string.Empty;
-			if (founderLevel.CheckHasFlag(FounderLevel.Gold))
+			if (FounderLevelEx.CheckHasFlag(founderLevel, 4))
 			{
 				switch (spriteType)
 				{
@@ -46,7 +48,7 @@ namespace HeavyMetalMachines.Frontend
 					break;
 				}
 			}
-			else if (founderLevel.CheckHasFlag(FounderLevel.Silver))
+			else if (FounderLevelEx.CheckHasFlag(founderLevel, 2))
 			{
 				switch (spriteType)
 				{
@@ -71,7 +73,7 @@ namespace HeavyMetalMachines.Frontend
 					break;
 				}
 			}
-			else if (founderLevel.CheckHasFlag(FounderLevel.Bronze))
+			else if (FounderLevelEx.CheckHasFlag(founderLevel, 1))
 			{
 				switch (spriteType)
 				{
@@ -109,15 +111,15 @@ namespace HeavyMetalMachines.Frontend
 		public static string GetDescription(FounderLevel founderLevel)
 		{
 			string key = string.Empty;
-			if (founderLevel.CheckHasFlag(FounderLevel.Gold))
+			if (FounderLevelEx.CheckHasFlag(founderLevel, 4))
 			{
 				key = "FOUNDERS_BOOSTER_GOLD";
 			}
-			else if (founderLevel.CheckHasFlag(FounderLevel.Silver))
+			else if (FounderLevelEx.CheckHasFlag(founderLevel, 2))
 			{
 				key = "FOUNDERS_BOOSTER_SILVER";
 			}
-			else if (founderLevel.CheckHasFlag(FounderLevel.Bronze))
+			else if (FounderLevelEx.CheckHasFlag(founderLevel, 1))
 			{
 				key = "FOUNDERS_BOOSTER_BRONZE";
 			}
@@ -128,21 +130,21 @@ namespace HeavyMetalMachines.Frontend
 					founderLevel
 				});
 			}
-			return Language.Get(key, TranslationSheets.MainMenuGui);
+			return Language.Get(key, TranslationContext.MainMenuGui);
 		}
 
 		public static int GetBonusPercentage(FounderLevel founderLevel, HMMHub hub)
 		{
 			FounderPackConfig founderPackConfig = hub.SharedConfigs.FounderPackConfig;
-			if (founderLevel.CheckHasFlag(FounderLevel.Gold))
+			if (FounderLevelEx.CheckHasFlag(founderLevel, 4))
 			{
 				return founderPackConfig.FounderPackGoldXpBonus;
 			}
-			if (founderLevel.CheckHasFlag(FounderLevel.Silver))
+			if (FounderLevelEx.CheckHasFlag(founderLevel, 2))
 			{
 				return founderPackConfig.FounderPackSilverXpBonus;
 			}
-			if (founderLevel.CheckHasFlag(FounderLevel.Bronze))
+			if (FounderLevelEx.CheckHasFlag(founderLevel, 1))
 			{
 				return founderPackConfig.FounderPackBronzeXpBonus;
 			}
@@ -151,7 +153,7 @@ namespace HeavyMetalMachines.Frontend
 
 		public static void UpdateHMM2DDynamicSprite(FounderLevel founderLevel, HMMUI2DDynamicSprite founderBorder, FoundersBoosterGui.SpriteType spriteType)
 		{
-			if (founderLevel == FounderLevel.None)
+			if (founderLevel == null)
 			{
 				founderBorder.gameObject.SetActive(false);
 				return;

@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using HeavyMetalMachines.Infra.Context;
 using Pocketverse;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Combat
 {
@@ -21,6 +23,14 @@ namespace HeavyMetalMachines.Combat
 			get
 			{
 				return (!GameHubBehaviour.Hub.Net.IsServer()) ? this._trans.position : this._body.position;
+			}
+		}
+
+		public Vector3 LastPosition
+		{
+			get
+			{
+				return this._lastPosition;
 			}
 		}
 
@@ -144,7 +154,7 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
-		public List<CombatLink> Links
+		public List<ICombatLink> Links
 		{
 			get
 			{
@@ -152,16 +162,24 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
+		public Vector3 Up
+		{
+			get
+			{
+				return this._trans.up;
+			}
+		}
+
 		public void BreakAllLinks()
 		{
 			for (int i = 0; i < this._links.Count; i++)
 			{
-				CombatLink combatLink = this._links[i];
+				ICombatLink combatLink = this._links[i];
 				combatLink.Break();
 			}
 		}
 
-		public void IncrementUpdatedLinkCount()
+		public void IncrementUpdatedLinkCount(ICombatLink link)
 		{
 			if (++this._numLinksUpdated >= this._links.Count && this.CanMove)
 			{
@@ -172,12 +190,12 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
-		public void LockMovement()
+		public void PauseSimulation()
 		{
 			this._lockMovement = true;
 		}
 
-		public void UnlockMovement()
+		public void UnpauseSimulation()
 		{
 			this._lockMovement = false;
 		}
@@ -203,19 +221,29 @@ namespace HeavyMetalMachines.Combat
 		protected virtual void Awake()
 		{
 			this._trans = base.transform;
+			if (this._body == null)
+			{
+				this._body = base.GetComponent<Rigidbody>();
+			}
 			if (GameHubBehaviour.Hub.Net.IsClient())
 			{
 				base.enabled = false;
+				Collider[] componentsInChildren = base.gameObject.GetComponentsInChildren<Collider>(true);
+				if (this._body)
+				{
+					Object.Destroy(this._body);
+				}
+				for (int i = 0; i < componentsInChildren.Length; i++)
+				{
+					componentsInChildren[i].enabled = false;
+				}
 				return;
 			}
 			if (!this.Combat)
 			{
 				this.Combat = base.GetComponent<CombatObject>();
 			}
-			if (this._body == null)
-			{
-				this._body = base.GetComponent<Rigidbody>();
-			}
+			this._body.constraints = 84;
 			this._lastPosition = this._body.position;
 		}
 
@@ -236,12 +264,17 @@ namespace HeavyMetalMachines.Combat
 			this._lastSpeed = this._body.velocity.magnitude;
 			this.MovementFixedUpdate();
 			this.UpdateLinks();
-			if (this._links.Count == 0)
+			if (this.ThereAreNoActiveLinks())
 			{
 				this.ApplyDrag(this.Info.Drag, this.Combat.Attributes.DragMod, this.Combat.Attributes.DragModPct);
 				this.SetNewVelocity();
-				this.PhysicConstraint();
 			}
+			this.PhysicConstraint();
+		}
+
+		private bool ThereAreNoActiveLinks()
+		{
+			return this._links.All((ICombatLink link) => !link.IsEnabled);
 		}
 
 		private void ResetCarMovementProperties()
@@ -269,7 +302,7 @@ namespace HeavyMetalMachines.Combat
 			}
 			else
 			{
-				this._body.AddForce(this._body.velocity.normalized * drag * -1f, ForceMode.Acceleration);
+				this._body.AddForce(this._body.velocity.normalized * drag * -1f, 5);
 			}
 		}
 
@@ -281,11 +314,7 @@ namespace HeavyMetalMachines.Combat
 
 		protected virtual void PhysicConstraint()
 		{
-			if (!Mathf.Approximately(0f, this._body.position.y))
-			{
-				this._body.velocity = new Vector3(this._body.velocity.x, 0f, this._body.velocity.z);
-				this._body.position = new Vector3(this._body.position.x, 0f, this._body.position.z);
-			}
+			this._body.AddRelativeForce(this._body.velocity.y * Vector3.down, 2);
 			Quaternion rotation = Quaternion.Euler(0f, this._body.rotation.eulerAngles.y, 0f);
 			this._body.rotation = rotation;
 		}
@@ -307,7 +336,7 @@ namespace HeavyMetalMachines.Combat
 
 		protected virtual void MovementFixedUpdate()
 		{
-			this._body.maxAngularVelocity = this.MaxAngularSpeed * 0.0174532924f;
+			this._body.maxAngularVelocity = this.MaxAngularSpeed * 0.017453292f;
 			this.SpeedZ = Vector3.Dot(this._trans.forward, this._body.velocity);
 		}
 
@@ -324,7 +353,7 @@ namespace HeavyMetalMachines.Combat
 				return;
 			}
 			this._nextCollisionEvent = time + 0.5f;
-			CollisionParser.CollisionEvent evt = new CollisionParser.CollisionEvent
+			CollisionEvent evt = new CollisionEvent
 			{
 				ObjId = base.Id.ObjId,
 				Point = collision.contacts[0].point,
@@ -332,7 +361,7 @@ namespace HeavyMetalMachines.Combat
 				Intensity = collision.relativeVelocity.magnitude,
 				OtherLayer = (byte)collision.contacts[0].otherCollider.gameObject.layer
 			};
-			PlaybackManager.Collision.SendData(evt);
+			this._dispatcher.SendData(evt);
 		}
 
 		protected virtual void OnCollisionStay(Collision collision)
@@ -371,7 +400,7 @@ namespace HeavyMetalMachines.Combat
 				vector *= magnitude;
 			}
 			vector *= ((!ignorePushReceived) ? (this.Info.PushReceived + this.Combat.Attributes.PushReceivedPct) : 1f);
-			this._body.AddForce(vector, ForceMode.VelocityChange);
+			this._body.AddForce(vector, 2);
 		}
 
 		public bool HasLinkWithTag(string tag)
@@ -391,7 +420,14 @@ namespace HeavyMetalMachines.Combat
 			return false;
 		}
 
-		public virtual void AddLink(CombatLink newLink, bool force)
+		public ICombatLink GetLinkWithTag(string tag)
+		{
+			ICombatLink result = null;
+			this._taggedLinks.TryGetValue(tag, out result);
+			return result;
+		}
+
+		public virtual void AddLink(ICombatLink newLink, bool force)
 		{
 			if (!force && !string.IsNullOrEmpty(newLink.Tag) && this.HasLinkWithTag(newLink.Tag))
 			{
@@ -402,6 +438,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				this._taggedLinks[newLink.Tag] = newLink;
 			}
+			newLink.OnLinkUpdated += this.IncrementUpdatedLinkCount;
 			this._links.Add(newLink);
 		}
 
@@ -416,23 +453,31 @@ namespace HeavyMetalMachines.Combat
 
 		public virtual void ForcePosition(Vector3 newPosition, bool includeLinks = true)
 		{
+			CombatMovement.Log.DebugFormat("ForcePosition Combat: {0} LastPosition: {1} NewPosition: {2} Body.Position: {3} IncludeLinks: {4}", new object[]
+			{
+				this.Combat,
+				this._lastPosition,
+				newPosition,
+				this._body.position,
+				includeLinks
+			});
 			if (includeLinks && this._links.Count > 0)
 			{
-				Vector3 b = newPosition - this._body.position;
+				Vector3 vector = newPosition - this._body.position;
 				for (int i = 0; i < this._links.Count; i++)
 				{
-					CombatLink combatLink = this._links[i];
+					ICombatLink combatLink = this._links[i];
 					if (!combatLink.IsBroken)
 					{
-						CombatMovement movement = combatLink.Point1.Movement;
-						CombatMovement movement2 = combatLink.Point2.Movement;
+						IPhysicalObject movement = combatLink.Point1.Movement;
+						IPhysicalObject movement2 = combatLink.Point2.Movement;
 						if (movement != this)
 						{
-							movement.ForcePosition(movement._lastPosition + b, false);
+							movement.ForcePosition(movement.LastPosition + vector, false);
 						}
 						if (movement2 != this)
 						{
-							movement2.ForcePosition(movement2._lastPosition + b, false);
+							movement2.ForcePosition(movement2.LastPosition + vector, false);
 						}
 					}
 				}
@@ -442,6 +487,14 @@ namespace HeavyMetalMachines.Combat
 
 		public virtual void ForcePositionAndRotation(Vector3 newPosition, Quaternion newRotation)
 		{
+			CombatMovement.Log.DebugFormat("ForcePositionAndRotation Combat: {0} Position: {1} NewPosition: {2} Rotation: {3} NewRotation: {4}", new object[]
+			{
+				this.Combat,
+				base.transform.position,
+				newPosition,
+				base.transform.rotation,
+				newRotation
+			});
 			this.BreakAllLinks();
 			base.transform.SetPositionAndRotation(newPosition, newRotation);
 		}
@@ -475,6 +528,7 @@ namespace HeavyMetalMachines.Combat
 			}
 			this._lastVelocity = Vector3.zero;
 			this._lastAngularVelocity = Vector3.zero;
+			this.SpeedZ = 0f;
 		}
 
 		public void Clear()
@@ -484,7 +538,7 @@ namespace HeavyMetalMachines.Combat
 			FixedJoint[] components = base.GetComponents<FixedJoint>();
 			for (int i = 0; i < components.Length; i++)
 			{
-				UnityEngine.Object.Destroy(components[i]);
+				Object.Destroy(components[i]);
 			}
 			this.Push(Vector3.zero, false, 0f, false);
 		}
@@ -507,16 +561,24 @@ namespace HeavyMetalMachines.Combat
 			return GameHubBehaviour.Hub.MatchMan.GetClosestValidPoint(position, depthLayers, this.Info.ValidatorTeleportOffset);
 		}
 
+		public void LookTowards(Vector3 forward)
+		{
+			base.transform.rotation = Quaternion.LookRotation(forward);
+		}
+
 		private static readonly BitLogger Log = new BitLogger(typeof(CombatMovement));
+
+		[Inject]
+		private ICollisionDispatcher _dispatcher;
 
 		public CombatObject Combat;
 
 		[SerializeField]
 		private MovementInfo _info;
 
-		protected readonly Dictionary<string, CombatLink> _taggedLinks = new Dictionary<string, CombatLink>();
+		protected readonly Dictionary<string, ICombatLink> _taggedLinks = new Dictionary<string, ICombatLink>();
 
-		protected readonly List<CombatLink> _links = new List<CombatLink>();
+		protected readonly List<ICombatLink> _links = new List<ICombatLink>();
 
 		protected Vector3 _lastAngularVelocity;
 

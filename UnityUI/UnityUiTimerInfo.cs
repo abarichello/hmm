@@ -1,5 +1,6 @@
 ﻿using System;
 using HeavyMetalMachines.Frontend;
+using HeavyMetalMachines.Localization;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -9,29 +10,33 @@ namespace HeavyMetalMachines.UnityUI
 	{
 		public void Setup(TimeSpan remainingTime, TimeSpan warningTime, string formatedText = "<color=#{0}>{1}</color>")
 		{
-			string arg;
+			string text;
 			if (remainingTime.Days > 0)
 			{
-				arg = string.Format("{0} {1}", remainingTime.Days, Language.Get("GUI_TIME_DAYS", TranslationSheets.GUI));
+				text = string.Format("{0} {1}", remainingTime.Days, Language.Get("GUI_TIME_DAYS", TranslationContext.GUI));
 			}
 			else if (remainingTime.Hours > 0)
 			{
-				arg = string.Format("{0} {1}", remainingTime.Hours, Language.Get("GUI_TIME_HOURS", TranslationSheets.GUI));
+				text = string.Format("{0} {1}", remainingTime.Hours, Language.Get("GUI_TIME_HOURS", TranslationContext.GUI));
 			}
 			else if (remainingTime.Minutes > 0)
 			{
-				arg = string.Format("{0} {1}", remainingTime.Minutes, Language.Get("GUI_TIME_MINUTES", TranslationSheets.GUI));
+				text = string.Format("{0} {1}", remainingTime.Minutes, Language.Get("GUI_TIME_MINUTES", TranslationContext.GUI));
 			}
 			else
 			{
-				arg = Language.Get("GUI_TIME_LESS_THEN_A_MINUTE", TranslationSheets.GUI);
+				text = Language.Get("GUI_TIME_LESS_THEN_A_MINUTE", TranslationContext.GUI);
 			}
 			if (remainingTime > warningTime)
 			{
 				this._clockInfoRawImage.sprite = this._clockTexture;
 				this._borderImage.color = this._normalBorderColor;
 				this._borderImage.SetAlpha(0f);
-				this._timeText.text = string.Format(formatedText, HudUtils.RGBToHex(this._normalTextColor), arg);
+				this._timeText.text = Language.Format(formatedText, new object[]
+				{
+					HudUtils.RGBToHex(this._normalTextColor),
+					text
+				});
 			}
 			else
 			{
@@ -39,7 +44,11 @@ namespace HeavyMetalMachines.UnityUI
 				this._borderImage.sprite = this._warningBorderSprite;
 				this._borderImage.color = this._warningBorderColor;
 				this._borderImage.SetAlpha(1f);
-				this._timeText.text = string.Format(formatedText, HudUtils.RGBToHex(this._warningTextColor), arg);
+				this._timeText.text = Language.Format(formatedText, new object[]
+				{
+					HudUtils.RGBToHex(this._warningTextColor),
+					text
+				});
 			}
 		}
 

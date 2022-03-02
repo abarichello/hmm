@@ -2,11 +2,11 @@
 using Assets.ClientApiObjects;
 using Assets.ClientApiObjects.Components;
 using Assets.Customization;
-using Commons.Swordfish.Battlepass;
 using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.DataTransferObjects.Battlepass;
 using HeavyMetalMachines.Match;
+using Hoplon.Unity.Loading;
 using Pocketverse;
-using SharedUtils.Loading;
 using UnityEngine;
 
 namespace HeavyMetalMachines.VFX
@@ -26,11 +26,11 @@ namespace HeavyMetalMachines.VFX
 				return this;
 			}
 			string prefabNameAt = component.GetPrefabNameAt(this._subSlot);
-			ResourcesContent.Content asset = LoadingManager.ResourceContent.GetAsset(prefabNameAt);
+			Content asset = Loading.Content.GetAsset(prefabNameAt);
 			Component component2 = asset.Asset as Component;
 			Component component3 = GameHubBehaviour.Hub.Resources.PrefabCacheInstantiate(component2, effect.position, effect.rotation);
 			MasterVFX masterVFX = component3.GetComponent<MasterVFX>();
-			masterVFX.transform.parent = GameHubBehaviour.Hub.Drawer.Effects;
+			GameHubBehaviour.Hub.Drawer.AddEffect(masterVFX.transform);
 			masterVFX.baseMasterVFX = component2.GetComponent<MasterVFX>();
 			masterVFX = masterVFX.Activate(this.TargetFX);
 			this._targetFXInfo.Owner = owner;
@@ -46,7 +46,7 @@ namespace HeavyMetalMachines.VFX
 		{
 			if (!CustomizationAssetsScriptableObject.SlotIsVFX(this._itemSlot))
 			{
-				this._itemSlot = PlayerCustomizationSlot.TakeOffVFX;
+				this._itemSlot = 2;
 			}
 		}
 
@@ -56,7 +56,7 @@ namespace HeavyMetalMachines.VFX
 		private CustomizationHubMasterVFX.OwnerTarget _actualOwner;
 
 		[SerializeField]
-		private PlayerCustomizationSlot _itemSlot = PlayerCustomizationSlot.TakeOffVFX;
+		private PlayerCustomizationSlot _itemSlot = 2;
 
 		[SerializeField]
 		private int _subSlot;

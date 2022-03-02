@@ -20,12 +20,12 @@ namespace HeavyMetalMachines.Server
 
 		public void SetupRandomSelectionDelay()
 		{
-			this.Delay = UnityEngine.Random.Range(this._minSelectionDelay, this._maxSelectionDelay);
+			this.Delay = Random.Range(this._minSelectionDelay, this._maxSelectionDelay);
 		}
 
 		public void SetupRandomConfirmationDelay()
 		{
-			this.Delay = UnityEngine.Random.Range(this._minConfirmationDelay, this._maxConfirmationDelay);
+			this.Delay = Random.Range(this._minConfirmationDelay, this._maxConfirmationDelay);
 		}
 
 		public void DecrementeDelay(float value)

@@ -1,9 +1,10 @@
 ﻿using System;
+using HeavyMetalMachines.Infra.Context;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkDestroyOnBombPhaseChange : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkDestroyOnBombPhaseChange : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		public override void PerkInitialized()
 		{
@@ -17,12 +18,12 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
-		private void ServerDestroy(BombScoreBoard.State state)
+		private void ServerDestroy(BombScoreboardState state)
 		{
 			this.Effect.TriggerDefaultDestroy(-1);
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			GameHubBehaviour.Hub.BombManager.ListenToPhaseChange -= this.ServerDestroy;
 		}

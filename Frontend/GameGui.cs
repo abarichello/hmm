@@ -1,13 +1,27 @@
 ﻿using System;
 using System.Collections;
 using System.Diagnostics;
-using HeavyMetalMachines.Battlepass;
-using HeavyMetalMachines.Combat;
+using Assets.Standard_Assets.Scripts.HMM.PlotKids;
+using HeavyMetalMachines.CharacterHelp.Presenting;
 using HeavyMetalMachines.Event;
+using HeavyMetalMachines.Infra.Context;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
 using HeavyMetalMachines.Infra.ScriptableObjects;
+using HeavyMetalMachines.Input.NoInputDetection.Presenting;
+using HeavyMetalMachines.Localization;
+using HeavyMetalMachines.MuteSystem;
+using HeavyMetalMachines.Options.Presenting;
+using HeavyMetalMachines.QuickChat;
+using HeavyMetalMachines.RadialMenu.View;
+using HeavymetalMachines.ReportSystem;
 using HeavyMetalMachines.VFX;
+using Hoplon.Input;
+using Hoplon.Input.UiNavigation;
+using Hoplon.Localization.TranslationTable;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
@@ -15,6 +29,26 @@ namespace HeavyMetalMachines.Frontend
 	{
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public static event Action ListenToGameGuiCreation;
+
+		private UiNavigationGroupHolder UiNavigationGroupHolder
+		{
+			get
+			{
+				return this._uiNavigationGroupHolder;
+			}
+		}
+
+		private void Awake()
+		{
+			this.UiNavigationGroupHolder.AddGroup();
+			this._inputCancelDownDisposable = ObservableExtensions.Subscribe<Unit>(this.UiNavigationGroupHolder.ObserveInputCancelDown(), delegate(Unit _)
+			{
+				if (this._inputGetActiveDevicePoller.GetActiveDevice() != 3)
+				{
+					this._optionsPresenter.Show();
+				}
+			});
+		}
 
 		private void OnEnable()
 		{
@@ -28,6 +62,7 @@ namespace HeavyMetalMachines.Frontend
 			this.HudTabController.OnVisibilityChange += this.OnOtherVisibilityChange;
 			SpectatorModalGUI.OnModalVisibilityChanged += this.OnOtherVisibilityChange;
 			GameHubBehaviour.Hub.GuiScripts.DriverHelper.OnVisibilityChange += this.OnOtherVisibilityChange;
+			GameHubBehaviour.Hub.GuiScripts.AfkControllerGui.OnVisibilityChange += this.OnOtherVisibilityChange;
 			GameHubBehaviour.Hub.Events.Players.ListenToObjectUnspawn += this.HideSomeElementsToRespawn;
 			GameHubBehaviour.Hub.Events.Players.ListenToPreObjectSpawn += this.HideSomeElementsToRespawn;
 			GameHubBehaviour.Hub.Events.Players.ListenToObjectRespawning += this.HideSomeElementsToRespawn;
@@ -39,6 +74,7 @@ namespace HeavyMetalMachines.Frontend
 			this.HudTabController.OnVisibilityChange -= this.OnOtherVisibilityChange;
 			SpectatorModalGUI.OnModalVisibilityChanged -= this.OnOtherVisibilityChange;
 			GameHubBehaviour.Hub.GuiScripts.DriverHelper.OnVisibilityChange -= this.OnOtherVisibilityChange;
+			GameHubBehaviour.Hub.GuiScripts.AfkControllerGui.OnVisibilityChange -= this.OnOtherVisibilityChange;
 			GameHubBehaviour.Hub.Events.Players.ListenToObjectUnspawn -= this.HideSomeElementsToRespawn;
 			GameHubBehaviour.Hub.Events.Players.ListenToPreObjectSpawn -= this.HideSomeElementsToRespawn;
 			GameHubBehaviour.Hub.Events.Players.ListenToObjectRespawning -= this.HideSomeElementsToRespawn;
@@ -48,16 +84,191 @@ namespace HeavyMetalMachines.Frontend
 		private void Start()
 		{
 			GameGui.StaticUIGadgetConstructor = this.UIGadgetConstructor;
+			if (this._configLoader.GetBoolValue(ConfigAccess.HORTA))
+			{
+				GameHubBehaviour.Hub.CursorManager.Push(true, CursorManager.CursorTypes.MainMenuCursor);
+				this._hortaComponent.ShowTimelineWindow();
+			}
+			this.InitializeEmotesMenuPresenter();
+			this.InitializeQuickChatMenu();
+			this.InitializeOverlayShowing();
+			this.InitializeMuteSystemPresenter();
+			this.InitializeCharacterHelp();
+		}
+
+		private void InitializeCharacterHelp()
+		{
+			if (GameHubBehaviour.Hub.Match.LevelIsTutorial() || SpectatorController.IsSpectating)
+			{
+				return;
+			}
+			this._characterHelpPresenter.Set(GameHubBehaviour.Hub.Players.CurrentPlayerData.CharacterItemType.Id);
+		}
+
+		private void InitializeEmotesMenuPresenter()
+		{
+			this._emotesMenuPresenter = this._diContainer.Resolve<IEmotesMenuPresenter>();
+			ObservableExtensions.Subscribe<Unit>(this._emotesMenuPresenter.Initialize());
+		}
+
+		private void InitializeQuickChatMenu()
+		{
+			this._quickChatMenuPresenter = this._diContainer.Resolve<IQuickChatMenuPresenter>();
+			ObservableExtensions.Subscribe<Unit>(this._quickChatMenuPresenter.Initialize());
+		}
+
+		private IObservable<Unit> InitializeReportSystemPresenter()
+		{
+			this._retortSystemPresenter = this._diContainer.Resolve<IReportSystemPresenter>();
+			return this._retortSystemPresenter.Initialize();
+		}
+
+		private void InitializeMuteSystemPresenter()
+		{
+			this._muteSystemPresenter = this._diContainer.Resolve<IMuteSystemPresenter>();
+			ObservableExtensions.Subscribe<Unit>(Observable.ContinueWith<Unit, Unit>(this.InitializeReportSystemPresenter(), this._muteSystemPresenter.Initialize()));
+		}
+
+		private void InitializeOverlayShowing()
+		{
+			DisposableExtensions.AddTo<IDisposable>(ObservableExtensions.Subscribe<Unit>(Observable.Switch<Unit>(Observable.Select<bool, IObservable<Unit>>(this._diContainer.Resolve<ICanShowInGameOverlay>().GetThenObserveCanShow(), new Func<bool, IObservable<Unit>>(this.ListenAndExecuteOverlays)))), this);
+		}
+
+		private IObservable<Unit> ListenAndExecuteOverlays(bool canShowOverlays)
+		{
+			if (!canShowOverlays)
+			{
+				return Observable.ReturnUnit();
+			}
+			return Observable.Repeat<Unit>(Observable.ContinueWith<IObservable<Unit>, Unit>(Observable.First<IObservable<Unit>>(Observable.Merge<IObservable<Unit>>(new IObservable<IObservable<Unit>>[]
+			{
+				this.ListenAndExecuteEmotesPresenter(),
+				this.ListenAndExecuteQuickChatPresenter()
+			})), (IObservable<Unit> operation) => operation));
+		}
+
+		private IObservable<IObservable<Unit>> ListenAndExecuteEmotesPresenter()
+		{
+			return this.ListenAndExecuteRadialMenuPresenter(this._onShowHideEmotesMenu, this._emotesMenuPresenter);
+		}
+
+		private IObservable<IObservable<Unit>> ListenAndExecuteQuickChatPresenter()
+		{
+			return this.ListenAndExecuteRadialMenuPresenter(this._onShowHideQuickChatMenu, this._quickChatMenuPresenter);
+		}
+
+		private IObservable<IObservable<Unit>> ListenAndExecuteRadialMenuPresenter(IObservable<bool> onShowHideMenu, IRadialMenuPresenter radialMenuPresenter)
+		{
+			return Observable.Select<Unit, IObservable<Unit>>(Observable.First<Unit>(this.OnRadialMenuButtonDown(onShowHideMenu)), delegate(Unit _)
+			{
+				radialMenuPresenter.Show();
+				return Observable.AsUnitObservable<Unit>(Observable.DoOnTerminate<Unit>(Observable.DoOnCancel<Unit>(Observable.Do<Unit>(this.WaitForEmoteInput(onShowHideMenu, radialMenuPresenter), delegate(Unit __)
+				{
+					radialMenuPresenter.SendSelectedItem();
+				}), delegate()
+				{
+					radialMenuPresenter.Hide();
+				}), delegate()
+				{
+					radialMenuPresenter.Hide();
+				}));
+			});
+		}
+
+		private IObservable<Unit> WaitForEmoteInput(IObservable<bool> onShowHideMenu, IRadialMenuPresenter radialMenuPresenter)
+		{
+			if (this._inputGetActiveDevicePoller.GetActiveDevice() == 3)
+			{
+				return Observable.TakeUntil<Unit, Unit>(Observable.First<Unit>(this.OnRadialMenuConfirmed(onShowHideMenu, radialMenuPresenter)), this.OnRadialMenuCanceled(radialMenuPresenter));
+			}
+			return Observable.AsUnitObservable<bool>(Observable.First<bool>(onShowHideMenu, (bool shouldShow) => !shouldShow));
+		}
+
+		private IObservable<Unit> OnRadialMenuButtonDown(IObservable<bool> onShowHideMenu)
+		{
+			return Observable.AsUnitObservable<bool>(Observable.ContinueWith<bool, bool>(Observable.First<bool>(onShowHideMenu, (bool shouldShow) => !shouldShow), Observable.Where<bool>(onShowHideMenu, (bool shouldShow) => shouldShow)));
+		}
+
+		private IObservable<Unit> OnRadialMenuConfirmed(IObservable<bool> onShowHideMenu, IRadialMenuPresenter radialMenuPresenter)
+		{
+			return Observable.Merge<Unit>(new IObservable<Unit>[]
+			{
+				Observable.AsUnitObservable<Unit>(this.OnRadialMenuButtonDown(onShowHideMenu)),
+				radialMenuPresenter.OnConfirmed()
+			});
+		}
+
+		private IObservable<Unit> OnRadialMenuCanceled(IRadialMenuPresenter radialMenuPresenter)
+		{
+			return radialMenuPresenter.OnCanceled();
 		}
 
 		private void OnDestroy()
 		{
+			this.DisposeEmoteMenu();
+			this.DisposeQuickChatMenu();
+			this.DisposeMuteSystem();
+			this.DisposeReportSystem();
 			GameGui.ListenToGameGuiCreation = null;
+			if (this._configLoader.GetBoolValue(ConfigAccess.HORTA))
+			{
+				if (GameHubBehaviour.Hub.CursorManager != null)
+				{
+					GameHubBehaviour.Hub.CursorManager.Pop();
+				}
+				this._hortaComponent.DisposeTimelineWindow();
+			}
+			this.UiNavigationGroupHolder.RemoveGroup();
+			if (this._inputCancelDownDisposable != null)
+			{
+				this._inputCancelDownDisposable.Dispose();
+				this._inputCancelDownDisposable = null;
+			}
+		}
+
+		public void ShowEmotesMenu()
+		{
+			this._onShowHideEmotesMenu.OnNext(true);
+		}
+
+		public void HideEmotesMenu()
+		{
+			this._onShowHideEmotesMenu.OnNext(false);
+		}
+
+		public void ShowQuickChatMenu()
+		{
+			this._onShowHideQuickChatMenu.OnNext(true);
+		}
+
+		public void HideQuickChatMenu()
+		{
+			this._onShowHideQuickChatMenu.OnNext(false);
+		}
+
+		private void DisposeEmoteMenu()
+		{
+			ObservableExtensions.Subscribe<Unit>(this._emotesMenuPresenter.Dispose());
+		}
+
+		private void DisposeQuickChatMenu()
+		{
+			ObservableExtensions.Subscribe<Unit>(this._quickChatMenuPresenter.Dispose());
+		}
+
+		private void DisposeMuteSystem()
+		{
+			ObservableExtensions.Subscribe<Unit>(this._muteSystemPresenter.Dispose());
+		}
+
+		private void DisposeReportSystem()
+		{
+			ObservableExtensions.Subscribe<Unit>(this._retortSystemPresenter.Dispose());
 		}
 
 		private void HideSomeElementsToRespawn(PlayerEvent data)
 		{
-			if (data.TargetId != GameHubBehaviour.Hub.Players.CurrentPlayerData.PlayerCarId || GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreBoard.State.BombDelivery || GameHubBehaviour.Hub.Players.CurrentPlayerData.IsBotControlled)
+			if (data.TargetId != GameHubBehaviour.Hub.Players.CurrentPlayerData.PlayerCarId || GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreboardState.BombDelivery || GameHubBehaviour.Hub.Players.CurrentPlayerData.IsBotControlled)
 			{
 				return;
 			}
@@ -67,7 +278,7 @@ namespace HeavyMetalMachines.Frontend
 
 		private void ShowElementsAfterRespawn(PlayerEvent data)
 		{
-			if (data.TargetId != GameHubBehaviour.Hub.Players.CurrentPlayerData.PlayerCarId || GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreBoard.State.BombDelivery || GameHubBehaviour.Hub.Players.CurrentPlayerData.IsBotControlled)
+			if (data.TargetId != GameHubBehaviour.Hub.Players.CurrentPlayerData.PlayerCarId || GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreboardState.BombDelivery || GameHubBehaviour.Hub.Players.CurrentPlayerData.IsBotControlled)
 			{
 				return;
 			}
@@ -86,17 +297,18 @@ namespace HeavyMetalMachines.Frontend
 
 		public void OnFriendInviteSent()
 		{
-			this.OkWindowFeedback("InviteSent", "MainMenuGui", new object[0]);
+			GameGui.Log.Debug("OnFriendInviteSent - show");
+			this.OkWindowFeedback("InviteSent", TranslationContext.MainMenuGui, new object[0]);
 		}
 
-		public void OkWindowFeedback(string key, string tab, params object[] param)
+		public void OkWindowFeedback(string key, ContextTag tab, params object[] param)
 		{
 			Guid confirmWindowGuid = Guid.NewGuid();
 			ConfirmWindowProperties properties = new ConfirmWindowProperties
 			{
 				Guid = confirmWindowGuid,
-				QuestionText = string.Format(Language.Get(key, tab), param),
-				OkButtonText = Language.Get("Ok", "GUI"),
+				QuestionText = Language.GetFormatted(key, tab, param),
+				OkButtonText = Language.Get("Ok", TranslationContext.GUI),
 				OnOk = delegate()
 				{
 					GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.HideConfirmWindow(confirmWindowGuid);
@@ -116,9 +328,14 @@ namespace HeavyMetalMachines.Frontend
 			{
 				return;
 			}
-			bool flag = GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreBoard.State.BombDelivery || GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreBoard.State.PreBomb;
-			bool visibility2 = visibility && flag && !GameHubBehaviour.Hub.GuiScripts.AfkControllerGui.IsWindowVisible() && !this.HudTabController.IsWindowVisible() && !GameHubBehaviour.Hub.GuiScripts.DriverHelper.IsWindowVisible();
-			this.SetHudVisibility(GameGui.HudElement.All, visibility2);
+			bool flag = GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreboardState.BombDelivery || GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreboardState.PreBomb;
+			bool flag2 = visibility && flag && !GameHubBehaviour.Hub.GuiScripts.AfkControllerGui.IsWindowVisible() && !this.HudTabController.IsWindowVisible() && !GameHubBehaviour.Hub.GuiScripts.DriverHelper.IsWindowVisible();
+			this.SetHudVisibility(GameGui.HudElement.All, flag2);
+			GameGui.Log.DebugFormat("Exit ShowGameHud. Visibility: {0} ShouldShow: {1}", new object[]
+			{
+				visibility,
+				flag2
+			});
 		}
 
 		public void SetHudVisibility(GameGui.HudElement hudElements, bool visibility)
@@ -138,12 +355,20 @@ namespace HeavyMetalMachines.Frontend
 			if (hudElements.HasFlag(GameGui.HudElement.TopScore))
 			{
 				this.HudScoreController.SetWindowVisibility(visibility);
-				this.OvertimeTextController.SetVisibility(visibility);
+				if (this.OvertimeTextController != null)
+				{
+					this.OvertimeTextController.SetVisibility(visibility);
+				}
 			}
 			if (hudElements.HasFlag(GameGui.HudElement.Respawn))
 			{
 				this.RespawnController.SetVisibility(visibility);
 			}
+		}
+
+		public void OnEndGame()
+		{
+			ObservableExtensions.Subscribe<Unit>(this._characterHelpPresenter.Hide());
 		}
 
 		public void ShowEndGameBackground(Action callback)
@@ -165,7 +390,8 @@ namespace HeavyMetalMachines.Frontend
 
 		private static readonly BitLogger Log = new BitLogger(typeof(GameGui));
 
-		public Transform HudIconsTransform;
+		[InjectOnClient]
+		private DiContainer _diContainer;
 
 		public HudChatController HudChatController;
 
@@ -178,8 +404,6 @@ namespace HeavyMetalMachines.Frontend
 		public HudMegafeedbacksController HudMegafeedbacksController;
 
 		public BombTipWindow bombTipWindow;
-
-		public BattlepassComponent BattlepassComponent;
 
 		public BattlepassProgressScriptableObject BattlepassProgressScriptableObject;
 
@@ -196,6 +420,8 @@ namespace HeavyMetalMachines.Frontend
 		[SerializeField]
 		public UIGadgetConstructor UIGadgetConstructor;
 
+		public GadgetHud GadgetHud;
+
 		[SerializeField]
 		public HudMinimapUiController HudMinimapUiController;
 
@@ -210,11 +436,48 @@ namespace HeavyMetalMachines.Frontend
 
 		public GameObject Hud;
 
-		[Header("End Game")]
+		public HudKillfeedControllerUnityUI KillFeedController;
+
+		[Header("[End Game]")]
 		[SerializeField]
 		private UI2DSprite _endGameBackground;
 
+		[Header("[Ui Navigation]")]
+		[SerializeField]
+		private UiNavigationGroupHolder _uiNavigationGroupHolder;
+
 		public static UIGadgetConstructor StaticUIGadgetConstructor;
+
+		private IEmotesMenuPresenter _emotesMenuPresenter;
+
+		private IQuickChatMenuPresenter _quickChatMenuPresenter;
+
+		private IMuteSystemPresenter _muteSystemPresenter;
+
+		private INoInputDetectedPresenter _noInputDetectedPresenter;
+
+		private IReportSystemPresenter _retortSystemPresenter;
+
+		private readonly Subject<bool> _onShowHideEmotesMenu = new Subject<bool>();
+
+		private readonly Subject<bool> _onShowHideQuickChatMenu = new Subject<bool>();
+
+		[InjectOnClient]
+		private IConfigLoader _configLoader;
+
+		[InjectOnClient]
+		private HORTAComponent _hortaComponent;
+
+		[InjectOnClient]
+		private IOptionsPresenter _optionsPresenter;
+
+		[InjectOnClient]
+		private IInputGetActiveDevicePoller _inputGetActiveDevicePoller;
+
+		[InjectOnClient]
+		private ICharacterHelpPresenter _characterHelpPresenter;
+
+		private IDisposable _inputCancelDownDisposable;
 
 		[Flags]
 		public enum HudElement

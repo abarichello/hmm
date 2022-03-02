@@ -1,12 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using Assets.ClientApiObjects;
+using Assets.ClientApiObjects.Components;
 using ClientAPI;
 using ClientAPI.Objects;
-using HeavyMetalMachines.Character;
+using HeavyMetalMachines.Arena;
+using HeavyMetalMachines.Localization;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Matches.DataTransferObjects;
 using HeavyMetalMachines.Swordfish.Player;
 using HeavyMetalMachines.Utils;
+using Hoplon.Input.UiNavigation;
+using Hoplon.Serialization;
 using Pocketverse;
 using UnityEngine;
 
@@ -14,10 +20,17 @@ namespace HeavyMetalMachines.Frontend
 {
 	public class MainMenuProfileMatches : MainMenuProfileWindow
 	{
+		private IUiNavigationSubGroupHolder UiNavigationSubGroupHolder
+		{
+			get
+			{
+				return this._uiNavigationSubGroupHolder;
+			}
+		}
+
 		public override void OnLoading()
 		{
 			this._dataLoaded = false;
-			this._repositionDone = false;
 			UIGrid grid = this.Grid;
 			grid.onCustomSort = (Comparison<Transform>)Delegate.Combine(grid.onCustomSort, new Comparison<Transform>(this.SortItemsList));
 		}
@@ -70,7 +83,7 @@ namespace HeavyMetalMachines.Frontend
 				this.CenterLineGameObject.SetActive(false);
 				this.InfoGroupGameObject.SetActive(true);
 				this.LoadingFeedbackGameObject.SetActive(true);
-				this.InfoGroupLabel.text = Language.Get("PROFILE_MATCHES_LOADING", TranslationSheets.Profile);
+				this.InfoGroupLabel.text = Language.Get("PROFILE_MATCHES_LOADING", TranslationContext.Profile);
 				this.CreatePoolFromUpdateData();
 				return;
 			}
@@ -84,9 +97,8 @@ namespace HeavyMetalMachines.Frontend
 			{
 				base.gameObject.SetActive(true);
 				this.ScreenAlphaAnimation.Play("profileMatchesIn");
-				if (this._dataLoaded && !this._repositionDone)
+				if (this._dataLoaded)
 				{
-					this._repositionDone = true;
 					base.StartCoroutine(GUIUtils.HackScrollReposition(this.ScrollView, this.ScrollBar, this.Grid));
 				}
 			}
@@ -95,6 +107,23 @@ namespace HeavyMetalMachines.Frontend
 				this.ScreenAlphaAnimation.Play("profileMatchesOut");
 				this.disableCoroutine = base.StartCoroutine(GUIUtils.WaitAndDisable(this.ScreenAlphaAnimation.clip.length, base.gameObject));
 			}
+			this.SetUiNavigationFocus(visible);
+		}
+
+		private void SetUiNavigationFocus(bool focused)
+		{
+			if (focused)
+			{
+				this.UiNavigationSubGroupHolder.SubGroupFocusGet();
+			}
+			else
+			{
+				this.UiNavigationSubGroupHolder.SubGroupFocusRelease();
+			}
+		}
+
+		public override void OnPreBackToMainMenu()
+		{
 		}
 
 		public override void OnBackToMainMenu()
@@ -108,7 +137,7 @@ namespace HeavyMetalMachines.Frontend
 			{
 				return;
 			}
-			Inventory inventoryByKind = GameHubBehaviour.Hub.User.Inventory.GetInventoryByKind(InventoryBag.InventoryKind.MatchHistory);
+			Inventory inventoryByKind = GameHubBehaviour.Hub.User.Inventory.GetInventoryByKind(5);
 			if (inventoryByKind == null)
 			{
 				MainMenuProfileMatches.Log.ErrorFormat("Could not find Inventory for MatchHistory Kind. PlayerId: {0}", new object[]
@@ -131,6 +160,7 @@ namespace HeavyMetalMachines.Frontend
 				});
 				Array.Resize<Item>(ref items, this.GridPoolQuantity);
 			}
+			MainMenuProfileMatches.Log.Debug("ClientApiInventoryOnGetMatchHistorySuccess - Count = " + items.Length);
 			this._dataLoaded = true;
 			this.Grid.hideInactive = false;
 			List<Transform> childList = this.Grid.GetChildList();
@@ -139,101 +169,115 @@ namespace HeavyMetalMachines.Frontend
 				childList[i].gameObject.SetActive(false);
 			}
 			this.Grid.hideInactive = true;
-			foreach (Item item in items)
+			for (int j = 0; j < items.Length; j++)
 			{
-				MatchHistoryItemBag matchHistoryItemBag = (MatchHistoryItemBag)((JsonSerializeable<T>)item.Bag);
-				if (matchHistoryItemBag.ArenaIndex >= GameHubBehaviour.Hub.ArenaConfig.Arenas.Length)
+				Item item = items[j];
+				MatchHistoryItemBag matchHistoryItemBag = (MatchHistoryItemBag)((JsonSerializeable<!0>)item.Bag);
+				MatchKind gameMode = matchHistoryItemBag.GameMode;
+				if (gameMode != 2 && gameMode != 6)
 				{
-					MainMenuProfileMatches.Log.WarnFormat("Arena index out of range: {0}", new object[]
+					IGameArenaInfo arenaByIndex = GameHubBehaviour.Hub.ArenaConfig.GetArenaByIndex(matchHistoryItemBag.ArenaIndex);
+					IItemType itemType;
+					if (arenaByIndex == null)
 					{
-						matchHistoryItemBag.ArenaIndex
-					});
-				}
-				else
-				{
-					GameArenaInfo gameArenaInfo = GameHubBehaviour.Hub.ArenaConfig.Arenas[matchHistoryItemBag.ArenaIndex];
-					if (!gameArenaInfo.IsTutorial)
+						MainMenuProfileMatches.Log.WarnFormat("Arena index out of range: {0}", new object[]
+						{
+							matchHistoryItemBag.ArenaIndex
+						});
+					}
+					else if (!GameHubBehaviour.Hub.InventoryColletion.AllCharactersByCharacterId.TryGetValue(matchHistoryItemBag.CharacterId, out itemType))
 					{
-						HeavyMetalMachines.Character.CharacterInfo characterInfo;
-						if (!GameHubBehaviour.Hub.InventoryColletion.AllCharactersByInfoId.TryGetValue(matchHistoryItemBag.CharacterId, out characterInfo))
+						Debug.Assert(false, string.Format("Character from MatchHistoryItemBag not found! Id:[{0}]", matchHistoryItemBag.CharacterId), Debug.TargetTeam.All);
+					}
+					else
+					{
+						MainMenuProfileMatches.Log.DebugFormat("Match record {0}: {1}", new object[]
 						{
-							HeavyMetalMachines.Utils.Debug.Assert(false, string.Format("Character from MatchHistoryItemBag not found! Id:[{0}]", matchHistoryItemBag.CharacterId), HeavyMetalMachines.Utils.Debug.TargetTeam.All);
-						}
-						else
+							j,
+							matchHistoryItemBag
+						});
+						for (int k = 0; k < childList.Count; k++)
 						{
-							for (int k = 0; k < childList.Count; k++)
+							MainMenuProfileMatchesSlot component = childList[k].GetComponent<MainMenuProfileMatchesSlot>();
+							MatchData.MatchResult matchResult = (MatchData.MatchResult)matchHistoryItemBag.MatchResult;
+							if (!component.gameObject.activeSelf && component.GetResultType() == matchResult)
 							{
-								MainMenuProfileMatchesSlot component = childList[k].GetComponent<MainMenuProfileMatchesSlot>();
-								MatchData.MatchResult matchResult = (MatchData.MatchResult)matchHistoryItemBag.MatchResult;
-								if (!component.gameObject.activeSelf && component.GetResultType() == matchResult)
+								string carSkinSpriteName = HudUtils.GetCarSkinSpriteName(GameHubBehaviour.Hub.InventoryColletion, itemType.Id, new Guid(matchHistoryItemBag.SkinId));
+								CultureInfo systemCulture = CultureUtils.GetSystemCulture();
+								DateTime matchDateTime = DateTime.Parse(string.Format("{0} GMT", matchHistoryItemBag.Date));
+								RewardsInfo.Medals bestPerformanceMedal = (RewardsInfo.Medals)matchHistoryItemBag.BestPerformanceMedal;
+								string key = "PROFILE_MATCHES_RESULT_VICTORY";
+								Color resultColor = this.ResultLabelVictoryColor;
+								if (matchHistoryItemBag.Abandoned)
 								{
-									string carSkinSpriteName = HudUtils.GetCarSkinSpriteName(GameHubBehaviour.Hub, characterInfo, new Guid(matchHistoryItemBag.SkinId));
-									CultureInfo systemCulture = CultureUtils.GetSystemCulture();
-									DateTime matchDateTime = DateTime.Parse(string.Format("{0} GMT", matchHistoryItemBag.Date));
-									RewardsInfo.Medals bestPerformanceMedal = (RewardsInfo.Medals)matchHistoryItemBag.BestPerformanceMedal;
-									string key = "PROFILE_MATCHES_RESULT_VICTORY";
-									Color resultColor = this.ResultLabelVictoryColor;
-									if (matchHistoryItemBag.Abandoned)
-									{
-										key = "PROFILE_MATCHES_RESULT_ABANDON";
-										resultColor = this.ResultLabelAbandonColor;
-									}
-									else if (matchResult == MatchData.MatchResult.Defeat)
-									{
-										key = "PROFILE_MATCHES_RESULT_DEFEAT";
-										resultColor = this.ResultLabelDefeatColor;
-									}
-									string key2;
-									string gameModeIconSpriteName;
-									switch ((byte)matchHistoryItemBag.GameMode)
-									{
-									case 0:
-										key2 = "PROFILE_PVP";
-										gameModeIconSpriteName = "pvp_icon 1";
-										break;
-									case 1:
-										key2 = "PROFILE_PVE";
-										gameModeIconSpriteName = "pve_icon";
-										break;
-									case 2:
-									case 3:
-										goto IL_297;
-									case 4:
-										key2 = "PROFILE_CUSTOM";
-										gameModeIconSpriteName = "custom_icon";
-										break;
-									default:
-										goto IL_297;
-									}
-									IL_2CE:
-									MainMenuProfileMatchesSlot.MatchSlotInfo info = new MainMenuProfileMatchesSlot.MatchSlotInfo
-									{
-										CharacterIconSpriteName = carSkinSpriteName,
-										CharacterNameText = characterInfo.LocalizedName,
-										HasPerformance = (bestPerformanceMedal != RewardsInfo.Medals.None),
-										PerformanceIconSpriteName = this.GetPerformanceInfo(bestPerformanceMedal),
-										GameModeIconSpriteName = gameModeIconSpriteName,
-										GameModeName = Language.Get(key2, TranslationSheets.Profile),
-										DateText = matchDateTime.ToString(systemCulture.DateTimeFormat.ShortDatePattern),
-										TimeText = matchDateTime.ToString("HH:mm"),
-										MatchDateTime = matchDateTime,
-										ResultText = Language.Get(key, TranslationSheets.Profile),
-										ResultColor = resultColor,
-										ArenaName = Language.Get(gameArenaInfo.DraftName, TranslationSheets.MainMenuGui)
-									};
-									component.SetInfo(info);
-									component.gameObject.SetActive(true);
-									this.CenterLineGameObject.SetActive(true);
+									key = "PROFILE_MATCHES_RESULT_ABANDON";
+									resultColor = this.ResultLabelAbandonColor;
+								}
+								else if (matchResult == MatchData.MatchResult.Defeat)
+								{
+									key = "PROFILE_MATCHES_RESULT_DEFEAT";
+									resultColor = this.ResultLabelDefeatColor;
+								}
+								string key2;
+								string gameModeIconSpriteName;
+								switch (matchHistoryItemBag.GameMode)
+								{
+								case 0:
+								case 7:
+									key2 = "PROFILE_PVP";
+									gameModeIconSpriteName = "pvp_icon 1";
 									break;
-									IL_297:
+								case 1:
 									key2 = "PROFILE_PVE";
 									gameModeIconSpriteName = "pve_icon";
-									MainMenuProfileMatches.Log.WarnFormat("Unknown bag.GameMode: {0}", new object[]
-									{
-										matchHistoryItemBag.GameMode
-									});
-									goto IL_2CE;
+									break;
+								case 2:
+								case 6:
+									goto IL_307;
+								case 3:
+									key2 = "PROFILE_RANKED";
+									gameModeIconSpriteName = "pve_icon";
+									break;
+								case 4:
+									key2 = "PROFILE_CUSTOM";
+									gameModeIconSpriteName = "custom_icon";
+									break;
+								case 5:
+									key2 = "PROFILE_TOURNAMENT";
+									gameModeIconSpriteName = "pve_icon";
+									break;
+								default:
+									goto IL_307;
 								}
+								IL_33E:
+								CharacterItemTypeComponent component2 = itemType.GetComponent<CharacterItemTypeComponent>();
+								MainMenuProfileMatchesSlot.MatchSlotInfo info = new MainMenuProfileMatchesSlot.MatchSlotInfo
+								{
+									CharacterIconSpriteName = carSkinSpriteName,
+									CharacterNameText = component2.GetCharacterLocalizedName(),
+									HasPerformance = (bestPerformanceMedal != RewardsInfo.Medals.None),
+									PerformanceIconSpriteName = this.GetPerformanceInfo(bestPerformanceMedal),
+									GameModeIconSpriteName = gameModeIconSpriteName,
+									GameModeName = Language.Get(key2, TranslationContext.Profile),
+									DateText = matchDateTime.ToString(systemCulture.DateTimeFormat.ShortDatePattern),
+									TimeText = matchDateTime.ToString("HH:mm"),
+									MatchDateTime = matchDateTime,
+									ResultText = Language.Get(key, TranslationContext.Profile),
+									ResultColor = resultColor,
+									ArenaName = Language.Get(arenaByIndex.DraftName, TranslationContext.MainMenuGui)
+								};
+								component.SetInfo(info);
+								component.gameObject.SetActive(true);
+								this.CenterLineGameObject.SetActive(true);
+								break;
+								IL_307:
+								key2 = "PROFILE_PVE";
+								gameModeIconSpriteName = "pve_icon";
+								MainMenuProfileMatches.Log.WarnFormat("Unknown bag.GameMode: {0}", new object[]
+								{
+									matchHistoryItemBag.GameMode
+								});
+								goto IL_33E;
 							}
 						}
 					}
@@ -244,12 +288,11 @@ namespace HeavyMetalMachines.Frontend
 			this.LoadingFeedbackGameObject.SetActive(false);
 			if (!activeSelf)
 			{
-				this.InfoGroupLabel.text = Language.Get("PROFILE_MATCHES_FIRST_INFO", TranslationSheets.Profile);
+				this.InfoGroupLabel.text = Language.Get("PROFILE_MATCHES_FIRST_INFO", TranslationContext.Profile);
 			}
 			this.Grid.Reposition();
 			if (base.gameObject.activeSelf)
 			{
-				this._repositionDone = true;
 				base.StartCoroutine(GUIUtils.HackScrollReposition(this.ScrollView, this.ScrollBar, this.Grid));
 			}
 		}
@@ -264,7 +307,7 @@ namespace HeavyMetalMachines.Frontend
 					return performanceInfo.SpriteName;
 				}
 			}
-			HeavyMetalMachines.Utils.Debug.Assert(false, "PROFILE MATCHES - performance info not found. (GetPerformanceInfo) - Medal: " + medal, HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+			Debug.Assert(false, "PROFILE MATCHES - performance info not found. (GetPerformanceInfo) - Medal: " + medal, Debug.TargetTeam.All);
 			return null;
 		}
 
@@ -315,7 +358,8 @@ namespace HeavyMetalMachines.Frontend
 
 		private bool _dataLoaded;
 
-		private bool _repositionDone;
+		[SerializeField]
+		private UiNavigationSubGroupHolder _uiNavigationSubGroupHolder;
 
 		private Coroutine disableCoroutine;
 

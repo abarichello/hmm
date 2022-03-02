@@ -39,10 +39,10 @@ namespace HeavyMetalMachines.Combat
 			{
 				this._rigidbody.angularVelocity = Vector3.zero;
 			}
-			Vector3 forward = this._lookAtTarget.position - this._transform.position;
-			forward.y = 0f;
-			Quaternion to = Quaternion.LookRotation(forward);
-			Quaternion rotation = Quaternion.RotateTowards(this._transform.rotation, to, this._maxDegreesPerSecond * Time.fixedDeltaTime);
+			Vector3 vector = this._lookAtTarget.position - this._transform.position;
+			vector.y = 0f;
+			Quaternion quaternion = Quaternion.LookRotation(vector);
+			Quaternion rotation = Quaternion.RotateTowards(this._transform.rotation, quaternion, this._maxDegreesPerSecond * Time.fixedDeltaTime);
 			this._transform.rotation = rotation;
 		}
 

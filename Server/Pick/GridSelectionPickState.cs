@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using HeavyMetalMachines.Character;
+using HeavyMetalMachines.Characters;
 using HeavyMetalMachines.Match;
 using HeavyMetalMachines.Server.Pick.Apis;
 using Pocketverse;
@@ -37,17 +37,20 @@ namespace HeavyMetalMachines.Server.Pick
 
 		public void AutoSelectGridAll()
 		{
-			List<PlayerData> list = new List<PlayerData>(this._matchPlayers.BlueTeamPlayersAndBots);
+			this.DispatchGridSelectionAndConfirm(this._matchPlayers.BlueTeamPlayersAndBots);
+			this.DispatchGridSelectionAndConfirm(this._matchPlayers.RedTeamPlayersAndBots);
+		}
+
+		private void DispatchGridSelectionAndConfirm(List<PlayerData> unsortedPlayersAndBotsList)
+		{
+			List<PlayerData> list = new List<PlayerData>(unsortedPlayersAndBotsList);
 			list.Sort((PlayerData a, PlayerData b) => a.autoDesiredGrid.CompareTo(b.autoDesiredGrid));
-			List<PlayerData> list2 = new List<PlayerData>(this._matchPlayers.RedTeamPlayersAndBots);
-			list2.Sort((PlayerData a, PlayerData b) => a.autoDesiredGrid.CompareTo(b.autoDesiredGrid));
-			for (int i = 0; i < this._matchPlayers.PlayersAndBots.Count; i++)
+			for (int i = 0; i < list.Count; i++)
 			{
-				PlayerData playerData = this._matchPlayers.PlayersAndBots[i];
-				int gridIndex = (playerData.Team != TeamKind.Blue) ? list2.IndexOf(playerData) : list.IndexOf(playerData);
-				playerData.autoDesiredGrid = (playerData.SelectedGridIndex = (playerData.GridIndex = gridIndex));
+				PlayerData playerData = list[i];
+				playerData.autoDesiredGrid = (playerData.SelectedGridIndex = (playerData.GridIndex = i));
 				this._pickService.DispatchConfirmGridSelection(playerData.PlayerAddress, playerData.SelectedGridIndex, this._addressGroups.GetGroup(0));
-				this._pickService.DispatchConfirmGridPick(playerData.PlayerAddress, playerData.SelectedGridIndex, playerData.Customizations.SelectedSkin, this._addressGroups.GetGroup(0));
+				this._pickService.DispatchConfirmGridPick(playerData.PlayerAddress, playerData.SelectedGridIndex, this._addressGroups.GetGroup(0));
 			}
 		}
 

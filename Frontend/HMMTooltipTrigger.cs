@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.Localization;
 using Pocketverse;
 using UnityEngine;
 
@@ -41,7 +42,7 @@ namespace HeavyMetalMachines.Frontend
 			}
 			HMMTooltipTrigger._isDisplayingTooltip = true;
 			Vector3 targetPosition = (!(this.TargetPosition != null)) ? Vector3.zero : this.TargetPosition.position;
-			UITooltip.Show((!this.TranslateText || !GameHubBehaviour.Hub || !GameHubBehaviour.Hub.Net) ? this.TooltipText : Language.Get(this.TooltipText, this.Sheet.ToString()), this.FollowMouse, this.ScaleTextInOverflow, targetPosition);
+			UITooltip.Show((!this.TranslateText || !GameHubBehaviour.Hub || !GameHubBehaviour.Hub.Net) ? this.TooltipText : Language.Get(this.TooltipText, this.Sheet), this.FollowMouse, this.ScaleTextInOverflow, targetPosition);
 		}
 
 		private void HideTooltip()
@@ -79,7 +80,10 @@ namespace HeavyMetalMachines.Frontend
 
 		private void OnDisable()
 		{
-			this.HideTooltip();
+			if (this._mustShowTooltip)
+			{
+				this.HideTooltip();
+			}
 		}
 
 		public string TooltipText;

@@ -5,8 +5,8 @@ namespace HeavyMetalMachines.Audio.Music
 	[Serializable]
 	public class MusicAndAmbience
 	{
-		public FMODAsset MusicAsset;
+		public AudioEventAsset MusicAsset;
 
-		public FMODAsset AmbienceAsset;
+		public AudioEventAsset AmbienceAsset;
 	}
 }

@@ -4,6 +4,7 @@ using System.Diagnostics;
 using HeavyMetalMachines.Utils;
 using Pocketverse;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
@@ -15,19 +16,25 @@ namespace HeavyMetalMachines.Frontend
 		public virtual void Awake()
 		{
 			HudFeedObject<T> component = this.HudFeedObjectReference.GetComponent<HudFeedObject<T>>();
-			ObjectPoolUtils.CreateObjectPool<HudFeedObject<T>>(component, out this._hudFeedObjects, this.FeedMaxSize);
+			ObjectPoolUtils.CreateInjectedObjectPool<HudFeedObject<T>>(component, out this._hudFeedObjects, this.FeedMaxSize, this._container, 1, null);
 			for (int i = 0; i < this._hudFeedObjects.Length; i++)
 			{
-				Transform transform = this._hudFeedObjects[i].transform;
-				Vector3 localPosition = transform.localPosition;
-				localPosition.y = (float)(this.VerticalOffset * i);
-				transform.localPosition = localPosition;
+				this._hudFeedObjects[i].gameObject.SetActive(true);
+				RectTransform rectTransform = this._hudFeedObjects[i].transform as RectTransform;
+				Vector2 anchoredPosition = rectTransform.anchoredPosition;
+				anchoredPosition.x = this.HudFeedObjectReferenceOffset.x;
+				anchoredPosition.y = this.HudFeedObjectReferenceOffset.y + (float)(this.VerticalOffset * i);
+				rectTransform.anchoredPosition = anchoredPosition;
 			}
 			this._feedStack = new Stack<T>(this.FeedMaxSize);
 		}
 
-		public void Update()
+		public virtual void Update()
 		{
+			if (Time.frameCount % 2 == 0)
+			{
+				return;
+			}
 			if (this._feedStack.Count > 0 && !this._hudFeedObjects[0].InAnimation.isPlaying)
 			{
 				this.InsertAndAnimateKillfeedObjects(this._feedStack.Pop());
@@ -36,10 +43,7 @@ namespace HeavyMetalMachines.Frontend
 			{
 				for (int i = 0; i < this._hudFeedObjects.Length; i++)
 				{
-					if (this._hudFeedObjects[i].gameObject.activeInHierarchy)
-					{
-						this._hudFeedObjects[i].FeedUpdate(this.HideFeedObjectTimeSec);
-					}
+					this._hudFeedObjects[i].FeedUpdate(this.HideFeedObjectTimeSec);
 				}
 			}
 		}
@@ -73,6 +77,9 @@ namespace HeavyMetalMachines.Frontend
 
 		public static readonly BitLogger Log = new BitLogger(typeof(HudFeedController<T>));
 
+		[Inject]
+		private DiContainer _container;
+
 		public int VerticalOffset = -50;
 
 		public int FeedMaxSize;
@@ -83,6 +90,8 @@ namespace HeavyMetalMachines.Frontend
 		public float HideFeedObjectTimeSec = 5f;
 
 		public GameObject HudFeedObjectReference;
+
+		public Vector2 HudFeedObjectReferenceOffset;
 
 		protected HudFeedObject<T>[] _hudFeedObjects;
 

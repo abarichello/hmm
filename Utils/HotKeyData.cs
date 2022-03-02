@@ -1,9 +1,11 @@
 ﻿using System;
+using HeavyMetalMachines.Spectator;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Utils
 {
-	public class HotKeyData
+	[Serializable]
+	public class HotKeyData : IHotKey
 	{
 		public bool IsPressed()
 		{

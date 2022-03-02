@@ -2,7 +2,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using Pocketverse;
-using UnityEngine;
 
 namespace HeavyMetalMachines.Utils
 {
@@ -37,7 +36,6 @@ namespace HeavyMetalMachines.Utils
 			int num = this._disabledObjectsStack.Pop();
 			if (num < 0 || num >= this._allObjectsList.Count)
 			{
-				Debug.LogError(string.Format("Inconsistency inside UnorderedList idx:{0}, objCount:{1}, listInitialSize:{2}", num, this._allObjectsList.Count, this._listInitialSize));
 				return;
 			}
 			this._allObjectsList[num] = targetObject;

@@ -11,7 +11,7 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 
 		public void UpdateInterfaceOnClient(int pickupsCounts)
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1015, 4, base.IsReliable, new object[]
+			base.Dispatch(base.DispatchDestination(), base.OID, 1016, 4, base.IsReliable, new object[]
 			{
 				pickupsCounts
 			});

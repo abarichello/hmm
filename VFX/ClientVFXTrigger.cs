@@ -45,7 +45,7 @@ namespace HeavyMetalMachines.VFX
 				return;
 			}
 			MasterVFX masterVFX = (MasterVFX)GameHubBehaviour.Hub.Resources.PrefabCacheInstantiate(this.vfx, base.transform.position, base.transform.rotation);
-			masterVFX.transform.parent = GameHubBehaviour.Hub.Drawer.Effects;
+			GameHubBehaviour.Hub.Drawer.AddEffect(masterVFX.transform);
 			masterVFX.baseMasterVFX = this.vfx;
 			masterVFX.Activate(this.Identifiable, this.Identifiable, base.transform);
 		}

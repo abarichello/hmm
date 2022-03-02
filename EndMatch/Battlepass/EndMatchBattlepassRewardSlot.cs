@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.DataTransferObjects.Progression;
 using HeavyMetalMachines.Utils;
 using HeavyMetalMachines.VFX;
 using UnityEngine;
@@ -33,13 +34,20 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 			slots.FameText.gameObject.SetActive(false);
 			switch (slots.rewardKind)
 			{
-			case ProgressionInfo.RewardKind.None:
+			case 0:
 				slots.Border.color = this._borderInfo.UnlockedColorWithoutItem;
 				slots.LockImage.gameObject.SetActive(false);
 				break;
-			case ProgressionInfo.RewardKind.SoftCurrency:
+			case 1:
 				slots.FameText.gameObject.SetActive(true);
 				slots.FameText.color = ((slotType == EndMatchBattlepassLevelUpWindow.SlotLevelType.Locked) ? this._alphaImageConfig.FamaColorDisabled : this._alphaImageConfig.FamaColorEnabled);
+				slots.FameText.effectColor = this._alphaImageConfig.FamaOutlineColor;
+				slots.FameText.text = data.FameAmount.ToString();
+				break;
+			case 4:
+				slots.FameText.gameObject.SetActive(true);
+				slots.FameText.color = ((slotType == EndMatchBattlepassLevelUpWindow.SlotLevelType.Locked) ? this._alphaImageConfig.HardCoinColorDisabled : this._alphaImageConfig.HardCointColorEnabled);
+				slots.FameText.effectColor = this._alphaImageConfig.HardCoinOutlineColor;
 				slots.FameText.text = data.FameAmount.ToString();
 				break;
 			}
@@ -61,8 +69,8 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 				}
 				return;
 			}
-			this._freeRewards.LockImage.alpha = 1f;
-			this._premiumRewards.LockImage.alpha = 1f;
+			this._freeRewards.LockImage.Alpha = 1f;
+			this._premiumRewards.LockImage.Alpha = 1f;
 			this._freeRewards.LockImage.gameObject.SetActive(true);
 			this._premiumRewards.LockImage.gameObject.SetActive(true);
 			this._freeRewards.LockImage.widget.mainTexture = this._rewardLocksConfig.FreeTexture;
@@ -114,7 +122,7 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 
 		public void PlayUnlockRewardAnimation(bool isPremium)
 		{
-			if (this._freeRewards.rewardKind != ProgressionInfo.RewardKind.None)
+			if (this._freeRewards.rewardKind != null)
 			{
 				this._freeRewards.UnlockReward.Play("LevelUp_UnlockReward");
 			}
@@ -138,7 +146,7 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 		{
 			this._freeRewards.IconImage.alpha = this._alphaImageConfig.EnabledIconImageAlpha;
 			this._freeRewards.Border.mainTexture = this._borderInfo.UnlockedFreeSprite;
-			if (this._freeRewards.rewardKind == ProgressionInfo.RewardKind.None)
+			if (this._freeRewards.rewardKind == null)
 			{
 				this._freeRewards.Border.color = this._borderInfo.UnlockedColorWithoutItem;
 			}
@@ -152,7 +160,7 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 			}
 			this._premiumRewards.IconImage.alpha = this._alphaImageConfig.EnabledIconImageAlpha;
 			this._premiumRewards.Border.mainTexture = this._borderInfo.UnlockedPremiumSprite;
-			if (this._premiumRewards.rewardKind == ProgressionInfo.RewardKind.None)
+			if (this._premiumRewards.rewardKind == null)
 			{
 				this._premiumRewards.Border.color = this._borderInfo.UnlockedColorWithoutItem;
 			}
@@ -164,8 +172,40 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 
 		public void EnableColorFameText()
 		{
-			this._freeRewards.FameText.color = this._alphaImageConfig.FamaColorEnabled;
-			this._premiumRewards.FameText.color = this._alphaImageConfig.FamaColorEnabled;
+			switch (this._freeRewards.rewardKind)
+			{
+			case 0:
+			case 2:
+			case 3:
+				break;
+			case 1:
+				this._freeRewards.FameText.color = this._alphaImageConfig.FamaColorEnabled;
+				this._freeRewards.FameText.effectColor = this._alphaImageConfig.FamaOutlineColor;
+				break;
+			case 4:
+				this._freeRewards.FameText.color = this._alphaImageConfig.HardCointColorEnabled;
+				this._freeRewards.FameText.effectColor = this._alphaImageConfig.HardCoinOutlineColor;
+				break;
+			default:
+				throw new ArgumentOutOfRangeException();
+			}
+			switch (this._premiumRewards.rewardKind)
+			{
+			case 0:
+			case 2:
+			case 3:
+				break;
+			case 1:
+				this._premiumRewards.FameText.color = this._alphaImageConfig.FamaColorEnabled;
+				this._premiumRewards.FameText.effectColor = this._alphaImageConfig.FamaOutlineColor;
+				break;
+			case 4:
+				this._premiumRewards.FameText.color = this._alphaImageConfig.HardCointColorEnabled;
+				this._premiumRewards.FameText.effectColor = this._alphaImageConfig.HardCoinOutlineColor;
+				break;
+			default:
+				throw new ArgumentOutOfRangeException();
+			}
 		}
 
 		public int GetSlotLevel()

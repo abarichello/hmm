@@ -2,9 +2,11 @@
 using System.Collections.Generic;
 using Assets.Standard_Assets.Scripts.HMM.Bot;
 using HeavyMetalMachines.AI;
-using HeavyMetalMachines.Character;
+using HeavyMetalMachines.Characters;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Combat.Gadget;
+using HeavyMetalMachines.Combat.GadgetScript;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.Match;
 using Pocketverse;
 using UnityEngine;
@@ -41,6 +43,10 @@ namespace HeavyMetalMachines.BotAI
 			this._aggros = new BotAIGoalManager.TeamSharedData();
 		}
 
+		public CombatObject Combat { get; set; }
+
+		public CarComponentHub CarHub { get; set; }
+
 		private BombObjectives BombObjectives
 		{
 			get
@@ -48,7 +54,7 @@ namespace HeavyMetalMachines.BotAI
 				BombObjectives result;
 				if ((result = this._bombObjectives) == null)
 				{
-					result = (this._bombObjectives = UnityEngine.Object.FindObjectOfType<BombObjectives>());
+					result = (this._bombObjectives = Object.FindObjectOfType<BombObjectives>());
 				}
 				return result;
 			}
@@ -64,6 +70,54 @@ namespace HeavyMetalMachines.BotAI
 					result = (this._bombObjectiveDeliver = this.BombObjectives.GetObjective("Delivery", this.Combat.Team));
 				}
 				return result;
+			}
+		}
+
+		public BotAIGoalManager.Action CurrentAction
+		{
+			get
+			{
+				return this._currentAction;
+			}
+			set
+			{
+				this._currentAction = value;
+			}
+		}
+
+		public BotAIGoalManager.SubState CurrentSubState
+		{
+			get
+			{
+				return this._currentSubState;
+			}
+			set
+			{
+				this._currentSubState = value;
+			}
+		}
+
+		public BotAIGoalManager.State CurrentState
+		{
+			get
+			{
+				return this._currentState;
+			}
+			set
+			{
+				this._currentState = value;
+			}
+		}
+
+		public BotAIGoalManager.TeamState CurrentTeamState
+		{
+			get
+			{
+				return this._currentTeamState;
+			}
+			set
+			{
+				this._currentTeamState = value;
 			}
 		}
 
@@ -91,6 +145,7 @@ namespace HeavyMetalMachines.BotAI
 			this.initialized = true;
 			this.MyData = GameHubBehaviour.Hub.Players.PlayersAndBots.Find((PlayerData b) => b.PlayerCarId == this.Combat.Id.ObjId);
 			this.Enemyteam = ((this.MyData.Team != TeamKind.Red) ? TeamKind.Red : TeamKind.Blue);
+			this._myRole = this.MyData.GetCharacterRole();
 			for (int i = 0; i < GameHubBehaviour.Hub.Players.PlayersAndBots.Count; i++)
 			{
 				PlayerData playerData = GameHubBehaviour.Hub.Players.PlayersAndBots[i];
@@ -113,36 +168,11 @@ namespace HeavyMetalMachines.BotAI
 			{
 				this._enemyCarsList[(j + this.Combat.Player.TeamSlot) % list.Count] = list[j];
 			}
-			this._gadgets.Add(new BotAIGoalManager.GadgetAIState
-			{
-				Gadget = this.Combat.CustomGadget2,
-				UseInfo = this.Goals.Gadget2,
-				GadgetState = this.Combat.GadgetStates.G2StateObject
-			});
-			this._gadgets.Add(new BotAIGoalManager.GadgetAIState
-			{
-				Gadget = this.Combat.CustomGadget1,
-				UseInfo = this.Goals.Gadget1,
-				GadgetState = this.Combat.GadgetStates.G1StateObject
-			});
-			this._gadgets.Add(new BotAIGoalManager.GadgetAIState
-			{
-				Gadget = this.Combat.CustomGadget0,
-				UseInfo = this.Goals.Gadget0,
-				GadgetState = this.Combat.GadgetStates.G0StateObject
-			});
-			this._gadgets.Add(new BotAIGoalManager.GadgetAIState
-			{
-				Gadget = this.Combat.BoostGadget,
-				UseInfo = this.Goals.BoostGadget,
-				GadgetState = this.Combat.GadgetStates.GBoostStateObject
-			});
-			this._bombGadget = new BotAIGoalManager.GadgetAIState
-			{
-				Gadget = this.Combat.BombGadget,
-				UseInfo = this.Goals.BombGadget,
-				GadgetState = this.Combat.GadgetStates.BombStateObject
-			};
+			this._gadgets.Add(this.CreateGadgetAIState(this.Combat.CustomGadget2, this.Goals.Gadget2, this.Combat.GadgetStates.G2StateObject));
+			this._gadgets.Add(this.CreateGadgetAIState(this.Combat.CustomGadget1, this.Goals.Gadget1, this.Combat.GadgetStates.G1StateObject));
+			this._gadgets.Add(this.CreateGadgetAIState(this.Combat.CustomGadget0, this.Goals.Gadget0, this.Combat.GadgetStates.G0StateObject));
+			this._gadgets.Add(this.CreateGadgetAIState(this.Combat.BoostGadget, this.Goals.BoostGadget, this.Combat.GadgetStates.GBoostStateObject));
+			this._bombGadget = this.CreateGadgetAIState(this.Combat.BombGadget, this.Goals.BombGadget, this.Combat.GadgetStates.BombStateObject);
 			this.UpdateBotOnlyTeamGoalCap();
 			GameHubBehaviour.Hub.BombManager.ServerOnBombCarrierIdentifiableChanged += this.OnBombCarrierChange;
 			if (BotAIAmbushSystem.instance)
@@ -152,7 +182,18 @@ namespace HeavyMetalMachines.BotAI
 			this.Combat.ListenToPosDamageTaken += this.OnDamage;
 		}
 
-		public BotAIGoalManager.GadgetAIState GetGadgetState(GadgetSlot slot)
+		private GadgetAIState CreateGadgetAIState(GadgetBehaviour gadget, BotAIGoal.GadgetUseInfo gadgetUseInfo, GadgetData.GadgetStateObject gadgetState)
+		{
+			IsGadgetDisarmedByCombatAttributes isGadgetDisarmed = new IsGadgetDisarmedByCombatAttributes(gadget.Slot, gadget.Nature);
+			return new GadgetAIState(isGadgetDisarmed)
+			{
+				Gadget = gadget,
+				UseInfo = gadgetUseInfo,
+				GadgetState = gadgetState
+			};
+		}
+
+		public GadgetAIState GetGadgetState(GadgetSlot slot)
 		{
 			if (slot == GadgetSlot.BombGadget)
 			{
@@ -170,13 +211,13 @@ namespace HeavyMetalMachines.BotAI
 
 		public void UpdateBotOnlyTeamGoalCap()
 		{
-			this._carHub.botAIGoalManager.Goals.IsOnBotOnlyTeam = true;
+			this.Goals.IsOnBotOnlyTeam = true;
 			for (int i = 0; i < GameHubBehaviour.Hub.Players.Players.Count; i++)
 			{
 				PlayerData playerData = GameHubBehaviour.Hub.Players.Players[i];
 				if (playerData.Team == this.Combat.Team && !playerData.IsBotControlled)
 				{
-					this._carHub.botAIGoalManager.Goals.IsOnBotOnlyTeam = false;
+					this.Goals.IsOnBotOnlyTeam = false;
 					break;
 				}
 			}
@@ -190,9 +231,9 @@ namespace HeavyMetalMachines.BotAI
 				if (!playerData.IsNarrator && playerData.Team == this.Combat.Team && playerData.CharacterInstance.ObjId != this.Combat.Player.CharacterInstance.ObjId)
 				{
 					CarComponentHub componentHub = playerData.CharacterInstance.GetComponentHub<CarComponentHub>();
-					if (componentHub.botAIGoalManager.initialized)
+					if (componentHub.AIAgent.GoalManager.initialized)
 					{
-						componentHub.botAIGoalManager.Goals.IsOnBotOnlyTeam = this._carHub.botAIGoalManager.Goals.IsOnBotOnlyTeam;
+						componentHub.AIAgent.GoalManager.Goals.IsOnBotOnlyTeam = this.Goals.IsOnBotOnlyTeam;
 					}
 				}
 			}
@@ -204,7 +245,7 @@ namespace HeavyMetalMachines.BotAI
 
 		private void OnDestroy()
 		{
-			UnityEngine.Object.Destroy(this.Goals);
+			Object.Destroy(this.Goals);
 			GameHubBehaviour.Hub.BombManager.ServerOnBombCarrierIdentifiableChanged -= this.OnBombCarrierChange;
 			if (BotAIAmbushSystem.instance)
 			{
@@ -219,9 +260,9 @@ namespace HeavyMetalMachines.BotAI
 			{
 				return;
 			}
-			if (this.CurrentAction == BotAIGoalManager.Action.Ambush || UnityEngine.Random.Range(0f, 1f) < this.Goals.Ambush)
+			if (this.CurrentAction == BotAIGoalManager.Action.Ambush || Random.Range(0f, 1f) < this.Goals.Ambush)
 			{
-				bool flag = UnityEngine.Random.Range(0f, 1f) < 0.5f;
+				bool flag = Random.Range(0f, 1f) < 0.5f;
 				if (flag && ambush.optionalPoint != null)
 				{
 					this.SetTarget(ambush.optionalPoint.transform, BotAIGoalManager.Action.Ambush);
@@ -305,27 +346,38 @@ namespace HeavyMetalMachines.BotAI
 
 		private void CheckSubState()
 		{
-			HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind role = this.MyData.Character.Role;
 			BotAIGoalManager.SubState subState = BotAIGoalManager.SubState.None;
 			bool flag = this.Combat.Data.HP < (float)this.Combat.Data.HPMax * this.Goals.DropBomb;
 			switch (this.CurrentState)
 			{
 			case BotAIGoalManager.State.GetBomb:
-				if (role != HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Carrier)
+				if (this._exitWaitingToPassAllowedTime > Time.time)
 				{
-					subState = ((!this.CheckCloseToBomb(true, null)) ? BotAIGoalManager.SubState.GetBomb : BotAIGoalManager.SubState.HealDefendAttack);
+					subState = BotAIGoalManager.SubState.HealDefendAttack;
+				}
+				else if (flag)
+				{
+					subState = BotAIGoalManager.SubState.SelfRecover;
 				}
 				else
 				{
-					subState = ((!flag) ? BotAIGoalManager.SubState.GetBomb : BotAIGoalManager.SubState.SelfRecover);
+					DriverRoleKind myRole = this._myRole;
+					if (myRole != 1)
+					{
+						subState = ((!this.CheckCloseToBomb(true, null)) ? BotAIGoalManager.SubState.GetBomb : BotAIGoalManager.SubState.HealDefendAttack);
+					}
+					else
+					{
+						subState = BotAIGoalManager.SubState.GetBomb;
+					}
 				}
 				break;
 			case BotAIGoalManager.State.KillCarrier:
-				subState = BotAIGoalManager.SubState.HealDefendAttack;
+				subState = ((!flag) ? BotAIGoalManager.SubState.HealDefendAttack : BotAIGoalManager.SubState.SelfRecover);
 				break;
 			case BotAIGoalManager.State.DeliverBomb:
 				subState = ((!flag) ? BotAIGoalManager.SubState.Deliver : BotAIGoalManager.SubState.Pass);
-				if (subState != BotAIGoalManager.SubState.Pass && (this.Combat.IsBot || this._carHub.Player.IsBotControlled))
+				if (subState != BotAIGoalManager.SubState.Pass && (this.Combat.IsBot || this.CarHub.Player.IsBotControlled))
 				{
 					List<PlayerData> players = GameHubBehaviour.Hub.Players.Players;
 					for (int i = 0; i < players.Count; i++)
@@ -334,9 +386,10 @@ namespace HeavyMetalMachines.BotAI
 						if (playerData.PlayerAddress != this.Combat.Player.PlayerAddress && !playerData.IsBotControlled && playerData.Team == this.Combat.Team)
 						{
 							CombatObject bitComponent = playerData.CharacterInstance.GetBitComponent<CombatObject>();
-							if (bitComponent.BombGadget.Pressed)
+							if (this.ShouldPassBomb(bitComponent))
 							{
 								subState = BotAIGoalManager.SubState.Pass;
+								this.CurrentAction = BotAIGoalManager.Action.PassBomb;
 								break;
 							}
 						}
@@ -344,20 +397,21 @@ namespace HeavyMetalMachines.BotAI
 				}
 				break;
 			case BotAIGoalManager.State.ProtectCarrier:
-				if (role != HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Carrier)
+				if (flag)
 				{
-					if (role != HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Support)
+					subState = BotAIGoalManager.SubState.SelfRecover;
+				}
+				else
+				{
+					DriverRoleKind myRole2 = this._myRole;
+					if (myRole2 != 1)
 					{
 						subState = BotAIGoalManager.SubState.HealDefendAttack;
 					}
 					else
 					{
-						subState = ((!flag) ? BotAIGoalManager.SubState.HealDefendAttack : BotAIGoalManager.SubState.SelfRecover);
+						subState = BotAIGoalManager.SubState.GetPass;
 					}
-				}
-				else
-				{
-					subState = ((!flag) ? BotAIGoalManager.SubState.GetPass : BotAIGoalManager.SubState.SelfRecover);
 				}
 				break;
 			}
@@ -381,12 +435,35 @@ namespace HeavyMetalMachines.BotAI
 				this.SetTarget(this.BombObjectiveDeliver, BotAIGoalManager.Action.Idle);
 				break;
 			case BotAIGoalManager.SubState.SelfRecover:
-			{
-				Transform target = (this.Combat.Team != TeamKind.Red) ? GameHubBehaviour.Hub.BotAIHub.GarageControllerBlu.transform : GameHubBehaviour.Hub.BotAIHub.GarageControllerRed.transform;
-				this.SetTarget(target, BotAIGoalManager.Action.Idle);
+				this.SetTarget(this.GetClosestRepairPoint(), BotAIGoalManager.Action.Idle);
 				break;
 			}
+		}
+
+		private Transform GetClosestRepairPoint()
+		{
+			Transform transform = null;
+			float num = float.MaxValue;
+			Vector3 position = this.Combat.Transform.position;
+			foreach (Transform transform2 in GameHubBehaviour.Hub.BotAIHub.RepairPoints)
+			{
+				float num2 = Vector3.SqrMagnitude(transform2.position - position);
+				if (num2 <= num)
+				{
+					num = num2;
+					transform = transform2;
+				}
 			}
+			if (transform)
+			{
+				return transform;
+			}
+			return (this.Combat.Team != TeamKind.Red) ? GameHubBehaviour.Hub.BotAIHub.GarageControllerBlu.transform : GameHubBehaviour.Hub.BotAIHub.GarageControllerRed.transform;
+		}
+
+		private bool ShouldPassBomb(CombatObject otherCombat)
+		{
+			return otherCombat.BombGadget.Pressed && !otherCombat.Attributes.IsGadgetDisarmed(GadgetSlot.BombGadget, (GadgetNatureKind)0) && (float)this.Goals.SqrdMinPassBombDistance > Vector3.SqrMagnitude(this.Combat.transform.position - otherCombat.transform.position);
 		}
 
 		private bool UpdateSubState()
@@ -432,36 +509,56 @@ namespace HeavyMetalMachines.BotAI
 			{
 				if (currentAction == BotAIGoalManager.Action.DeliverBomb)
 				{
-					bool flag = Time.time > this._holdTime && Vector3.Dot(this.Combat.Transform.forward, (this.BombObjectiveDeliver.position - this.Combat.Transform.position).normalized) > this._bombGadget.UseInfo.GetDotLimit;
-					this._bombGadget.Press(!flag);
+					this.ExecuteDeliverBombAction();
 				}
 			}
 			else
 			{
-				bool flag2 = this.CheckLineOfSightToDelivery();
-				if (flag2)
-				{
-					this._bombGadget.Press(true);
-					this._holdTime = Time.time + this._bombGadget.UseInfo.AttackSpeed;
-					this.SetTarget(this.BombObjectiveDeliver, BotAIGoalManager.Action.DeliverBomb);
-				}
+				this.ExecuteIdleAction();
 			}
 			return false;
+		}
+
+		private void ExecuteIdleAction()
+		{
+			bool flag = this.CheckLineOfSightToDelivery();
+			if (flag)
+			{
+				this._bombGadget.Press(true);
+				this._holdTime = Time.time + this._bombGadget.UseInfo.AttackSpeed;
+				this.SetTarget(this.BombObjectiveDeliver, BotAIGoalManager.Action.DeliverBomb);
+			}
+		}
+
+		private void ExecuteDeliverBombAction()
+		{
+			Vector3 normalized = (this.BombObjectiveDeliver.position - this.Combat.Transform.position).normalized;
+			float num = Vector3.Dot(this.Combat.Transform.forward, normalized);
+			bool flag = Time.time > this._holdTime && num > this._bombGadget.UseInfo.GetDotLimit;
+			if (flag)
+			{
+				this._bombGadget.Press(false);
+				this.SetExitWaitingToPassBomb();
+			}
+			else
+			{
+				this._bombGadget.Press(true);
+			}
 		}
 
 		private bool CheckLineOfSightToDelivery()
 		{
 			Vector3 position = this.BombObjectiveDeliver.position;
 			Vector3 position2 = GameHubBehaviour.Hub.BombManager.BombMovement.transform.position;
-			Vector3 a = position - position2;
+			Vector3 vector = position - position2;
 			float num = GameHubBehaviour.Hub.BotAIMatchRules.CloseToDeliveryDistance * GameHubBehaviour.Hub.BotAIMatchRules.CloseToDeliveryDistance;
-			float num2 = Vector3.SqrMagnitude(a);
+			float num2 = Vector3.SqrMagnitude(vector);
 			if (num2 >= num)
 			{
 				return false;
 			}
 			float num3 = Mathf.Sqrt(num2);
-			RaycastHit[] array = Physics.RaycastAll(position2, a / num3, num3, LayerManager.GetWallMask(true));
+			RaycastHit[] array = Physics.RaycastAll(position2, vector / num3, num3, LayerManager.GetWallMask(true));
 			bool flag = false;
 			for (int i = 0; i < array.Length; i++)
 			{
@@ -484,23 +581,23 @@ namespace HeavyMetalMachines.BotAI
 				{
 					if (currentAction == BotAIGoalManager.Action.DeliverBomb)
 					{
-						bool flag = Time.time > this._holdTime && Vector3.Dot(this.Combat.Transform.forward, (this.BombObjectiveDeliver.position - this.Combat.Transform.position).normalized) > this._bombGadget.UseInfo.GetDotLimit;
-						this._bombGadget.Press(!flag);
+						this.ExecuteDeliverBombAction();
 					}
 				}
 				else if (!this.Combat.BombGadget.Pressed)
 				{
 					this._bombGadget.Press(true);
+					this.SetExitWaitingToPassBomb();
 				}
 				else
 				{
 					this._bombGadget.Press(false);
 				}
 			}
-			else if (this._carHub.Player.IsBotControlled || this._carHub.Player.HasCounselor)
+			else if (this.CarHub.Player.IsBotControlled || this.CarHub.Player.HasCounselor)
 			{
-				bool flag2 = this.CheckLineOfSightToDelivery();
-				if (flag2)
+				bool flag = this.CheckLineOfSightToDelivery();
+				if (flag)
 				{
 					this._bombGadget.Press(true);
 					this._holdTime = Time.time + this._bombGadget.UseInfo.AttackSpeed;
@@ -510,9 +607,9 @@ namespace HeavyMetalMachines.BotAI
 				{
 					float num = Vector3.SqrMagnitude(this.BombObjectiveDeliver.position - this.Combat.Transform.position);
 					float num2 = GameHubBehaviour.Hub.BotAIMatchRules.CloseToDeliveryDistance * GameHubBehaviour.Hub.BotAIMatchRules.CloseToDeliveryDistance;
-					bool flag3 = num > num2 && this.CheckCloseToBomb(true, null);
-					this._bombGadget.Press(flag3);
-					if (flag3)
+					bool flag2 = num > num2 && this.CheckCloseToBomb(true, null);
+					this._bombGadget.Press(flag2);
+					if (flag2)
 					{
 						this.CurrentAction = BotAIGoalManager.Action.PassBomb;
 					}
@@ -521,14 +618,20 @@ namespace HeavyMetalMachines.BotAI
 			return false;
 		}
 
+		private void SetExitWaitingToPassBomb()
+		{
+			this._exitWaitingToPassAllowedTime = Time.time + this.Goals.WaitForPassStateSeconds;
+		}
+
 		private bool UpdateHealDefendAttackState()
 		{
-			HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind role = this.MyData.Character.Role;
 			switch (this.CurrentAction)
 			{
 			case BotAIGoalManager.Action.Idle:
+			{
 				this._pursuitTime = -1f;
-				if (role != HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Support)
+				DriverRoleKind myRole = this._myRole;
+				if (myRole != null)
 				{
 					this.CurrentAction = BotAIGoalManager.Action.Kill;
 				}
@@ -537,6 +640,7 @@ namespace HeavyMetalMachines.BotAI
 					this.CurrentAction = BotAIGoalManager.Action.Heal;
 				}
 				break;
+			}
 			case BotAIGoalManager.Action.Heal:
 				if ((this.CurrentState == BotAIGoalManager.State.ProtectCarrier && this._bombCarrier.Data.HP < (float)this._bombCarrier.Data.HPMax) || !this._closeToBomb)
 				{
@@ -645,9 +749,9 @@ namespace HeavyMetalMachines.BotAI
 			{
 				return true;
 			}
-			Vector3 a = (!(this._bombCarrier == null)) ? this._bombCarrier.Transform.position : GameHubBehaviour.Hub.BombManager.BombMovement.transform.position;
+			Vector3 vector = (!(this._bombCarrier == null)) ? this._bombCarrier.Transform.position : GameHubBehaviour.Hub.BombManager.BombMovement.transform.position;
 			float num = GameHubBehaviour.Hub.BotAIMatchRules.MaxRangeOfAction * GameHubBehaviour.Hub.BotAIMatchRules.MaxRangeOfAction;
-			float num2 = Vector3.SqrMagnitude(a - target.Transform.position);
+			float num2 = Vector3.SqrMagnitude(vector - target.Transform.position);
 			return num2 < num;
 		}
 
@@ -657,21 +761,21 @@ namespace HeavyMetalMachines.BotAI
 			{
 				return 0f;
 			}
-			Vector3 a = (!(this._bombCarrier == null)) ? this._bombCarrier.Transform.position : GameHubBehaviour.Hub.BombManager.BombMovement.transform.position;
-			return Vector3.Distance(a, this.Combat.Transform.position);
+			Vector3 vector = (!(this._bombCarrier == null)) ? this._bombCarrier.Transform.position : GameHubBehaviour.Hub.BombManager.BombMovement.transform.position;
+			return Vector3.Distance(vector, this.Combat.Transform.position);
 		}
 
 		private bool CheckCloseToBomb(bool friends, List<CombatObject> close)
 		{
-			Vector3 a = (!(this._bombCarrier == null)) ? this._bombCarrier.Transform.position : GameHubBehaviour.Hub.BombManager.BombMovement.transform.position;
+			Vector3 vector = (!(this._bombCarrier == null)) ? this._bombCarrier.Transform.position : GameHubBehaviour.Hub.BombManager.BombMovement.transform.position;
 			float num = GameHubBehaviour.Hub.BotAIMatchRules.MaxRangeOfAction * GameHubBehaviour.Hub.BotAIMatchRules.MaxRangeOfAction;
 			List<CombatObject> list = (!friends) ? this._enemyCarsList : this._friendCarsList;
-			HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind role = this.MyData.Character.Role;
 			bool flag = true;
 			bool flag2 = false;
-			if (role != HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Carrier)
+			DriverRoleKind myRole = this._myRole;
+			if (myRole != 1)
 			{
-				if (role == HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Tackler)
+				if (myRole == 2)
 				{
 					flag = false;
 				}
@@ -692,12 +796,12 @@ namespace HeavyMetalMachines.BotAI
 					}
 					else
 					{
-						HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind role2 = combatObject.Player.Character.Role;
-						if (role2 != HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Tackler)
+						DriverRoleKind characterRole = combatObject.Player.GetCharacterRole();
+						if (characterRole != 2)
 						{
-							if (role2 != HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Carrier)
+							if (characterRole != 1)
 							{
-								if (role2 == HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Support)
+								if (characterRole == null)
 								{
 									flag3 = flag2;
 								}
@@ -714,7 +818,7 @@ namespace HeavyMetalMachines.BotAI
 					}
 					if (flag3)
 					{
-						float num2 = Vector3.SqrMagnitude(a - combatObject.Transform.position);
+						float num2 = Vector3.SqrMagnitude(vector - combatObject.Transform.position);
 						if (num2 < num)
 						{
 							if (close == null)
@@ -774,11 +878,11 @@ namespace HeavyMetalMachines.BotAI
 
 		private void Update()
 		{
-			if (!this._carHub.Player.HasCounselor && !this._carHub.Player.IsBotControlled)
+			if (!this.CarHub.Player.HasCounselor && !this.CarHub.Player.IsBotControlled)
 			{
 				return;
 			}
-			if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState != BombScoreBoard.State.BombDelivery && !GameHubBehaviour.Hub.Match.LevelIsTutorial())
+			if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState != BombScoreboardState.BombDelivery && !GameHubBehaviour.Hub.Match.LevelIsTutorial())
 			{
 				for (int i = 0; i < this._gadgets.Count; i++)
 				{
@@ -791,20 +895,24 @@ namespace HeavyMetalMachines.BotAI
 			this.UpdateSubState();
 			this.UseGadgets(this._currentTargetCombat);
 			bool flag = false;
-			bool flag2 = this._bombGadget.Update(Time.deltaTime, false);
+			bool flag2 = this._bombGadget.Update(Time.deltaTime, false, this.Combat);
 			flag = (flag || flag2);
-			if (this._carHub.Player.IsBotControlled)
+			if (this.CarHub.Player.IsBotControlled)
 			{
 				this._bombGadget.Gadget.Pressed = this._bombGadget.Using;
 			}
 			for (int j = 0; j < this._gadgets.Count; j++)
 			{
-				BotAIGoalManager.GadgetAIState gadgetAIState = this._gadgets[j];
-				bool flag3 = gadgetAIState.Update(Time.deltaTime, flag);
+				GadgetAIState gadgetAIState = this._gadgets[j];
+				bool flag3 = gadgetAIState.Update(Time.deltaTime, flag, this.Combat);
 				flag = (flag || flag3);
-				if (this._carHub.Player.IsBotControlled)
+				if (this.CarHub.Player.IsBotControlled)
 				{
 					gadgetAIState.Gadget.Pressed = flag3;
+					if (gadgetAIState.Gadget.Combat.HasGadgetContext((int)gadgetAIState.Gadget.Slot))
+					{
+						((CombatGadget)gadgetAIState.Gadget.Combat.GetGadgetContext((int)gadgetAIState.Gadget.Slot)).Pressed = flag3;
+					}
 				}
 			}
 			if (this.nextGoalTime > 0f)
@@ -824,28 +932,28 @@ namespace HeavyMetalMachines.BotAI
 
 		private bool ProbeForward(Transform target, BotAIGoal.GadgetUseInfo info)
 		{
-			Vector3 vector;
+			Vector3 vector3;
 			if (info.PredictMovement && info.AttackSpeed > 0f)
 			{
 				CombatMovement component = target.GetComponent<CombatMovement>();
 				Vector3 position = target.position;
 				Vector3 position2 = base.transform.position;
-				float d = (position - position2).magnitude / info.AttackSpeed;
-				Vector3 a = position + target.forward * component.SpeedZ * d;
-				Vector3 b = position2 + base.transform.forward * this.Combat.Movement.SpeedZ * d;
-				vector = a - b;
+				float num = (position - position2).magnitude / info.AttackSpeed;
+				Vector3 vector = position + target.forward * component.SpeedZ * num;
+				Vector3 vector2 = position2 + base.transform.forward * this.Combat.Movement.SpeedZ * num;
+				vector3 = vector - vector2;
 			}
 			else
 			{
-				vector = target.position - base.transform.position;
+				vector3 = target.position - base.transform.position;
 			}
-			Vector3 normalized = vector.normalized;
-			float num = Vector3.Dot(base.transform.forward, normalized);
-			if (num > info.GetDotLimit)
+			Vector3 normalized = vector3.normalized;
+			float num2 = Vector3.Dot(base.transform.forward, normalized);
+			if (num2 > info.GetDotLimit)
 			{
 				if (!info.CrossesWalls)
 				{
-					foreach (RaycastHit raycastHit in Physics.RaycastAll(new Ray(base.transform.position, normalized), vector.magnitude))
+					foreach (RaycastHit raycastHit in Physics.RaycastAll(new Ray(base.transform.position, normalized), vector3.magnitude))
 					{
 						if (raycastHit.collider.gameObject.layer == 9)
 						{
@@ -883,16 +991,16 @@ namespace HeavyMetalMachines.BotAI
 		private bool ProbeDistance(Transform target, GadgetInfo info)
 		{
 			CombatMovement component = target.GetComponent<CombatMovement>();
-			Vector3 a = target.TransformPoint(Vector3.forward * (component.SpeedZ * component.SpeedZ * info.LifeTime * info.LifeTime));
-			float num = Vector3.SqrMagnitude(a - base.transform.position);
-			return a.sqrMagnitude < num;
+			Vector3 vector = target.TransformPoint(Vector3.forward * (component.SpeedZ * component.SpeedZ * info.LifeTime * info.LifeTime));
+			float num = Vector3.SqrMagnitude(vector - base.transform.position);
+			return vector.sqrMagnitude < num;
 		}
 
 		private void UseGadgets(CombatObject target)
 		{
 			for (int i = 0; i < this._gadgets.Count; i++)
 			{
-				BotAIGoalManager.GadgetAIState gadgetAIState = this._gadgets[i];
+				GadgetAIState gadgetAIState = this._gadgets[i];
 				if (gadgetAIState.Gadget.Nature != GadgetNatureKind.Teleport)
 				{
 					if (!gadgetAIState.Gadget.Activated || gadgetAIState.GadgetState.GadgetState != GadgetState.Ready)
@@ -963,7 +1071,7 @@ namespace HeavyMetalMachines.BotAI
 			}
 		}
 
-		private bool TryUseGadget(Transform target, BotAIGoalManager.GadgetAIState state)
+		private bool TryUseGadget(Transform target, GadgetAIState state)
 		{
 			if (state.UseInfo.CheckRange)
 			{
@@ -1055,23 +1163,23 @@ namespace HeavyMetalMachines.BotAI
 				}
 				Gizmos.DrawLine(base.transform.position, this._currentTarget.position);
 			}
-			Vector3 b = Camera.current.transform.up * 3f;
+			Vector3 vector = Camera.current.transform.up * 3f;
 			switch (this.CurrentAction)
 			{
 			case BotAIGoalManager.Action.Heal:
-				Gizmos.DrawIcon(base.transform.position + b, "protect", false);
+				Gizmos.DrawIcon(base.transform.position + vector, "protect", false);
 				break;
 			case BotAIGoalManager.Action.Kill:
-				Gizmos.DrawIcon(base.transform.position + b, "attack", false);
+				Gizmos.DrawIcon(base.transform.position + vector, "attack", false);
 				break;
 			case BotAIGoalManager.Action.PassBomb:
-				Gizmos.DrawIcon(base.transform.position + b, "drop_bomp", false);
+				Gizmos.DrawIcon(base.transform.position + vector, "drop_bomp", false);
 				break;
 			case BotAIGoalManager.Action.Ambush:
-				Gizmos.DrawIcon(base.transform.position + b, "apple", false);
+				Gizmos.DrawIcon(base.transform.position + vector, "apple", false);
 				break;
 			case BotAIGoalManager.Action.Lead:
-				Gizmos.DrawIcon(base.transform.position + b, "lead", false);
+				Gizmos.DrawIcon(base.transform.position + vector, "lead", false);
 				break;
 			}
 		}
@@ -1110,21 +1218,21 @@ namespace HeavyMetalMachines.BotAI
 
 		private float nextGoalTime;
 
-		private List<BotAIGoalManager.GadgetAIState> _gadgets = new List<BotAIGoalManager.GadgetAIState>();
+		private List<GadgetAIState> _gadgets = new List<GadgetAIState>();
 
-		private BotAIGoalManager.GadgetAIState _bombGadget;
+		private GadgetAIState _bombGadget;
 
 		private Transform _currentTarget;
 
 		private CombatObject _currentTargetCombat;
 
-		public BotAIGoalManager.TeamState CurrentTeamState;
+		private BotAIGoalManager.TeamState _currentTeamState;
 
-		public BotAIGoalManager.State CurrentState;
+		private BotAIGoalManager.State _currentState;
 
-		public BotAIGoalManager.SubState CurrentSubState;
+		private BotAIGoalManager.SubState _currentSubState;
 
-		public BotAIGoalManager.Action CurrentAction;
+		private BotAIGoalManager.Action _currentAction;
 
 		private float lastBombPass;
 
@@ -1135,11 +1243,6 @@ namespace HeavyMetalMachines.BotAI
 		public static readonly BitLogger Log = new BitLogger(typeof(BotAIGoalManager));
 
 		public PlayerData MyData;
-
-		public CombatObject Combat;
-
-		[SerializeField]
-		private CarComponentHub _carHub;
 
 		public TeamKind Enemyteam;
 
@@ -1160,6 +1263,10 @@ namespace HeavyMetalMachines.BotAI
 		public bool TutorialDisabled;
 
 		private bool initialized;
+
+		private DriverRoleKind _myRole;
+
+		private float _exitWaitingToPassAllowedTime;
 
 		private float _holdTime = -1f;
 
@@ -1278,73 +1385,6 @@ namespace HeavyMetalMachines.BotAI
 			public Dictionary<int, int> Aggros = new Dictionary<int, int>(4);
 
 			public Dictionary<int, int> InverseAggros = new Dictionary<int, int>(4);
-		}
-
-		[Serializable]
-		public class GadgetAIState
-		{
-			public void ForceStop()
-			{
-				this.Delay = 0f;
-				this.ShouldUse = false;
-				this.FlipAfterSwitch = false;
-				this.Using = false;
-			}
-
-			public void Press(bool value)
-			{
-				if (this.Delay > 0f)
-				{
-					this.FlipAfterSwitch = (value != this.ShouldUse);
-					return;
-				}
-				if (this.ShouldUse == value)
-				{
-					return;
-				}
-				this.Delay = this.UseInfo.ReactionTimeMin + UnityEngine.Random.Range(0f, 1f) * (this.UseInfo.ReactionTimeMax - this.UseInfo.ReactionTimeMin);
-				this.ShouldUse = value;
-				this.FlipAfterSwitch = false;
-			}
-
-			public bool Update(float dt, bool gadgetUsedThisFrame)
-			{
-				if (gadgetUsedThisFrame)
-				{
-					this.ForceStop();
-					return false;
-				}
-				if (this.Delay > 0f)
-				{
-					this.Delay -= dt;
-				}
-				if (this.Delay <= 0f)
-				{
-					bool shouldUse = this.ShouldUse;
-					this.Using = shouldUse;
-					if (this.FlipAfterSwitch)
-					{
-						this.FlipAfterSwitch = false;
-						this.Press(!shouldUse);
-					}
-					return shouldUse;
-				}
-				return this.Using;
-			}
-
-			public BotAIGoal.GadgetUseInfo UseInfo;
-
-			public GadgetBehaviour Gadget;
-
-			public GadgetData.GadgetStateObject GadgetState;
-
-			public bool ShouldUse;
-
-			public bool Using;
-
-			public float Delay;
-
-			public bool FlipAfterSwitch;
 		}
 	}
 }

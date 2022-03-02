@@ -28,7 +28,8 @@ namespace HeavyMetalMachines.Scene
 				Causer = -1,
 				PickupId = base.Id.ObjId,
 				Position = base.transform.position,
-				Reason = SpawnReason.LifeTime
+				Reason = SpawnReason.LifeTime,
+				TargetEventId = -1
 			});
 			this.Picked = true;
 		}
@@ -62,7 +63,8 @@ namespace HeavyMetalMachines.Scene
 				Causer = id,
 				PickupId = base.Id.ObjId,
 				Position = base.transform.position,
-				Reason = SpawnReason.Pickup
+				Reason = SpawnReason.Pickup,
+				TargetEventId = -1
 			});
 		}
 

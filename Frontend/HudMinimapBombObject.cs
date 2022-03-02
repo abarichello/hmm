@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.Arena;
 using HeavyMetalMachines.Match;
 using Pocketverse;
 using UnityEngine;
@@ -10,8 +11,8 @@ namespace HeavyMetalMachines.Frontend
 		public override void Setup()
 		{
 			base.Setup();
-			GameArenaInfo gameArenaInfo = GameHubBehaviour.Hub.ArenaConfig.Arenas[GameHubBehaviour.Hub.Match.ArenaIndex];
-			this._carriedBombOffset = gameArenaInfo.MinimapCarriedBombOffset;
+			IGameArenaInfo currentArena = GameHubBehaviour.Hub.ArenaConfig.GetCurrentArena();
+			this._carriedBombOffset = currentArena.MinimapCarriedBombOffset;
 		}
 
 		public override void OnUpdate()

@@ -1,5 +1,5 @@
 ﻿using System;
-using HeavyMetalMachines.Platform;
+using UnityEngine;
 
 namespace HeavyMetalMachines.Frontend.Apis
 {
@@ -13,7 +13,7 @@ namespace HeavyMetalMachines.Frontend.Apis
 
 		void DisableCursorClipToClientWindow();
 
-		void SetCustomCursorClipArea(WindowsPlatform.RECT clipArea);
+		void SetCustomCursorClipArea(RectInt clipArea);
 
 		void ClearCustomCursorClipArea();
 	}

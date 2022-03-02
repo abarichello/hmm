@@ -26,7 +26,10 @@ namespace HeavyMetalMachines.Combat
 				{
 					if (state == BombDropperController.State.Stop)
 					{
-						this.DropperAnimator.SetBool("drop_activate", false);
+						if (this.DropperAnimator != null)
+						{
+							this.DropperAnimator.SetBool("drop_activate", false);
+						}
 						for (int i = 0; i < this.particleSystems.Length; i++)
 						{
 							HoplonParticleSystem hoplonParticleSystem = this.particleSystems[i];
@@ -51,7 +54,7 @@ namespace HeavyMetalMachines.Combat
 		{
 			if (reason == SpawnReason.TriggerDrop)
 			{
-				Transform transform = BombVisualController.GetInstance(false).transform;
+				Transform transform = BombVisualController.GetInstance().transform;
 				if (transform == null)
 				{
 					return;
@@ -59,7 +62,10 @@ namespace HeavyMetalMachines.Combat
 				if (Vector3.Distance(base.transform.position, transform.position) < this.Range)
 				{
 					this.timeToRun = 0.5f;
-					this.DropperAnimator.SetBool("drop_activate", true);
+					if (this.DropperAnimator != null)
+					{
+						this.DropperAnimator.SetBool("drop_activate", true);
+					}
 					for (int i = 0; i < this.particleSystems.Length; i++)
 					{
 						HoplonParticleSystem hoplonParticleSystem = this.particleSystems[i];

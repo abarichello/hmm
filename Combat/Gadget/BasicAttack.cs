@@ -148,8 +148,8 @@ namespace HeavyMetalMachines.Combat.Gadget
 			Vector3 velocity = this._rigidbody.velocity;
 			vector.y = 0f;
 			velocity.y = 0f;
-			Vector3 from = Vector3.Project(velocity, vector);
-			data.Range += from.magnitude * num * (float)((Vector3.Angle(from, vector) >= 1f) ? -1 : 1);
+			Vector3 vector2 = Vector3.Project(velocity, vector);
+			data.Range += vector2.magnitude * num * (float)((Vector3.Angle(vector2, vector) >= 1f) ? -1 : 1);
 			return data;
 		}
 

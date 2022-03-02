@@ -127,7 +127,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			}
 		}
 
-		protected override void InnerOnDestroyEffect(DestroyEffect evt)
+		protected override void InnerOnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (GameHubBehaviour.Hub.Net.IsClient())
 			{

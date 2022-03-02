@@ -1,5 +1,9 @@
 ﻿using System;
 using Assets.ClientApiObjects.Components;
+using HeavyMetalMachines.Customization.Skins;
+using HeavyMetalMachines.Customizations.Skins;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Localization;
 using Pocketverse;
 using UnityEngine;
 
@@ -12,38 +16,24 @@ namespace HeavyMetalMachines.Frontend
 			this._mainGameObject.SetActive(false);
 		}
 
-		public void Setup(SkinPrefabItemTypeComponent.SkinCustomizations skinCustomizations)
+		public void Setup(SkinPrefabItemTypeComponent skinPrefabComponent)
 		{
-			bool flag = skinCustomizations.CustomPortrait || skinCustomizations.CustomSFX || skinCustomizations.CustomVFX;
-			this._mainGameObject.SetActive(flag);
-			if (flag)
-			{
-				this._customPortraitGameObject.SetActive(skinCustomizations.CustomPortrait);
-				this._customSfxGameObject.SetActive(skinCustomizations.CustomSFX);
-				this._customVfxGameObject.SetActive(skinCustomizations.CustomVFX);
-				this._iconsGrid.Reposition();
-			}
-			this.HideTooltip();
+			SkinPrefabItemTypeComponent.SkinCustomizations skinCustomization = skinPrefabComponent.SkinCustomization;
+			this._mainGameObject.SetActive(true);
+			this.GetTitleDraft(skinPrefabComponent.Tier);
+			this._customPortraitGameObject.SetActive(skinCustomization.CustomPortrait);
+			this._customSfxGameObject.SetActive(skinCustomization.CustomSFX);
+			this._customVfxGameObject.SetActive(skinCustomization.CustomVFX);
+			this._iconsGrid.Reposition();
 		}
 
-		public void ShowTooltip(GameObject iconGameObject)
+		private void GetTitleDraft(TierKind tier)
 		{
-			string key = "TYPE_POSE_TITLE";
-			if (iconGameObject == this._customSfxGameObject)
+			SkinRarityInfo skinRarityInfo;
+			if (this._skinRarityProvider.TryGetSkinRarityInfo(tier, out skinRarityInfo))
 			{
-				key = "TYPE_SOUND_TITLE";
+				this._titleLabel.text = Language.Get(skinRarityInfo.LongDraftName, TranslationContext.MainMenuGui);
 			}
-			else if (iconGameObject == this._customVfxGameObject)
-			{
-				key = "TYPE_EFFECTS_TITLE";
-			}
-			this._tooltipLabel.text = Language.Get(key, TranslationSheets.MainMenuGui);
-			this._tooltipLabel.gameObject.SetActive(true);
-		}
-
-		public void HideTooltip()
-		{
-			this._tooltipLabel.gameObject.SetActive(false);
 		}
 
 		public void GridReposition()
@@ -58,6 +48,9 @@ namespace HeavyMetalMachines.Frontend
 		private UIGrid _iconsGrid;
 
 		[SerializeField]
+		private UILabel _titleLabel;
+
+		[SerializeField]
 		private GameObject _customPortraitGameObject;
 
 		[SerializeField]
@@ -66,7 +59,7 @@ namespace HeavyMetalMachines.Frontend
 		[SerializeField]
 		private GameObject _customVfxGameObject;
 
-		[SerializeField]
-		private UILabel _tooltipLabel;
+		[InjectOnClient]
+		private ISkinRarityProvider _skinRarityProvider;
 	}
 }

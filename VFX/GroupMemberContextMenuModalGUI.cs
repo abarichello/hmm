@@ -3,14 +3,25 @@ using System.Collections;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids.Infra;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids.Social;
 using ClientAPI.Objects;
+using HeavyMetalMachines.BI;
+using HeavyMetalMachines.Chat.Business;
 using HeavyMetalMachines.Frontend;
+using HeavyMetalMachines.Players.Business;
+using HeavyMetalMachines.Social.Friends.Business;
+using HeavyMetalMachines.Social.Friends.Business.BlockedPlayers;
+using HeavyMetalMachines.Social.Friends.Business.Invites;
+using HeavyMetalMachines.Social.Groups.Business;
+using HeavyMetalMachines.Social.Groups.Models;
 using HeavyMetalMachines.VFX.PlotKids;
-using HeavyMetalMachines.VFX.PlotKids.VoiceChat;
+using HeavyMetalMachines.VoiceChat.Business;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.VFX
 {
+	[Obsolete]
 	public class GroupMemberContextMenuModalGUI : ModalGUIController
 	{
 		public GroupMember GroupMember
@@ -22,13 +33,21 @@ namespace HeavyMetalMachines.VFX
 			set
 			{
 				this._groupMember = value;
+				this._groupMemberPlayer = this._groupMember.ConvertToPlayer();
 				this._nameLabel.text = this._groupMember.PlayerName;
-				bool flag = string.Equals(this._groupMember.UniversalID, GameHubBehaviour.Hub.User.UniversalId, StringComparison.InvariantCultureIgnoreCase);
+				HMMHub hub = GameHubBehaviour.Hub;
+				bool flag = string.Equals(this._groupMember.UniversalID, hub.User.UniversalId, StringComparison.InvariantCultureIgnoreCase);
 				bool flag2 = ManagerController.Get<GroupManager>().GetSelfGroupStatus() == GroupStatus.Owner;
 				bool flag3 = this._groupMember.GroupId.Equals(Guid.Empty);
-				this._promoteToOwnerButton.gameObject.SetActive(!flag && flag2 && !flag3);
+				this._promoteToOwnerButton.gameObject.SetActive(!flag && flag2 && !flag3 && !hub.IsWaitingInQueue());
 				this._removeFromGroupButton.gameObject.SetActive(!flag && flag2);
-				bool flag4 = ManagerController.Get<FriendManager>().FriendsDictionary.ContainsKey(this._groupMember.UniversalID);
+				IIsPlayerLocalPlayerFriend isPlayerLocalPlayerFriend = this._diContainer.Resolve<IIsPlayerLocalPlayerFriend>();
+				bool flag4 = isPlayerLocalPlayerFriend.IsFriend(this._groupMember.PlayerId);
+				IIsPlayerBlocked isPlayerBlocked = this._diContainer.Resolve<IIsPlayerBlocked>();
+				if (isPlayerBlocked.IsBlocked(this._groupMember.PlayerId))
+				{
+					this._sendMessageButton.gameObject.SetActive(false);
+				}
 				this._addFriendButton.gameObject.SetActive(!flag && !flag4);
 				this._actionsTable.repositionNow = true;
 				this.UpdateFriendVoiceMutedStatus();
@@ -68,7 +87,8 @@ namespace HeavyMetalMachines.VFX
 		{
 			Debug.Log(string.Format("onButtonClick_OpenGroupChat: {0} ({1})", this.GroupMember.PlayerName, this.GroupMember.UniversalID));
 			SingletonMonoBehaviour<PanelController>.Instance.ShowModalWindow<SocialModalGUI>();
-			SocialModalGUI.Current.CreateGroupChatTab(ManagerController.Get<GroupManager>().GetCurrentGroupIfExists());
+			IGroupStorage groupStorage = this._diContainer.Resolve<IGroupStorage>();
+			SocialModalGUI.Current.CreateGroupChatTab(groupStorage.Group);
 			base.ResolveModalWindow();
 		}
 
@@ -82,19 +102,36 @@ namespace HeavyMetalMachines.VFX
 
 		public void onButtonClick_TransferGroupOwnership()
 		{
-			ManagerController.Get<GroupManager>().PromoteToGroupOwner(this._groupMember);
+			ManagerController.Get<GroupManager>().PromoteToGroupOwner(this.ConvertedGroupMember());
 			base.ResolveModalWindow();
+		}
+
+		private GroupMember ConvertedGroupMember()
+		{
+			GroupMember groupMember = this._groupMember;
+			return new GroupMember
+			{
+				PlayerId = groupMember.PlayerId,
+				UniversalId = groupMember.UniversalID,
+				IsPendingInvite = groupMember.IsPendingInviteToGroup(),
+				Nickname = groupMember.PlayerName,
+				IsGroupLeader = groupMember.IsUserGroupLeader()
+			};
 		}
 
 		public void onButtonClick_KickMemberFromGroup()
 		{
 			ManagerController.Get<GroupManager>().TryKickMemberOrCancelInvite(this._groupMember);
 			base.ResolveModalWindow();
+			GameHubBehaviour.Hub.Swordfish.Log.BILogClient(76, true);
 		}
 
 		public void onButtonClick_AddFriend()
 		{
-			SingletonMonoBehaviour<SocialController>.Instance.OpenSteamFriendInvite(this._groupMember.UniversalID);
+			ISendInvite sendInvite = this._diContainer.Resolve<ISendInvite>();
+			sendInvite.Send(this._groupMember.PlayerId);
+			IClientButtonBILogger clientButtonBILogger = this._diContainer.Resolve<IClientButtonBILogger>();
+			clientButtonBILogger.LogButtonClick(ButtonName.SocialContextMenuFriendsListAddFriend);
 			base.ResolveModalWindow();
 		}
 
@@ -102,33 +139,38 @@ namespace HeavyMetalMachines.VFX
 		{
 			ManagerController.Get<GroupManager>().LeaveGroup(false);
 			base.ResolveModalWindow();
+			GameHubBehaviour.Hub.Swordfish.Log.BILogClient(77, true);
 		}
 
 		public void onButtonClick_FriendVoiceHandle()
 		{
-			SingletonMonoBehaviour<VoiceChatController>.Instance.ToggleMuteUser(this._groupMember.UniversalID);
-			this.UpdateFriendVoiceMutedStatus();
+			ObservableExtensions.Subscribe<Unit>(this._muteVoiceChatPlayer.ToggleMute(this._groupMemberPlayer), delegate(Unit _)
+			{
+				this.UpdateFriendVoiceMutedStatus();
+			});
 		}
 
 		private void UpdateFriendVoiceMutedStatus()
 		{
-			bool flag = SingletonMonoBehaviour<VoiceChatController>.Instance.IsUserMuted(this._groupMember.UniversalID);
+			bool flag = this._isVoiceChatPlayerMuted.IsMuted(this._groupMemberPlayer);
 			this._headSetIcon_ActivatedSprite.enabled = !flag;
 			this._headSetIcon_DesactivatedSprite.enabled = flag;
 			this._activatedVoice_Label.enabled = flag;
 			this._desactivatedVoice_Label.enabled = !flag;
-			Debug.Log(string.Format("Player {0} is mute = {1}", this._groupMember.PlayerName, SingletonMonoBehaviour<VoiceChatController>.Instance.IsUserSpeaking(this._groupMember.UniversalID)));
+			Debug.Log(string.Format("Player {0} is mute = {1}", this._groupMember.PlayerName, this._isPlayerSpeakingOnVoiceChat.IsSpeaking(this._groupMemberPlayer)));
 		}
 
 		public void onButtonClick_EnableDesableVoiceChat()
 		{
-			ManagerController.Get<ChatManager>().ToggleIgnoreUserGroupChat(this._groupMember.UniversalID);
-			this.RefreshGroupChatAllowedState();
+			ObservableExtensions.Subscribe<Unit>(Observable.Do<Unit>(this._blockPlayerInGroupChat.ToggleBlock(this._groupMemberPlayer), delegate(Unit _)
+			{
+				this.RefreshGroupChatAllowedState();
+			}));
 		}
 
 		private void RefreshGroupChatAllowedState()
 		{
-			bool flag = !ManagerController.Get<ChatManager>().IsUserIgnored(this._groupMember.UniversalID);
+			bool flag = this._isPlayerBlockedInGroupChat.IsBlocked(this._groupMemberPlayer);
 			this._dialogIcon_ActivatedSprite.enabled = flag;
 			this._dialogIcon_DesactivatedSprite.enabled = !flag;
 			this._activatedDialog_Label.enabled = !flag;
@@ -166,6 +208,8 @@ namespace HeavyMetalMachines.VFX
 
 		private GroupMember _groupMember;
 
+		private IPlayer _groupMemberPlayer;
+
 		[Header("Buttons References")]
 		[SerializeField]
 		private UIButton _sendMessageButton;
@@ -178,6 +222,24 @@ namespace HeavyMetalMachines.VFX
 
 		[SerializeField]
 		private UIButton _addFriendButton;
+
+		[Inject]
+		private DiContainer _diContainer;
+
+		[Inject]
+		private IIsPlayerSpeakingOnVoiceChat _isPlayerSpeakingOnVoiceChat;
+
+		[Inject]
+		private IMuteVoiceChatPlayer _muteVoiceChatPlayer;
+
+		[Inject]
+		private IIsVoiceChatPlayerMuted _isVoiceChatPlayerMuted;
+
+		[Inject]
+		private IIsPlayerBlockedInGroupChat _isPlayerBlockedInGroupChat;
+
+		[Inject]
+		private IBlockPlayerInGroupChat _blockPlayerInGroupChat;
 
 		[NonSerialized]
 		public SocialModalGUI ParentGUI;

@@ -8,8 +8,8 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Tutorial.InGame
 {
-	[Obsolete]
 	[ExecuteInEditMode]
+	[Obsolete]
 	public class InGameTutorialMaskController : GameHubBehaviour
 	{
 		public static InGameTutorialMaskController Instance
@@ -18,7 +18,7 @@ namespace HeavyMetalMachines.Tutorial.InGame
 			{
 				if (InGameTutorialMaskController._instance == null)
 				{
-					InGameTutorialMaskController._instance = UnityEngine.Object.FindObjectOfType<InGameTutorialMaskController>();
+					InGameTutorialMaskController._instance = Object.FindObjectOfType<InGameTutorialMaskController>();
 				}
 				return InGameTutorialMaskController._instance;
 			}
@@ -60,6 +60,10 @@ namespace HeavyMetalMachines.Tutorial.InGame
 					else
 					{
 						inGameTutorialMaskColliderTrigger.gameObject.SetActive(false);
+						InGameTutorialMaskController.Log.DebugFormat("disabling:{0}", new object[]
+						{
+							inGameTutorialMaskColliderTrigger.name
+						});
 					}
 				}
 			}
@@ -92,6 +96,7 @@ namespace HeavyMetalMachines.Tutorial.InGame
 
 		public void StartStep(HudMaskTutorialBehaviour pHudMaskRef)
 		{
+			InGameTutorialMaskController.Log.Debug("StartStep" + pHudMaskRef.gameObject.name);
 			this.currentHudMaskRef = pHudMaskRef;
 			this.PreviewStep(pHudMaskRef);
 			base.StartCoroutine(this.ShowStepCoroutine());
@@ -124,6 +129,7 @@ namespace HeavyMetalMachines.Tutorial.InGame
 				if (inGameTutorialMaskColliderTrigger == this.currentHudMaskRef.maskTrigger)
 				{
 					this._currentMask = inGameTutorialMaskColliderTrigger;
+					InGameTutorialMaskController.Log.DebugFormat("ShowCurrentMasks" + this._currentMask.name, new object[0]);
 					base.StartCoroutine(this.ShowOverlay(this.currentHudMaskRef.Delay, this.currentHudMaskRef.Duration));
 					base.StartCoroutine(this._currentMask.Show(this.currentHudMaskRef.Delay, this.currentHudMaskRef.Duration));
 					return;
@@ -133,6 +139,10 @@ namespace HeavyMetalMachines.Tutorial.InGame
 
 		private void HideCurrentMasks()
 		{
+			InGameTutorialMaskController.Log.DebugFormat("HideCurrentMasks!!! {0}", new object[]
+			{
+				this._currentMask
+			});
 			if (this._currentMask != null)
 			{
 				base.StartCoroutine(this._currentMask.Hide(0.5f));

@@ -1,11 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
-using HeavyMetalMachines.Character;
+using System.Linq;
+using HeavyMetalMachines.Characters;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Matchmaking.Configuration;
+using HeavyMetalMachines.Social.FriendDataUpdater.Business;
+using Hoplon.ToggleableFeatures;
+using Hoplon.Unity.Loading;
 using Pocketverse;
-using SharedUtils.Loading;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
@@ -24,10 +30,17 @@ namespace HeavyMetalMachines.Frontend
 			return (float)((double)this._timer - ((double)Time.realtimeSinceStartup - this._lasttimegottimerfromserver));
 		}
 
+		private List<int> _lockedInCompetitiveCharacterIds { get; set; }
+
 		protected override void OnStateDisabled()
 		{
 			base.OnStateDisabled();
 			this.PickModeGUI = null;
+			if (this._friendDataUpdaterDisposable != null)
+			{
+				this._friendDataUpdaterDisposable.Dispose();
+				this._friendDataUpdaterDisposable = null;
+			}
 		}
 
 		private void OnDisable()
@@ -36,7 +49,7 @@ namespace HeavyMetalMachines.Frontend
 			this.ClosedPilots.Clear();
 			if (this.loadingToken != null)
 			{
-				this.loadingToken.Unload();
+				Loading.Engine.UnloadToken(this.loadingToken);
 			}
 		}
 
@@ -51,10 +64,52 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
+		protected override IObservable<Unit> OnStateEnabledAsync()
+		{
+			return Observable.Do<Unit>(this.GetCompetitiveLockedCharacters(), delegate(Unit _)
+			{
+				this.InitializeFriendDataUpdater();
+			});
+		}
+
+		private void InitializeFriendDataUpdater()
+		{
+			this._localFriendDataUpdater = this._diContainer.ResolveId<ILocalFriendDataUpdater>(1);
+			this._friendDataUpdaterDisposable = ObservableExtensions.Subscribe<Unit>(this._localFriendDataUpdater.ExecuteIndefinitely(), delegate(Unit onNext)
+			{
+				PickModeSetup.Log.Debug("SwordfishLocalFriendDataService onNext");
+			}, delegate(Exception onError)
+			{
+				PickModeSetup.Log.ErrorFormat("SwordfishLocalFriendDataService Error={0}", new object[]
+				{
+					onError
+				});
+			});
+		}
+
+		private IObservable<Unit> GetCompetitiveLockedCharacters()
+		{
+			bool flag = GameHubBehaviour.Hub.Match.Kind == 3;
+			if (flag)
+			{
+				return Observable.AsUnitObservable<QueueConfiguration>(Observable.Do<QueueConfiguration>(Observable.First<QueueConfiguration>(this._diContainer.Resolve<IGetThenObserveCompetitiveQueueConfiguration>().GetThenObserve()), new Action<QueueConfiguration>(this.CacheCompetitiveQueueLockedCharacters)));
+			}
+			this._lockedInCompetitiveCharacterIds = new List<int>(0);
+			return Observable.ReturnUnit();
+		}
+
+		private void CacheCompetitiveQueueLockedCharacters(QueueConfiguration queueConfiguration)
+		{
+			this._lockedInCompetitiveCharacterIds = (from data in queueConfiguration.LockedCharacters
+			select data.Id).ToList<int>();
+		}
+
 		protected override void OnMyLevelLoaded()
 		{
 			this.PickModeGUI = (PickModeGUI)GameHubBehaviour.Hub.State.CurrentSceneStateData.StateGuiController;
+			this.PickModeGUI.LockedInCompetitiveCharacterIds = this._lockedInCompetitiveCharacterIds;
 			this.GetTimeFromServer();
+			this.PickModeGUI.PopulateCharacterGrid();
 			PickModeSetup.CallDelayedEvents<ConfirmSelectionCallback>(ref this._delayedConfirmCharacterSelectionCallbacks, new Action<ConfirmSelectionCallback>(this.OnConfirmSelectionCallback));
 			PickModeSetup.CallDelayedEvents<ConfirmPickCallback>(ref this._delayedConfirmCharacterPickCallbacks, new Action<ConfirmPickCallback>(this.OnConfirmPickCallback));
 			PickModeSetup.CallDelayedEvents<ConfirmSkinCallback>(ref this._delayedConfirmSkinPickCallbacks, new Action<ConfirmSkinCallback>(this.OnConfirmSkinCallback));
@@ -99,6 +154,12 @@ namespace HeavyMetalMachines.Frontend
 				this._delayedConfirmCharacterSelectionCallbacks.Add(evt);
 				return;
 			}
+			PickModeSetup.Log.DebugFormat("OnConfirmSelectionCallback received. address={0} charId={1} message={2}", new object[]
+			{
+				evt.PlayerAddress,
+				evt.PilotId,
+				evt.Message
+			});
 			this.PickModeGUI.OnServerConfirmCharacterSelection((int)evt.PlayerAddress, evt.PilotId);
 		}
 
@@ -157,6 +218,12 @@ namespace HeavyMetalMachines.Frontend
 				this._delayedConfirmCharacterPickCallbacks.Add(evt);
 				return;
 			}
+			PickModeSetup.Log.DebugFormat("OnConfirmPickCallback received. address={0} charId={1} teamKind={2}", new object[]
+			{
+				evt.PlayerAddress,
+				evt.CharacterId,
+				evt.TeamKind
+			});
 			if (evt.TeamKind == (int)this._hub.Players.CurrentPlayerData.Team)
 			{
 				this.ClosedPilots.Add(evt.CharacterId);
@@ -200,6 +267,7 @@ namespace HeavyMetalMachines.Frontend
 				this._delayedConfirmGridSelectionCallbacks.Add(evt);
 				return;
 			}
+			PickModeSetup.Log.Debug("OnConfirmGridSelectionCallback received");
 			this.PickModeGUI.OnConfirmGridSelection(evt.PlayerAddress, evt.GridIndex);
 		}
 
@@ -246,18 +314,31 @@ namespace HeavyMetalMachines.Frontend
 				this._delayedConfirmGridPickCallbacks.Add(evt);
 				return;
 			}
-			this.PickModeGUI.OnConfirmGridPick(evt.PlayerAddress, evt.GridIndex, evt.SkinSelected);
+			PickModeSetup.Log.Debug("OnConfirmGridPickCallback received");
+			this.PickModeGUI.OnConfirmGridPick(evt.PlayerAddress, evt.GridIndex);
+		}
+
+		private float DeltaTimeSincePick()
+		{
+			return Time.realtimeSinceStartup - this._realTimeOnPick;
 		}
 
 		private void Update()
 		{
 			MatchData.MatchState state = this._hub.Match.State;
-			if (state == MatchData.MatchState.MatchStarted || state == MatchData.MatchState.PreMatch)
+			if (state != MatchData.MatchState.CharacterPick)
 			{
-				if (this.GetTimer() < -3f)
+				if (state == MatchData.MatchState.MatchStarted || state == MatchData.MatchState.PreMatch)
 				{
-					this.GoToLoading();
+					if (this.GetTimer() < -3f || this.DeltaTimeSincePick() > 3f)
+					{
+						this.GoToLoading();
+					}
 				}
+			}
+			else
+			{
+				this._realTimeOnPick = Time.realtimeSinceStartup;
 			}
 		}
 
@@ -268,9 +349,12 @@ namespace HeavyMetalMachines.Frontend
 				return;
 			}
 			this._gameCalled = true;
-			HudWindowManager.Instance.CloseAll(null);
-			this.PickModeGUI.PlayEndPickScreenAudio();
+			HudWindowManager.Instance.CloseAll();
 			base.GoToState(this.loadingState, false);
+			if (this.PickModeGUI)
+			{
+				this.PickModeGUI.PlayEndPickScreenAudio();
+			}
 		}
 
 		public void OnPickTimeOutCallback(PickTimeOutCallback evt)
@@ -280,6 +364,10 @@ namespace HeavyMetalMachines.Frontend
 				this._delayedTimeoutCallbacks.Add(evt);
 				return;
 			}
+			PickModeSetup.Log.DebugFormat("OnPickTimeOutCallback received. time={0}", new object[]
+			{
+				evt.CustomizationTime
+			});
 			this._timer = evt.CustomizationTime;
 			this._lasttimegottimerfromserver = (double)Time.realtimeSinceStartup;
 			this.CountdownStarted = true;
@@ -293,6 +381,16 @@ namespace HeavyMetalMachines.Frontend
 
 		private static readonly BitLogger Log = new BitLogger(typeof(PickModeSetup));
 
+		[Inject]
+		private DiContainer _diContainer;
+
+		[Inject]
+		private IIsFeatureToggled _isFeatureToggled;
+
+		private ILocalFriendDataUpdater _localFriendDataUpdater;
+
+		private IDisposable _friendDataUpdaterDisposable;
+
 		private HMMHub _hub;
 
 		public PickModeGUI PickModeGUI;
@@ -301,7 +399,7 @@ namespace HeavyMetalMachines.Frontend
 
 		public LoadingState loadingState;
 
-		private LoadingManager.LoadingToken loadingToken;
+		private LoadingToken loadingToken;
 
 		private float _timer;
 
@@ -324,6 +422,8 @@ namespace HeavyMetalMachines.Frontend
 		private List<PickTimeOutCallback> _delayedTimeoutCallbacks = new List<PickTimeOutCallback>();
 
 		private bool _endScreenAudioPlayed;
+
+		private float _realTimeOnPick;
 
 		private bool _gameCalled;
 

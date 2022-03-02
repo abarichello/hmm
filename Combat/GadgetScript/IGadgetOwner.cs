@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.Infra.Context;
 
 namespace HeavyMetalMachines.Combat.GadgetScript
 {
@@ -9,5 +10,11 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 		bool HasGadgetContext(int id);
 
 		CDummy Dummy { get; }
+
+		bool IsLocalPlayer { get; }
+
+		IIdentifiable Identifiable { get; }
+
+		ICombatObject GadgetCombatObject { get; }
 	}
 }

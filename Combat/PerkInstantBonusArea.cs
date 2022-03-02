@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkInstantBonusArea : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkInstantBonusArea : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		public override void PerkInitialized()
 		{
@@ -38,7 +38,7 @@ namespace HeavyMetalMachines.Combat
 
 		private void ApplyBonus()
 		{
-			Collider[] array = Physics.OverlapSphere(this._myTransform.position, this.Radius, 1077058560);
+			Collider[] array = Physics.OverlapSphere(this._myTransform.position, this.Radius, 1077054464);
 			this._combatObjectsNew.Clear();
 			foreach (Collider comp in array)
 			{
@@ -72,7 +72,7 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (GameHubBehaviour.Hub.Net.IsClient())
 			{

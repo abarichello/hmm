@@ -4,6 +4,9 @@ using FMod;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Combat.Gadget;
 using HeavyMetalMachines.Event;
+using HeavyMetalMachines.Infra.Context;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Input.ControllerInput;
 using HeavyMetalMachines.Options;
 using Pocketverse;
 using UnityEngine;
@@ -82,7 +85,7 @@ namespace HeavyMetalMachines.Frontend
 			GadgetData.GadgetStateObject gadgetState = this._gadgetData.GetGadgetState(GadgetSlot.BoostGadget);
 			bool stateChanged = this._boostGadgetState != gadgetState.GadgetState;
 			this._boostGadgetState = gadgetState.GadgetState;
-			if (this._isKeyEnabled && !this._isSpectating && (!this._isAlive || this._boostGadgetState != GadgetState.Ready) && this.DeniedAudioFmodAsset != null && ControlOptions.GetButtonDown(ControlAction.GadgetBoost))
+			if (this._isKeyEnabled && !this._isSpectating && (!this._isAlive || this._boostGadgetState != GadgetState.Ready) && this.DeniedAudioFmodAsset != null && this._inputActionPoller.GetButtonDown(15))
 			{
 				FMODAudioManager.PlayOneShotAt(this.DeniedAudioFmodAsset, Vector3.zero, 0);
 			}
@@ -93,7 +96,7 @@ namespace HeavyMetalMachines.Frontend
 
 		private void UpdateNitroUiState(GadgetData.GadgetStateObject gadgetStateObject, bool stateChanged)
 		{
-			bool flag = GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreBoard.State.BombDelivery;
+			bool flag = GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreboardState.BombDelivery;
 			if (!this._isAlive || !flag)
 			{
 				this.cooldownGroupGO.SetActive(false);
@@ -106,7 +109,7 @@ namespace HeavyMetalMachines.Frontend
 				this.SetAnimatorNitroUiState(1);
 				return;
 			}
-			if (!ControlOptions.IsControlActionUnlocked(ControlAction.GadgetBoost))
+			if (!ControlOptions.IsControlActionUnlocked(15))
 			{
 				this.cooldownGroupGO.SetActive(false);
 				this.SetAnimatorNitroUiState(0);
@@ -123,7 +126,7 @@ namespace HeavyMetalMachines.Frontend
 						{
 							this.cooldownGroupGO.SetActive(true);
 						}
-						float num = (float)(gadgetStateObject.CoolDown - (long)GameHubBehaviour.Hub.GameTime.GetPlaybackTime()) * 0.001f;
+						float num = (float)(gadgetStateObject.Cooldown - (long)GameHubBehaviour.Hub.GameTime.GetPlaybackTime()) * 0.001f;
 						num = Mathf.Max(0f, num);
 						int num2 = (int)num;
 						float num3 = num - (float)num2;
@@ -140,7 +143,7 @@ namespace HeavyMetalMachines.Frontend
 			else
 			{
 				this.cooldownGroupGO.SetActive(false);
-				if (ControlOptions.GetButton(ControlAction.GadgetBoost))
+				if (this._inputActionPoller.GetButton(15))
 				{
 					if (!this._isSpectating)
 					{
@@ -164,7 +167,7 @@ namespace HeavyMetalMachines.Frontend
 
 		public void UpdateKey(string keyText)
 		{
-			this._isKeyEnabled = (keyText != KeyCode.None.ToString());
+			this._isKeyEnabled = (keyText != 0.ToString());
 			if (this.TryDisableShortcutKeysIfSpectator())
 			{
 				return;
@@ -216,16 +219,14 @@ namespace HeavyMetalMachines.Frontend
 		private GameObject cooldownGroupGO;
 
 		[Header("[Controls]")]
-		public ControlAction ControlAction;
-
 		public UILabel KeyLabel;
 
 		public UI2DSprite KeySprite;
 
 		[Header("[Audio]")]
-		public FMODAsset DeniedAudioFmodAsset;
+		public AudioEventAsset DeniedAudioFmodAsset;
 
-		public FMODAsset ActivatedAudioFmodAsset;
+		public AudioEventAsset ActivatedAudioFmodAsset;
 
 		private GadgetState _boostGadgetState;
 
@@ -242,5 +243,8 @@ namespace HeavyMetalMachines.Frontend
 		private bool _isKeyEnabled;
 
 		private bool _isSpectating;
+
+		[InjectOnClient]
+		private IControllerInputActionPoller _inputActionPoller;
 	}
 }

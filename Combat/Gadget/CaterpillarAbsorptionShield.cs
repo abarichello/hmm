@@ -81,6 +81,10 @@ namespace HeavyMetalMachines.Combat.Gadget
 
 		protected override int FireGadget()
 		{
+			CaterpillarAbsorptionShield.Log.DebugFormat("FireGadget MatchTime:{0}", new object[]
+			{
+				GameHubBehaviour.Hub.GameTime.GetPlaybackTime()
+			});
 			EffectEvent effectEvent = base.GetEffectEvent(this.MyInfo.WardEffect);
 			effectEvent.LifeTime = this.MyInfo.WardLifeTime;
 			effectEvent.Origin = this._myTransform.position;
@@ -88,6 +92,10 @@ namespace HeavyMetalMachines.Combat.Gadget
 			effectEvent.Modifiers = this._upgWardModifiers;
 			effectEvent.ExtraModifiers = this._upgWardExtraModifiers;
 			this._currentWardEffect = GameHubBehaviour.Hub.Events.TriggerEvent(effectEvent);
+			CaterpillarAbsorptionShield.Log.DebugFormat("FireGadget id:{0}", new object[]
+			{
+				this._currentWardEffect
+			});
 			base.OnGadgetUsed(this._currentWardEffect);
 			if (this.MyInfo.WardFeedback)
 			{
@@ -109,9 +117,10 @@ namespace HeavyMetalMachines.Combat.Gadget
 			effectEvent.Modifiers = this._upgExplosionModifiers;
 			effectEvent.Range = this._upgExplosionRange;
 			GameHubBehaviour.Hub.Events.TriggerEvent(effectEvent);
+			CaterpillarAbsorptionShield.Log.Debug("FireExplosion END");
 		}
 
-		protected override void InnerOnDestroyEffect(DestroyEffect evt)
+		protected override void InnerOnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (evt.RemoveData.TargetEventId == this._currentWardEffect)
 			{

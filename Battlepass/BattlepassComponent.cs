@@ -4,30 +4,53 @@ using Assets.ClientApiObjects;
 using Assets.ClientApiObjects.Components;
 using Assets.Standard_Assets.Scripts.HMM.Battlepass;
 using ClientAPI;
-using Commons.Swordfish.Battlepass;
+using HeavyMetalMachines.Battlepass.Business;
+using HeavyMetalMachines.BI;
+using HeavyMetalMachines.Boosters.Business;
+using HeavyMetalMachines.DataTransferObjects.Battlepass;
+using HeavyMetalMachines.DataTransferObjects.Player;
+using HeavyMetalMachines.DataTransferObjects.Progression;
+using HeavyMetalMachines.DataTransferObjects.Result;
 using HeavyMetalMachines.Frontend;
 using HeavyMetalMachines.Infra.ScriptableObjects;
+using HeavyMetalMachines.Store.Business;
 using HeavyMetalMachines.Swordfish;
 using HeavyMetalMachines.Utils;
+using Hoplon.Serialization;
 using Pocketverse;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace HeavyMetalMachines.Battlepass
 {
 	public class BattlepassComponent : GameHubScriptableObject, IBattlepassComponent
 	{
-		public void RegisterView(IBattlepassView view)
+		public void SetStoreBusinessFactory(IStoreBusinessFactory storeBusinessFactory)
+		{
+			this._storeBusinessFactory = storeBusinessFactory;
+			this._exchangeableItemChecker = new ExchangeableItemChecker(GameHubScriptableObject.Hub.User.Inventory, GameHubScriptableObject.Hub.SharedConfigs.Battlepass.SoftCoinAlreadyClaimPercentage, GameHubScriptableObject.Hub.InventoryColletion, this._hardCoinItemTypeScriptableObject.Id, this._softCoinItemTypeScriptableObject.Id, this._storeBusinessFactory);
+		}
+
+		public void SetIGetLocalPlayerXpBooster(IGetLocalPlayerXpBooster playerXpBooster)
+		{
+			this._getLocalPlayerXpBooster = playerXpBooster;
+		}
+
+		public void SetIGetBattlepassSeason(IGetBattlepassSeason getBattlepassSeason)
+		{
+			this._getBattlepassSeason = getBattlepassSeason;
+		}
+
+		public void RegisterView(ILegacyBattlepassView view)
 		{
 			this._battlepassView = view;
 		}
 
-		private void Awake()
+		public void UnregisterView()
 		{
-			this._exchangeableItemChecker = new ExchangeableItemChecker(GameHubScriptableObject.Hub.User.Inventory, GameHubScriptableObject.Hub.SharedConfigs.Battlepass.SoftCoinAlreadyClaimPercentage, GameHubScriptableObject.Hub.InventoryColletion, this._hardCoinItemTypeScriptableObject.Id, this._softCoinItemTypeScriptableObject.Id);
+			this._battlepassView = null;
 		}
 
-		private BattlepassViewData GetBattlepassViewData()
+		public BattlepassViewData GetBattlepassViewData()
 		{
 			BattlepassViewData battlepassViewData = new BattlepassViewData();
 			battlepassViewData.DataTime = new BattlepassViewData.BattlepassViewDataTime
@@ -39,8 +62,9 @@ namespace HeavyMetalMachines.Battlepass
 			if (GameHubScriptableObject.Hub != null)
 			{
 				BattlepassConfig battlepass = GameHubScriptableObject.Hub.SharedConfigs.Battlepass;
-				battlepassViewData.DataTime.StartDateUtc = battlepass.GetStartDate();
-				battlepassViewData.DataTime.EndDateUtc = battlepass.GetEndDate();
+				BattlepassSeason battlepassSeason = this._getBattlepassSeason.Get();
+				battlepassViewData.DataTime.StartDateUtc = battlepassSeason.StartSeasonDateTime;
+				battlepassViewData.DataTime.EndDateUtc = battlepassSeason.EndSeasonDateTime;
 				BattlepassProgress progress = this._battlepassProgressScriptableObject.Progress;
 				int currentXp = progress.CurrentXp;
 				int levelForXp = battlepass.GetLevelForXp(currentXp);
@@ -50,9 +74,9 @@ namespace HeavyMetalMachines.Battlepass
 				battlepassViewData.DataLevels.CurrentXp = currentXp - levels[levelForXp].XP;
 				battlepassViewData.DataLevels.MaxLevels = num;
 				battlepassViewData.DataLevels.MaxXpPerLevel = new int[levels.Length];
-				battlepassViewData.DataLevels.HasXpBooster = GameHubScriptableObject.Hub.GuiScripts.TopMenu.IsBoosterActive();
+				battlepassViewData.DataLevels.HasXpBooster = this._getLocalPlayerXpBooster.IsActive();
 				battlepassViewData.DataSeason.UserHasPremium = progress.HasPremium();
-				battlepassViewData.DataSeason.LevelPriceValue = this._accountXpItemType.ReferenceHardPrice;
+				battlepassViewData.DataSeason.ItemTypeId = this._accountXpItemType.Id;
 				battlepassViewData.DataSeason.FreeSeasonItems = new List<BattlepassViewData.BattlepassViewDataSlotItem>(num);
 				battlepassViewData.DataSeason.PremiumSeasonItems = new List<BattlepassViewData.BattlepassViewDataSlotItem>(num);
 				int num2 = 0;
@@ -62,60 +86,60 @@ namespace HeavyMetalMachines.Battlepass
 					ProgressionLevel progressionLevel = levels[i];
 					battlepassViewData.DataLevels.MaxXpPerLevel[i] = progressionLevel.XP - num2;
 					num2 = progressionLevel.XP;
-					if (progressionLevel.FreeRewards.Argument != null && progressionLevel.FreeRewards.Kind != ProgressionInfo.RewardKind.None)
+					if (progressionLevel.FreeRewards.Argument != null && progressionLevel.FreeRewards.Kind != null)
 					{
 						int currencyAmount = 0;
 						Guid id;
 						switch (progressionLevel.FreeRewards.Kind)
 						{
-						case ProgressionInfo.RewardKind.SoftCurrency:
+						case 1:
 							id = this._softCoinItemTypeScriptableObject.Id;
 							currencyAmount = ((!string.IsNullOrEmpty(progressionLevel.FreeRewards.Argument)) ? int.Parse(progressionLevel.FreeRewards.Argument) : 0);
-							goto IL_2BD;
-						case ProgressionInfo.RewardKind.ItemType:
+							goto IL_2C1;
+						case 2:
 							id = new Guid(progressionLevel.FreeRewards.Argument);
-							goto IL_2BD;
-						case ProgressionInfo.RewardKind.HardCurrency:
+							goto IL_2C1;
+						case 4:
 							id = this._hardCoinItemTypeScriptableObject.Id;
 							currencyAmount = ((!string.IsNullOrEmpty(progressionLevel.FreeRewards.Argument)) ? int.Parse(progressionLevel.FreeRewards.Argument) : 0);
-							goto IL_2BD;
+							goto IL_2C1;
 						}
-						HeavyMetalMachines.Utils.Debug.Assert(false, "BattlepassComponent: Invalid FreeRewards Kind: " + progressionLevel.FreeRewards.Kind, HeavyMetalMachines.Utils.Debug.TargetTeam.All);
-						goto IL_417;
-						IL_2BD:
+						Debug.Assert(false, "BattlepassComponent: Invalid FreeRewards Kind: " + progressionLevel.FreeRewards.Kind, Debug.TargetTeam.All);
+						goto IL_41B;
+						IL_2C1:
 						this.AddBattlepassViewDataSlotItem(progressionLevel.FreeRewards.Kind, false, id, i, currencyAmount, battlepassViewData.DataSeason.FreeSeasonItems);
-						goto IL_2E1;
+						goto IL_2E5;
 					}
-					goto IL_2E1;
-					IL_417:
+					goto IL_2E5;
+					IL_41B:
 					i++;
 					continue;
-					IL_2E1:
-					if (progressionLevel.PremiumRewards.Argument != null && progressionLevel.PremiumRewards.Kind != ProgressionInfo.RewardKind.None)
+					IL_2E5:
+					if (progressionLevel.PremiumRewards.Argument != null && progressionLevel.PremiumRewards.Kind != null)
 					{
 						int currencyAmount2 = 0;
 						Guid id2;
 						switch (progressionLevel.PremiumRewards.Kind)
 						{
-						case ProgressionInfo.RewardKind.SoftCurrency:
+						case 1:
 							id2 = this._softCoinItemTypeScriptableObject.Id;
 							currencyAmount2 = ((!string.IsNullOrEmpty(progressionLevel.PremiumRewards.Argument)) ? int.Parse(progressionLevel.PremiumRewards.Argument) : 0);
-							goto IL_3F3;
-						case ProgressionInfo.RewardKind.ItemType:
+							goto IL_3F7;
+						case 2:
 							id2 = new Guid(progressionLevel.PremiumRewards.Argument);
-							goto IL_3F3;
-						case ProgressionInfo.RewardKind.HardCurrency:
+							goto IL_3F7;
+						case 4:
 							id2 = this._hardCoinItemTypeScriptableObject.Id;
 							currencyAmount2 = ((!string.IsNullOrEmpty(progressionLevel.PremiumRewards.Argument)) ? int.Parse(progressionLevel.PremiumRewards.Argument) : 0);
-							goto IL_3F3;
+							goto IL_3F7;
 						}
-						HeavyMetalMachines.Utils.Debug.Assert(false, "BattlepassComponent: Invalid PremiumRewards Kind: " + progressionLevel.FreeRewards.Kind, HeavyMetalMachines.Utils.Debug.TargetTeam.All);
-						goto IL_417;
-						IL_3F3:
+						Debug.Assert(false, "BattlepassComponent: Invalid PremiumRewards Kind: " + progressionLevel.FreeRewards.Kind, Debug.TargetTeam.All);
+						goto IL_41B;
+						IL_3F7:
 						this.AddBattlepassViewDataSlotItem(progressionLevel.PremiumRewards.Kind, true, id2, i, currencyAmount2, battlepassViewData.DataSeason.PremiumSeasonItems);
-						goto IL_417;
+						goto IL_41B;
 					}
-					goto IL_417;
+					goto IL_41B;
 				}
 				battlepassViewData.BattlepassConfig = GameHubScriptableObject.Hub.SharedConfigs.Battlepass;
 				battlepassViewData.BattlepassProgress = progress;
@@ -169,24 +193,10 @@ namespace HeavyMetalMachines.Battlepass
 				};
 				if (itemTypeScriptableObject.GetComponentByEnum(ItemTypeComponent.Type.SkinPrefab, out itemTypeComponent))
 				{
-					item.SkinCustomizations = ((SkinPrefabItemTypeComponent)itemTypeComponent).SkinCustomization;
+					item.SkinPrefabComponent = (SkinPrefabItemTypeComponent)itemTypeComponent;
 				}
 				listToAdd.Add(item);
 			}
-		}
-
-		public void LoadMetalpassWindow()
-		{
-			SceneManager.LoadSceneAsync("UI_ADD_Battlepass", LoadSceneMode.Additive);
-		}
-
-		public void UnloadMetalpassWindow()
-		{
-			if (this._battlepassView != null)
-			{
-				SceneManager.UnloadSceneAsync("UI_ADD_Battlepass");
-			}
-			this._battlepassView = null;
 		}
 
 		public void ShowMetalpassPremiumShopWindow()
@@ -195,33 +205,10 @@ namespace HeavyMetalMachines.Battlepass
 			if (!this._battlepassView.IsVisible())
 			{
 				this._battlepassView.Setup(this.GetBattlepassViewData());
-				this._mustOpenBattlepassView = false;
-				bool hasRewardsToClaim = false;
-				if (flag && GameHubScriptableObject.Hub != null && !GameHubScriptableObject.Hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish))
-				{
-					hasRewardsToClaim = this._battlepassRewardComponent.TryToOpenRewardsToClaim(new System.Action(this.OnRewardWindowClose));
-				}
-				this._battlepassView.SetVisibility(true, hasRewardsToClaim, false);
 			}
 			if (!flag)
 			{
 				this._battlepassView.TryToOpenPremiumShop();
-			}
-		}
-
-		public void ShowMetalpassWindow(System.Action onWindowCloseAction)
-		{
-			if (!this._battlepassView.IsVisible())
-			{
-				this._battlepassView.Setup(this.GetBattlepassViewData());
-				this._onWindowCloseAction = onWindowCloseAction;
-				this._mustOpenBattlepassView = false;
-				bool hasRewardsToClaim = false;
-				if (GameHubScriptableObject.Hub != null && !GameHubScriptableObject.Hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish))
-				{
-					hasRewardsToClaim = this._battlepassRewardComponent.TryToOpenRewardsToClaim(new System.Action(this.OnRewardWindowClose));
-				}
-				this._battlepassView.SetVisibility(true, hasRewardsToClaim, false);
 			}
 		}
 
@@ -230,7 +217,7 @@ namespace HeavyMetalMachines.Battlepass
 			this._battlepassView.RewardWindowClosed();
 		}
 
-		public void HideMetalpassWindow(bool imediate)
+		private void HideMetalpassWindow(bool imediate)
 		{
 			if (this._battlepassView.IsVisible())
 			{
@@ -265,12 +252,12 @@ namespace HeavyMetalMachines.Battlepass
 			}
 		}
 
-		public void MetalpassBuyLevelRequest(int quantityFromCurrentLevel, System.Action onBuyLevel, System.Action onBuyWindowClosed)
+		public void MetalpassBuyLevelRequest(int quantityFromCurrentLevel, Action onBuyLevel, Action onBuyWindowClosed)
 		{
 			this._onMetalpassBuyLevel = onBuyLevel;
 			if (GameHubScriptableObject.Hub != null)
 			{
-				GameHubScriptableObject.Hub.GuiScripts.SharedPreGameWindow.ItemBuyWindow.ShowBuyWindow(this._accountXpItemType, new System.Action(this.OnMetalpassBuyLevel), onBuyWindowClosed, new System.Action(this.OnGoToShopCash), quantityFromCurrentLevel, true);
+				GameHubScriptableObject.Hub.GuiScripts.SharedPreGameWindow.ItemBuyWindow.ShowBuyWindow(this._accountXpItemType, new Action(this.OnMetalpassBuyLevel), onBuyWindowClosed, new Action(this.OnGoToShopCashFromBuyLevelRequest), quantityFromCurrentLevel, true);
 			}
 		}
 
@@ -284,21 +271,17 @@ namespace HeavyMetalMachines.Battlepass
 			this._onMetalpassBuyLevel = null;
 		}
 
+		private void OnGoToShopCashFromBuyLevelRequest()
+		{
+			ClientShopBILogger.LegacyLog(GameHubScriptableObject.Hub, 4, 6);
+			this.OnGoToShopCash();
+		}
+
 		public void OnGoToShopCash()
 		{
 			GameHubScriptableObject.Hub.GuiScripts.SharedPreGameWindow.ItemBuyWindow.CloseWindow();
 			this.HideMetalpassWindow(false);
 			GameHubScriptableObject.Hub.State.Current.GetStateGuiController<MainMenuGui>().OnCashTopButtonClick();
-		}
-
-		public bool MustOpenMetalpassWindow()
-		{
-			return this._mustOpenBattlepassView;
-		}
-
-		public void SetMustOpenMetalpassWindow()
-		{
-			this._mustOpenBattlepassView = true;
 		}
 
 		public void MarkMissionsAsSeen()
@@ -316,16 +299,30 @@ namespace HeavyMetalMachines.Battlepass
 			this._battlepassProgressScriptableObject.Progress.CurrentXp = currentXp2;
 		}
 
+		public void GivePremiumFake()
+		{
+			this._battlepassProgressScriptableObject.Progress.PremiumPurchaseDate = DateTime.UtcNow;
+			this._battlepassProgressScriptableObject.Progress.PremiumPurchaseXp = this._battlepassProgressScriptableObject.Progress.CurrentXp;
+		}
+
 		private void OnMarkMissionsSuccess(object state, string s)
 		{
 			GameState.GameStateKind gameStateKind = (GameState.GameStateKind)state;
 			if (gameStateKind == GameHubScriptableObject.Hub.State.Current.StateKind)
 			{
-				NetResult netResult = (NetResult)((JsonSerializeable<T>)s);
+				NetResult netResult = (NetResult)((JsonSerializeable<!0>)s);
 				if (netResult.Success)
 				{
 					GameHubScriptableObject.Hub.User.SetBattlepassProgress(netResult.Msg);
 				}
+			}
+			else
+			{
+				BattlepassComponent.Log.DebugFormat("OnMarkMissionsSuccess on another state. Old={0} Current={1}", new object[]
+				{
+					gameStateKind,
+					GameHubScriptableObject.Hub.State.Current.StateKind
+				});
 			}
 		}
 
@@ -340,9 +337,9 @@ namespace HeavyMetalMachines.Battlepass
 
 		public int GetPackageIndexRelevantToBattlepassLevel(int level, int maxLevel, int numItemTypes)
 		{
-			int b = maxLevel - numItemTypes + 1;
-			int num = Mathf.Max(level, b);
-			return Mathf.Clamp(num - maxLevel + numItemTypes, 1, numItemTypes - 1);
+			int num = maxLevel - numItemTypes + 1;
+			int num2 = Mathf.Max(level, num);
+			return Mathf.Clamp(num2 - maxLevel + numItemTypes, 1, numItemTypes - 1);
 		}
 
 		public void RefreshData(MainMenuData mainMenuData)
@@ -388,17 +385,21 @@ namespace HeavyMetalMachines.Battlepass
 		[SerializeField]
 		private ItemTypeScriptableObject _hardCoinItemTypeScriptableObject;
 
-		private IBattlepassView _battlepassView;
+		private ILegacyBattlepassView _battlepassView;
 
-		private System.Action _onWindowCloseAction;
+		private Action _onWindowCloseAction;
 
-		private System.Action _onMetalpassBuyLevel;
+		private Action _onMetalpassBuyLevel;
 
-		private bool _mustOpenBattlepassView;
+		private IStoreBusinessFactory _storeBusinessFactory;
 
 		private ExchangeableItemChecker _exchangeableItemChecker;
 
-		public System.Action OnBattlepassTransactionSuccess;
+		private IGetLocalPlayerXpBooster _getLocalPlayerXpBooster;
+
+		private IGetBattlepassSeason _getBattlepassSeason;
+
+		public Action OnBattlepassTransactionSuccess;
 
 		private long _sfClockOffset;
 	}

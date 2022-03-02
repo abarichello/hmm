@@ -84,7 +84,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				BarrierUtils.CombatHit hit = hitsResult[i];
 				BarrierUtils._sameCombatChecker.Init(hit);
-				int num = hitsResult.FindIndex(i + 1, new Predicate<BarrierUtils.CombatHit>(BarrierUtils._sameCombatChecker.Check));
+				int num = hitsResult.FindIndex(i + 1, BarrierUtils._sameCombatCheckerCheck);
 				if (num > i)
 				{
 					BarrierUtils.CombatHit combatHit = hitsResult[num];
@@ -99,9 +99,10 @@ namespace HeavyMetalMachines.Combat
 						Vector3 vector = position - point;
 						float magnitude = vector.magnitude;
 						vector /= magnitude;
-						Ray ray = new Ray(point, vector);
+						Ray ray;
+						ray..ctor(point, vector);
 						RaycastHit raycastHit;
-						bool flag = hit.Col.Raycast(ray, out raycastHit, magnitude);
+						bool flag = hit.Col.Raycast(ray, ref raycastHit, magnitude);
 						float num2 = (!flag) ? float.MaxValue : raycastHit.distance;
 						bool flag2 = false;
 						if (!flag && BarrierUtils.CheckInsideCollider2D(hit.Col, point, out raycastHit))
@@ -109,7 +110,7 @@ namespace HeavyMetalMachines.Combat
 							flag2 = true;
 							num2 = raycastHit.distance;
 						}
-						bool flag3 = combatHit.Col.Raycast(ray, out raycastHit, magnitude);
+						bool flag3 = combatHit.Col.Raycast(ray, ref raycastHit, magnitude);
 						float num3 = (!flag3) ? float.MaxValue : raycastHit.distance;
 						bool flag4 = false;
 						if (!flag3 && BarrierUtils.CheckInsideCollider2D(combatHit.Col, point, out raycastHit))
@@ -148,8 +149,9 @@ namespace HeavyMetalMachines.Combat
 
 		private static bool CheckInsideCollider2D(Collider col, Vector3 point, out RaycastHit hitInfo)
 		{
-			Ray ray = new Ray(point + Vector3.up * 100f, Vector3.down);
-			return col.Raycast(ray, out hitInfo, 100f);
+			Ray ray;
+			ray..ctor(point + Vector3.up * 100f, Vector3.down);
+			return col.Raycast(ray, ref hitInfo, 100f);
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(BarrierUtils));
@@ -159,6 +161,8 @@ namespace HeavyMetalMachines.Combat
 		private static Collider[] ColliderBuffer = new Collider[64];
 
 		private static BarrierUtils.SameCombatChecker _sameCombatChecker = new BarrierUtils.SameCombatChecker();
+
+		private static Predicate<BarrierUtils.CombatHit> _sameCombatCheckerCheck = new Predicate<BarrierUtils.CombatHit>(BarrierUtils._sameCombatChecker.Check);
 
 		private const float SkyCast = 100f;
 

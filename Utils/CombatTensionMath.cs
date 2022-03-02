@@ -28,18 +28,18 @@ namespace HeavyMetalMachines.Utils
 			}
 			Vector3 normalized = this._srcCombat.GetComponent<Rigidbody>().velocity.normalized;
 			Vector3 normalized2 = this._dstCombat.GetComponent<Rigidbody>().velocity.normalized;
-			Vector3 b = (position + position2) * 0.5f;
-			Vector3 normalized3 = (position - b).normalized;
-			Vector3 normalized4 = (position2 - b).normalized;
+			Vector3 vector = (position + position2) * 0.5f;
+			Vector3 normalized3 = (position - vector).normalized;
+			Vector3 normalized4 = (position2 - vector).normalized;
 			bool flag = Vector3.Dot(normalized, normalized3) > 0f;
 			bool flag2 = Vector3.Dot(normalized2, normalized4) > 0f;
 			if (!flag && this.SrcApplyOnTensionOnly && !flag2 && this.DstApplyOnTensionOnly)
 			{
 				return;
 			}
-			Vector3 vector = position2 - position;
-			Vector3 normalized5 = vector.normalized;
-			float num2 = vector.sqrMagnitude / this._srqRealRange;
+			Vector3 vector2 = position2 - position;
+			Vector3 normalized5 = vector2.normalized;
+			float num2 = vector2.sqrMagnitude / this._srqRealRange;
 			if (!this.QuadraticTension)
 			{
 				num2 = Mathf.Sqrt(num2);

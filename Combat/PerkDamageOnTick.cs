@@ -26,6 +26,13 @@ namespace HeavyMetalMachines.Combat
 			this._modifiers = base.GetModifiers(this.Source);
 			this._target = base.GetTargetCombat(this.Effect, this.Target);
 			this._origin = base.GetTargetTransform(this.Effect, this.Origin);
+			PerkDamageOnTick.Log.DebugFormat("_origin:{0} pos:{1} _target:{2} pos:{3}", new object[]
+			{
+				this._origin.name,
+				this.OriginPosition,
+				this._target.name,
+				this._target.transform.position
+			});
 		}
 
 		private void FixedUpdate()

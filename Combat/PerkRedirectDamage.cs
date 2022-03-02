@@ -3,7 +3,7 @@ using Pocketverse;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkRedirectDamage : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkRedirectDamage : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		public override void PerkInitialized()
 		{
@@ -16,10 +16,12 @@ namespace HeavyMetalMachines.Combat
 			this._toCombatObject = this.Effect.GetTargetCombat(this.To);
 			if (this._fromCombatObject == null)
 			{
+				PerkRedirectDamage.Log.Debug("Impossible to get From CombatObject");
 				return;
 			}
 			if (this._toCombatObject == null)
 			{
+				PerkRedirectDamage.Log.Debug("Impossible to get To CombatObject");
 				return;
 			}
 			if (!this.Effect.CheckHit(this._fromCombatObject))
@@ -33,7 +35,7 @@ namespace HeavyMetalMachines.Combat
 			this.AddListener(this._fromCombatObject);
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (this._fromCombatObject)
 			{

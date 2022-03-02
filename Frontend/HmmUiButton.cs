@@ -1,5 +1,6 @@
 ﻿using System;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace HeavyMetalMachines.Frontend
@@ -7,78 +8,91 @@ namespace HeavyMetalMachines.Frontend
 	[AddComponentMenu("UI/HMM/HmmUiButton")]
 	public class HmmUiButton : Button
 	{
+		public override void OnPointerExit(PointerEventData eventData)
+		{
+			base.OnPointerExit(eventData);
+			if (!this.IsActive())
+			{
+				return;
+			}
+			if (!this.IsInteractable() && base.currentSelectionState == 1)
+			{
+				base.UpdateSelectionState(null);
+			}
+		}
+
 		protected override void DoStateTransition(Selectable.SelectionState state, bool instant)
 		{
 			base.DoStateTransition(state, instant);
 			switch (state)
 			{
-			case Selectable.SelectionState.Normal:
-				this.ColorNormal();
+			case 0:
+				this.ColorNormal(instant);
 				break;
-			case Selectable.SelectionState.Highlighted:
-				this.ColorHover();
+			case 1:
+				this.ColorHover(instant);
 				break;
-			case Selectable.SelectionState.Pressed:
-				this.ColorPressed();
+			case 2:
+				this.ColorPressed(instant);
 				break;
-			case Selectable.SelectionState.Disabled:
-				this.OnDeselect();
+			case 3:
+				this.ColorDisabled(instant);
 				break;
 			}
 		}
 
-		private void OnDeselect()
-		{
-			this.ColorDisabled();
-		}
-
-		private void ColorHover()
+		private void ColorHover(bool instant)
 		{
 			for (int i = 0; i < this._graphicColorData.Length; i++)
 			{
-				HmmUiButton.ButtonGraphicColorData buttonGraphicColorData = this._graphicColorData[i];
-				buttonGraphicColorData.TargetGraphic.CrossFadeColor(buttonGraphicColorData.ColorBlock.highlightedColor, buttonGraphicColorData.ColorBlock.fadeDuration, true, buttonGraphicColorData.UseAlpha);
+				this._graphicColorData[i].SetColorHighlighted(instant);
+			}
+			for (int j = 0; j < this._spriteSwappers.Length; j++)
+			{
+				this._spriteSwappers[j].SetColorHighlighted();
 			}
 		}
 
-		private void ColorNormal()
+		private void ColorNormal(bool instant)
 		{
 			for (int i = 0; i < this._graphicColorData.Length; i++)
 			{
-				HmmUiButton.ButtonGraphicColorData buttonGraphicColorData = this._graphicColorData[i];
-				buttonGraphicColorData.TargetGraphic.CrossFadeColor(buttonGraphicColorData.ColorBlock.normalColor, buttonGraphicColorData.ColorBlock.fadeDuration, true, buttonGraphicColorData.UseAlpha);
+				this._graphicColorData[i].SetColorNormal(instant);
+			}
+			for (int j = 0; j < this._spriteSwappers.Length; j++)
+			{
+				this._spriteSwappers[j].SetColorNormal();
 			}
 		}
 
-		private void ColorPressed()
+		private void ColorPressed(bool instant)
 		{
 			for (int i = 0; i < this._graphicColorData.Length; i++)
 			{
-				HmmUiButton.ButtonGraphicColorData buttonGraphicColorData = this._graphicColorData[i];
-				buttonGraphicColorData.TargetGraphic.CrossFadeColor(buttonGraphicColorData.ColorBlock.pressedColor, buttonGraphicColorData.ColorBlock.fadeDuration, true, buttonGraphicColorData.UseAlpha);
+				this._graphicColorData[i].SetColorPressed(instant);
+			}
+			for (int j = 0; j < this._spriteSwappers.Length; j++)
+			{
+				this._spriteSwappers[j].SetColorPressed();
 			}
 		}
 
-		private void ColorDisabled()
+		private void ColorDisabled(bool instant)
 		{
 			for (int i = 0; i < this._graphicColorData.Length; i++)
 			{
-				HmmUiButton.ButtonGraphicColorData buttonGraphicColorData = this._graphicColorData[i];
-				buttonGraphicColorData.TargetGraphic.CrossFadeColor(buttonGraphicColorData.ColorBlock.disabledColor, buttonGraphicColorData.ColorBlock.fadeDuration, true, buttonGraphicColorData.UseAlpha);
+				this._graphicColorData[i].SetColorDisabled(instant);
+			}
+			for (int j = 0; j < this._spriteSwappers.Length; j++)
+			{
+				this._spriteSwappers[j].SetColorDisabled();
 			}
 		}
 
 		[SerializeField]
-		private HmmUiButton.ButtonGraphicColorData[] _graphicColorData = new HmmUiButton.ButtonGraphicColorData[0];
+		private UiButtonSpriteSwapper[] _spriteSwappers = new UiButtonSpriteSwapper[0];
 
-		[Serializable]
-		public class ButtonGraphicColorData
-		{
-			public Graphic TargetGraphic;
-
-			public ColorBlock ColorBlock;
-
-			public bool UseAlpha = true;
-		}
+		[SerializeField]
+		private SelectableGraphicColorData[] _graphicColorData = new SelectableGraphicColorData[0];
 	}
 }

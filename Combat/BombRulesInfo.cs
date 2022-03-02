@@ -7,12 +7,22 @@ namespace HeavyMetalMachines.Combat
 {
 	public class BombRulesInfo : GameHubScriptableObject
 	{
+		public int BombScoreTarget
+		{
+			get
+			{
+				return this._bombScoreTarget;
+			}
+			set
+			{
+				this._bombScoreTarget = value;
+			}
+		}
+
 		public float ShopDelayBeforeOpenSeconds = 2f;
 
 		[HideInInspector]
 		public float ShopPhaseSeconds;
-
-		public bool InstancesEnabled;
 
 		[HideInInspector]
 		public float ReplayDelaySeconds = 1.5f;
@@ -23,7 +33,8 @@ namespace HeavyMetalMachines.Combat
 
 		public BombInfo BombInfo;
 
-		public int BombScoreTarget = 3;
+		[SerializeField]
+		private int _bombScoreTarget = 3;
 
 		public float TimeToCheckDisputeFinished = 1f;
 

@@ -1,9 +1,12 @@
 ﻿using System;
 using System.Collections;
-using Commons.Swordfish.Battlepass;
+using HeavyMetalMachines.Battlepass.Business;
+using HeavyMetalMachines.DataTransferObjects.Battlepass;
+using HeavyMetalMachines.DataTransferObjects.Progression;
 using HeavyMetalMachines.Frontend;
 using HeavyMetalMachines.UnityUI;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Battlepass
 {
@@ -18,10 +21,13 @@ namespace HeavyMetalMachines.Battlepass
 			this._buyUiActions = buyUiActions;
 			int num = 0;
 			int num2 = 0;
-			for (int i = 0; i < missionConfig.Missions.Length; i++)
+			BattlepassSeason battlepassSeason = this._getBattlepassSeason.Get();
+			int missionIndex;
+			for (missionIndex = 0; missionIndex < missionConfig.Missions.Length; missionIndex++)
 			{
-				Mission mission = missionConfig.Missions[i];
-				if (mission.GetStartDate() <= utcNow && !progress.IsDoingMission(i) && i < progress.MissionsCompleted.Length && !progress.MissionsCompleted[i])
+				Mission mission = missionConfig.Missions[missionIndex];
+				bool flag = progress.MissionsCompleted.Find((MissionCompleted x) => x.MissionIndex == missionIndex) == null;
+				if (mission.GetStartDate(battlepassSeason.StartSeasonDateTime) <= utcNow && !progress.IsDoingMission(missionIndex) && flag)
 				{
 					if (mission.IsPremium > 0)
 					{
@@ -155,6 +161,9 @@ namespace HeavyMetalMachines.Battlepass
 
 		[SerializeField]
 		private float _premiumUnlockedCanvasGroupAlpha = 1f;
+
+		[Inject]
+		private IGetBattlepassSeason _getBattlepassSeason;
 
 		private IBattlepassBuyUiActions _buyUiActions;
 

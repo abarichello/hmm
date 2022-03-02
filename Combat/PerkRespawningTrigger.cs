@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.Infra.Context;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Combat
@@ -7,7 +8,7 @@ namespace HeavyMetalMachines.Combat
 	{
 		public override void PerkInitialized()
 		{
-			if (GameHubBehaviour.Hub.Net.IsClient() || GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreBoard.State.BombDelivery)
+			if (GameHubBehaviour.Hub.Net.IsClient() || GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreboardState.BombDelivery)
 			{
 				return;
 			}

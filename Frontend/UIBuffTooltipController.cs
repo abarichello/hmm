@@ -31,10 +31,10 @@ namespace HeavyMetalMachines.Frontend
 				this.SetAlpha(this.mCurrent * this.mCurrent);
 				if (this.scalingTransitions)
 				{
-					Vector3 b = this.mSize * 0.25f;
-					b.y = -b.y;
+					Vector3 vector = this.mSize * 0.25f;
+					vector.y = -vector.y;
 					Vector3 localScale = Vector3.one * (1.5f - this.mCurrent * 0.5f);
-					Vector3 localPosition = Vector3.Lerp(this.mPos - b, this.mPos, this.mCurrent);
+					Vector3 localPosition = Vector3.Lerp(this.mPos - vector, this.mPos, this.mCurrent);
 					this.mTrans.localPosition = localPosition;
 					this.mTrans.localScale = localScale;
 				}
@@ -90,7 +90,8 @@ namespace HeavyMetalMachines.Frontend
 				this.mPos.y = Mathf.Clamp01(this.mPos.y / (float)Screen.height);
 				float num = this.uiCamera.orthographicSize / this.mTrans.parent.lossyScale.y;
 				float num2 = (float)Screen.height * 0.5f / num;
-				Vector2 vector = new Vector2(num2 * this.mSize.x / (float)Screen.width, num2 * this.mSize.y / (float)Screen.height);
+				Vector2 vector;
+				vector..ctor(num2 * this.mSize.x / (float)Screen.width, num2 * this.mSize.y / (float)Screen.height);
 				this.mPos.x = Mathf.Min(this.mPos.x, 1f - vector.x);
 				this.mPos.y = Mathf.Max(this.mPos.y, vector.y);
 				this.mTrans.position = this.uiCamera.ViewportToWorldPoint(this.mPos);

@@ -2,12 +2,17 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using FMod;
+using HeavyMetalMachines.Localization;
+using HeavyMetalMachines.Presenting;
+using HeavyMetalMachines.Presenting.GenericConfirmWindow;
+using Hoplon.Input.UiNavigation;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Frontend
 {
-	public class ConfirmWindowReference : GameHubBehaviour
+	public class ConfirmWindowReference : GameHubBehaviour, IPersistentGenericConfirmWindowPresenter
 	{
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public static event Action EvtConfirmWindowOpened;
@@ -20,6 +25,14 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
+		private IUiNavigationGroupHolder UiNavigationGroupHolder
+		{
+			get
+			{
+				return this._uiNavigationGroupHolder;
+			}
+		}
+
 		public void ExecConfirm()
 		{
 			if (this._openedWindowProperties == null || this._openedWindowProperties.OnConfirm == null)
@@ -27,6 +40,10 @@ namespace HeavyMetalMachines.Frontend
 				return;
 			}
 			this._openedWindowProperties.OnConfirm();
+			if (this._openedWindowProperties != null)
+			{
+				this._openedWindowProperties.OnConfirm = null;
+			}
 		}
 
 		public void ExecRefuse()
@@ -151,11 +168,18 @@ namespace HeavyMetalMachines.Frontend
 			base.gameObject.SetActive(true);
 			this.SetupConfirmWindow(properties);
 			this._visible = true;
+			ConfirmWindowReference.Log.DebugFormat("Showing window. Question:{0} Text: {1}, guid: {2}", new object[]
+			{
+				properties.QuestionText,
+				properties.CheckboxText,
+				properties.Guid
+			});
 			if (ConfirmWindowReference.EvtConfirmWindowOpened != null)
 			{
 				ConfirmWindowReference.EvtConfirmWindowOpened();
 			}
 			GameHubBehaviour.Hub.CursorManager.Push(true, CursorManager.CursorTypes.OptionsCursor);
+			this.UiNavigationGroupHolder.AddHighPriorityGroup();
 		}
 
 		public void HideConfirmWindow(Guid guid)
@@ -170,6 +194,11 @@ namespace HeavyMetalMachines.Frontend
 				return;
 			}
 			this._confirmWindowStack.RemoveAt(num);
+			ConfirmWindowReference.Log.DebugFormat("Removed Guid \"{0}\" from stack. Stack Count: {1}", new object[]
+			{
+				guid,
+				this._confirmWindowStack
+			});
 		}
 
 		private bool TryHideWindowAndCloseIfOpened(Guid guid)
@@ -178,10 +207,16 @@ namespace HeavyMetalMachines.Frontend
 			{
 				return false;
 			}
+			ConfirmWindowReference.Log.DebugFormat("Closing window. Text: {0}, guid: {1}", new object[]
+			{
+				this.Label.text,
+				guid
+			});
 			base.gameObject.SetActive(false);
 			GameHubBehaviour.Hub.CursorManager.Pop();
 			this._visible = false;
 			this._openedWindowProperties = null;
+			this.UiNavigationGroupHolder.RemoveHighPriorityGroup();
 			if (this._confirmWindowStack.Count <= 0)
 			{
 				return true;
@@ -200,6 +235,11 @@ namespace HeavyMetalMachines.Frontend
 
 		public void QueueConfirmWindow(ConfirmWindowProperties properties)
 		{
+			ConfirmWindowReference.Log.DebugFormat("Stacking window. Text: {0}, guid: {1}", new object[]
+			{
+				properties.CheckboxText,
+				properties.Guid
+			});
 			this._confirmWindowStack.Add(properties);
 		}
 
@@ -242,17 +282,18 @@ namespace HeavyMetalMachines.Frontend
 			ConfirmWindowProperties properties = new ConfirmWindowProperties
 			{
 				Guid = confirmWindowGuid,
-				QuestionText = Language.Get("CloseGameQuestion", TranslationSheets.MainMenuGui.ToString()),
-				ConfirmButtonText = Language.Get("CLOSEGAME_YES", TranslationSheets.MainMenuGui.ToString()),
+				QuestionText = Language.Get("CloseGameQuestion", TranslationContext.MainMenuGui),
+				ConfirmButtonText = Language.Get("CLOSEGAME_YES", TranslationContext.MainMenuGui),
 				OnConfirm = delegate()
 				{
+					this.HideConfirmWindow(confirmWindowGuid);
 					if (preQuitCallback != null)
 					{
 						preQuitCallback();
 					}
-					GameHubBehaviour.Hub.Quit();
+					GameHubBehaviour.Hub.Quit(8);
 				},
-				RefuseButtonText = Language.Get("CLOSEGAME_NO", TranslationSheets.MainMenuGui.ToString()),
+				RefuseButtonText = Language.Get("CLOSEGAME_NO", TranslationContext.MainMenuGui),
 				OnRefuse = delegate()
 				{
 					this.HideConfirmWindow(confirmWindowGuid);
@@ -299,6 +340,38 @@ namespace HeavyMetalMachines.Frontend
 			{
 				this._openedWindowProperties.OnTimeOut();
 			}
+		}
+
+		public IObservable<Unit> Show(DialogConfiguration configuration)
+		{
+			ConfirmWindowReference.<Show>c__AnonStorey3 <Show>c__AnonStorey = new ConfirmWindowReference.<Show>c__AnonStorey3();
+			<Show>c__AnonStorey.configuration = configuration;
+			<Show>c__AnonStorey.$this = this;
+			return Observable.Create<Unit>(delegate(IObserver<Unit> observer)
+			{
+				bool isDisposed = false;
+				Guid id = Guid.NewGuid();
+				<Show>c__AnonStorey.$this.ShowConfirmWindow(new ConfirmWindowProperties
+				{
+					Guid = id,
+					TileText = <Show>c__AnonStorey.configuration.Title,
+					QuestionText = <Show>c__AnonStorey.configuration.Message,
+					OkButtonText = Language.Get("Ok", TranslationContext.GUI),
+					OnOk = delegate()
+					{
+						if (!isDisposed)
+						{
+							observer.OnNext(Unit.Default);
+							observer.OnCompleted();
+							<Show>c__AnonStorey.HideConfirmWindow(id);
+						}
+					}
+				});
+				return Disposable.Create(delegate()
+				{
+					isDisposed = true;
+				});
+			});
 		}
 
 		public static readonly BitLogger Log = new BitLogger(typeof(ConfirmWindowReference));
@@ -348,6 +421,9 @@ namespace HeavyMetalMachines.Frontend
 
 		private int _countdownAudioPlayed;
 
-		public FMODAsset CountdownAudio;
+		public AudioEventAsset CountdownAudio;
+
+		[SerializeField]
+		private UiNavigationGroupHolder _uiNavigationGroupHolder;
 	}
 }

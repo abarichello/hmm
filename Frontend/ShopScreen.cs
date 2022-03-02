@@ -1,4 +1,6 @@
 ﻿using System;
+using Hoplon.Input.UiNavigation;
+using Hoplon.Input.UiNavigation.AxisSelector;
 using Pocketverse;
 using UnityEngine;
 
@@ -6,6 +8,22 @@ namespace HeavyMetalMachines.Frontend
 {
 	public class ShopScreen : GameHubBehaviour
 	{
+		protected IUiNavigationSubGroupHolder UiNavigationSubGroupHolder
+		{
+			get
+			{
+				return this._uiNavigationSubGroupHolder;
+			}
+		}
+
+		protected IUiNavigationRebuilder UiNavigationAxisSelectorRebuilder
+		{
+			get
+			{
+				return this._uiNavigationAxisSelector;
+			}
+		}
+
 		public int CurrentPage
 		{
 			get
@@ -48,7 +66,7 @@ namespace HeavyMetalMachines.Frontend
 			this.PageToggleControllers = new ShopDriverPageToggle[this.TotalNumberofPages];
 			for (int j = 0; j < this.TotalNumberofPages; j++)
 			{
-				ShopDriverPageToggle component = UnityEngine.Object.Instantiate<GameObject>(this.PageTogglePrefab).GetComponent<ShopDriverPageToggle>();
+				ShopDriverPageToggle component = Object.Instantiate<GameObject>(this.PageTogglePrefab).GetComponent<ShopDriverPageToggle>();
 				component.Visible = true;
 				component.PageNumber.text = j + 1 + string.Empty;
 				component.transform.parent = this.PageControllersGridPivot.transform;
@@ -78,8 +96,14 @@ namespace HeavyMetalMachines.Frontend
 			}
 			for (int j = 0; j < this.TotalNumberofPages; j++)
 			{
-				this.PageToggleControllers[j].gameObject.SetActive(true);
-				this.PageToggleControllers[j].GetComponent<Collider>().enabled = true;
+				ShopDriverPageToggle shopDriverPageToggle2 = this.PageToggleControllers[j];
+				shopDriverPageToggle2.gameObject.SetActive(true);
+				shopDriverPageToggle2.GetComponent<Collider>().enabled = true;
+				UIButton[] components = shopDriverPageToggle2.GetComponents<UIButton>();
+				for (int k = 0; k < components.Length; k++)
+				{
+					components[k].SetState(UIButtonColor.State.Normal, true);
+				}
 			}
 			this.PageToggleControllers[this.CurrentPage].Toggle.value = true;
 			this.PageToggleControllers[this.CurrentPage].GetComponent<Collider>().enabled = false;
@@ -123,12 +147,14 @@ namespace HeavyMetalMachines.Frontend
 		public virtual void Hide()
 		{
 			this.ShopAnimator.SetBool("show", false);
+			this.UiNavigationSubGroupHolder.SubGroupFocusRelease();
 		}
 
 		public virtual void Show()
 		{
 			this.Setup();
 			this.ShopAnimator.SetBool("show", true);
+			this.UiNavigationSubGroupHolder.SubGroupFocusGet();
 		}
 
 		public virtual bool IsVisible()
@@ -154,6 +180,13 @@ namespace HeavyMetalMachines.Frontend
 		public UIGrid PageControllersGridPivot;
 
 		public ShopDriverPageToggle[] PageToggleControllers;
+
+		[Header("[Ui Navigation]")]
+		[SerializeField]
+		private UiNavigationSubGroupHolder _uiNavigationSubGroupHolder;
+
+		[SerializeField]
+		private UiNavigationAxisSelector _uiNavigationAxisSelector;
 
 		private int _totalNumberofPages;
 

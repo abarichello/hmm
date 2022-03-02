@@ -7,15 +7,16 @@ namespace HeavyMetalMachines.Frontend
 {
 	public class HudWinnerBackgroundEffect
 	{
-		public HudWinnerBackgroundEffect(HudWinnerBackgroundEffect.HudWinnerBackgroundEffectParameres backgroundEffectParameres)
+		public HudWinnerBackgroundEffect(HudWinnerBackgroundEffect.HudWinnerBackgroundEffectParameres backgroundEffectParameres, IGamePostProcessing postProcessing)
 		{
+			this._gamePostProcessing = postProcessing;
 			this._backgroundEffectParameres = backgroundEffectParameres;
 		}
 
 		internal void Start(Func<bool> condition)
 		{
 			this._animationStartTime = Time.timeSinceLevelLoad;
-			this._postProcessing = CarCamera.Singleton.postProcessing.Request("HudWinner", condition, false);
+			this._postProcessing = this._gamePostProcessing.Request("HudWinner", condition, false);
 			if (this._postProcessing != null)
 			{
 				this._postProcessing.Enabled = true;
@@ -32,13 +33,13 @@ namespace HeavyMetalMachines.Frontend
 				return;
 			}
 			float timeSinceLevelLoad = Time.timeSinceLevelLoad;
-			float a = timeSinceLevelLoad - this._animationStartTime;
+			float num = timeSinceLevelLoad - this._animationStartTime;
 			float stateLenght = this._backgroundEffectParameres.StateLenght;
-			HeavyMetalMachines.Utils.Debug.Assert(stateLenght != 0f, "No state lenght can be ==0.", HeavyMetalMachines.Utils.Debug.TargetTeam.All);
-			float t = Mathf.Min(a, stateLenght) / stateLenght;
-			this._postProcessing.Exposure.Parameters.Strength = Mathf.Lerp(this._backgroundEffectParameres.StartExposure, this._backgroundEffectParameres.EndExposure, t);
-			this._postProcessing.CRTMonitor.Parameters.LineStrength = Mathf.Lerp(this._backgroundEffectParameres.StartCRTMonitorLinesStrength, this._backgroundEffectParameres.EndCRTMonitorLinesStrength, t);
-			this._postProcessing.Saturation.Parameters.Value = Mathf.Lerp(this._backgroundEffectParameres.StartSaturation, this._backgroundEffectParameres.EndSaturation, t);
+			Debug.Assert(stateLenght != 0f, "No state lenght can be ==0.", Debug.TargetTeam.All);
+			float num2 = Mathf.Min(num, stateLenght) / stateLenght;
+			this._postProcessing.Exposure.Parameters.Strength = Mathf.Lerp(this._backgroundEffectParameres.StartExposure, this._backgroundEffectParameres.EndExposure, num2);
+			this._postProcessing.CRTMonitor.Parameters.LineStrength = Mathf.Lerp(this._backgroundEffectParameres.StartCRTMonitorLinesStrength, this._backgroundEffectParameres.EndCRTMonitorLinesStrength, num2);
+			this._postProcessing.Saturation.Parameters.Value = Mathf.Lerp(this._backgroundEffectParameres.StartSaturation, this._backgroundEffectParameres.EndSaturation, num2);
 		}
 
 		internal void Finish()
@@ -56,11 +57,13 @@ namespace HeavyMetalMachines.Frontend
 
 		private readonly HudWinnerBackgroundEffect.HudWinnerBackgroundEffectParameres _backgroundEffectParameres;
 
+		private IGamePostProcessing _gamePostProcessing;
+
 		[Serializable]
 		public class HudWinnerBackgroundEffectParameres
 		{
-			[Range(0f, 10f)]
 			[Tooltip("Lenght of the state, in seconds.")]
+			[Range(0f, 10f)]
 			public float StateLenght = 0.2f;
 
 			[Range(-20f, 20f)]

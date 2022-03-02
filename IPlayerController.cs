@@ -1,5 +1,6 @@
 ﻿using System;
 using HeavyMetalMachines.Combat.Gadget;
+using UnityEngine;
 
 namespace HeavyMetalMachines
 {
@@ -14,5 +15,7 @@ namespace HeavyMetalMachines
 		bool MovingCar { get; }
 
 		bool AcceleratingForward { get; }
+
+		Vector3 MousePosition { get; }
 	}
 }

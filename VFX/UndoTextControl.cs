@@ -75,12 +75,12 @@ namespace HeavyMetalMachines.VFX
 
 		public static bool CheckRedoInput()
 		{
-			return Input.GetKey(KeyCode.LeftControl) && Input.GetKeyDown(KeyCode.Y);
+			return Input.GetKey(306) && Input.GetKeyDown(121);
 		}
 
 		public static bool CheckUndoInput()
 		{
-			return Input.GetKey(KeyCode.LeftControl) && Input.GetKeyDown(KeyCode.Z);
+			return Input.GetKey(306) && Input.GetKeyDown(122);
 		}
 
 		private readonly Stack<string> _undoStack = new Stack<string>();

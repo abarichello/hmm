@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using HeavyMetalMachines.Bank;
 using HeavyMetalMachines.BotAI;
 using HeavyMetalMachines.Car;
@@ -55,7 +56,7 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
-		public PlayerStats Stats
+		public IPlayerStats Stats
 		{
 			get
 			{
@@ -88,6 +89,8 @@ namespace HeavyMetalMachines.Combat
 				return this.Movement;
 			}
 		}
+
+		public ITurretMovement TurretMovement { get; private set; }
 
 		public CombatController Controller
 		{
@@ -157,6 +160,14 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
+		public ICombatObject GadgetCombatObject
+		{
+			get
+			{
+				return this;
+			}
+		}
+
 		public ICombatController ModifierController
 		{
 			get
@@ -177,19 +188,34 @@ namespace HeavyMetalMachines.Combat
 		{
 			get
 			{
-				return this._playerController;
+				IPlayerController result;
+				if ((result = this._playerController) == null)
+				{
+					result = (this._playerController = (base.GetComponent<PlayerController>() ?? base.GetComponent<BotAIController>()));
+				}
+				return result;
 			}
 		}
+
+		public IPlayerData PlayerData
+		{
+			get
+			{
+				return this.Player;
+			}
+		}
+
+		public bool IsPlayer { get; set; }
+
+		public bool IsBot { get; set; }
+
+		public bool NoHit { get; private set; }
 
 		public TeamKind Team
 		{
 			get
 			{
-				if (this.IsPlayer)
-				{
-					return this.Player.Team;
-				}
-				return this.CreepTeam;
+				return (!this.IsPlayer) ? this.OwnerTeam : this.Player.Team;
 			}
 		}
 
@@ -261,9 +287,9 @@ namespace HeavyMetalMachines.Combat
 			{
 				this.Movement = base.GetComponent<CarMovement>();
 			}
-			if (!this.Creep)
+			if (this.TurretMovement == null)
 			{
-				this.Creep = base.GetComponent<CreepController>();
+				this.TurretMovement = base.GetComponent<ITurretMovement>();
 			}
 			if (!this.Gadgets)
 			{
@@ -285,6 +311,8 @@ namespace HeavyMetalMachines.Combat
 			{
 				this.BombBlocker.SetActive(false);
 			}
+			HazardArea component2 = base.GetComponent<HazardArea>();
+			this.NoHit = (component2 != null);
 		}
 
 		public void Clear()
@@ -306,19 +334,17 @@ namespace HeavyMetalMachines.Combat
 			this.Controller.Clear();
 			this.Feedback.ClearFeedbacks();
 			this.Movement.Clear();
+			this.TurretMovement.ResetRotation();
 		}
 
 		private void Start()
 		{
-			checked
+			if (GameHubBehaviour.Hub && GameHubBehaviour.Hub.Net.IsServer() && (this.IsPlayer || this.IsBot))
 			{
-				if (GameHubBehaviour.Hub.Net.IsServer() && (this.IsPlayer || this.IsBot))
+				TeamBlockController[] array = Object.FindObjectsOfType<TeamBlockController>();
+				for (int i = 0; i < array.Length; i++)
 				{
-					TeamBlockController[] array = UnityEngine.Object.FindObjectsOfType<TeamBlockController>();
-					for (int i = 0; i < array.Length; i++)
-					{
-						array[i].Add(this);
-					}
+					array[i].Add(this);
 				}
 			}
 		}
@@ -328,24 +354,32 @@ namespace HeavyMetalMachines.Combat
 			return this.Team == GameHubBehaviour.Hub.Players.CurrentPlayerTeam;
 		}
 
-		public Dictionary<GadgetSlot, CombatGadget> CustomGadgets
+		public void AddGadget(GadgetSlot slot, IHMMGadgetContext combatGadget)
 		{
-			get
-			{
-				return this._customGadgets;
-			}
+			this.CustomGadgets.Add(combatGadget);
+			this._customGadgets.Add((int)slot, combatGadget);
 		}
 
 		public IHMMGadgetContext GetGadgetContext(int id)
 		{
-			CombatGadget result;
-			this._customGadgets.TryGetValue((GadgetSlot)id, out result);
+			IHMMGadgetContext result;
+			this._customGadgets.TryGetValue(id, out result);
 			return result;
 		}
 
 		public bool HasGadgetContext(int id)
 		{
-			return this._customGadgets.ContainsKey((GadgetSlot)id);
+			return this._customGadgets.ContainsKey(id);
+		}
+
+		public IGadgetInput GetGadgetInput(GadgetSlot slot)
+		{
+			IHMMGadgetContext result;
+			if (this._customGadgets.TryGetValue((int)slot, out result))
+			{
+				return result;
+			}
+			return this.GetGadget(slot);
 		}
 
 		public GadgetBehaviour GetGadget(GadgetSlot slot)
@@ -402,50 +436,40 @@ namespace HeavyMetalMachines.Combat
 			{
 			case GadgetSlot.CustomGadget0:
 				this.CustomGadget0 = beh;
-				return;
+				break;
 			case GadgetSlot.CustomGadget1:
 				this.CustomGadget1 = beh;
-				return;
+				break;
 			case GadgetSlot.CustomGadget2:
 				this.CustomGadget2 = beh;
-				return;
+				break;
 			case GadgetSlot.BoostGadget:
 				this.BoostGadget = beh;
-				return;
+				break;
 			case GadgetSlot.PassiveGadget:
 				this.PassiveGadget = beh;
-				return;
+				break;
 			case GadgetSlot.GenericGadget:
 				this.GenericGadget = beh;
-				return;
+				break;
 			case GadgetSlot.HPUpgrade:
 				this.HPUpgrade = beh;
-				return;
+				break;
 			case GadgetSlot.EPUpgrade:
 				this.EPUpgrade = beh;
-				return;
-			case GadgetSlot.RespawnGadget:
-			case GadgetSlot.LiftSceneryGadget:
-			case GadgetSlot.OBSOLETE_PingMinimapGadget:
-			case (GadgetSlot)14:
-			case (GadgetSlot)15:
-			case (GadgetSlot)16:
-			case (GadgetSlot)17:
 				break;
 			case GadgetSlot.BombGadget:
 				this.BombGadget = (beh as BombGadget);
-				return;
+				break;
 			case GadgetSlot.DmgUpgrade:
 				this.DmgUpgrade = beh;
-				return;
+				break;
 			case GadgetSlot.OutOfCombatGadget:
 				this.OutOfCombatGadget = beh;
-				return;
+				break;
 			case GadgetSlot.TrailGadget:
 				this.TrailGadget = beh;
 				break;
-			default:
-				return;
 			}
 		}
 
@@ -482,7 +506,7 @@ namespace HeavyMetalMachines.Combat
 					return base.transform;
 				}
 			}
-			return this.Dummy.GetDummy(dummy, customDummyName);
+			return this.Dummy.GetDummy(dummy, customDummyName, this);
 		}
 
 		public void OnObjectSpawned(SpawnEvent evt)
@@ -517,62 +541,91 @@ namespace HeavyMetalMachines.Combat
 			return component;
 		}
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.ObjectUnspawnListener ListenToObjectUnspawn;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.ObjectSpawnListener ListenToObjectSpawn;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.AttributeChangedListener ListenToAttributeChanged;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.OnIndestructibleAlmostDied ListenToIndestructibleAlmostDied;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.BarrierHitListener ListenToBarrierHit;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.PreDamageListener ListenToPreDamageCaused;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.PosDamageListener ListenToPosDamageCaused;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.PreDamageListener ListenToPreDamageTaken;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.PosDamageListener ListenToPosDamageTaken;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.PosDamageListener ListenToPosRepairCaused;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.PosDamageListener ListenToPosRepairTaken;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.PreHealingListener ListenToPreHealingCaused;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.PosHealingListener ListenToPosHealingCaused;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.PreHealingListener ListenToPreHealingTaken;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event CombatObject.PosHealingListener ListenToPosHealingTaken;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<float, int> OnDamageDealt;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<float, int> OnDamageReceived;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<float, Vector3, Vector3> OnDamageReceivedFullData;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<float, int> OnRepairDealt;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<float, int> OnRepairReceived;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<float, int> OnImpulseDealt;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<float, int> OnImpulseReceived;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<float, int> OnCooldownRepairDealt;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<float, int> OnCooldownRepairReceived;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<float, int> OnTempHPReceived;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<ModifierEvent> ListenToModifierReceived;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<Collision> ListenToCollisionStay;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<Collision> ListenToCollisionEnter;
 
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event Action<CombatObject> ListenToEnable;
 
 		private void OnCollisionEnter(Collision col)
@@ -599,22 +652,28 @@ namespace HeavyMetalMachines.Combat
 			{
 			case EffectKind.CooldownRepair:
 				action = this.OnCooldownRepairReceived;
-				goto IL_75;
+				goto IL_9C;
 			case EffectKind.HPLightDamage:
 			case EffectKind.HPHeavyDamage:
 				break;
 			case EffectKind.Impulse:
 				action = this.OnImpulseReceived;
-				goto IL_75;
+				goto IL_9C;
 			default:
-				if (effect - EffectKind.HPPureDamage > 1)
+				switch (effect)
 				{
-					if (effect == EffectKind.HPRepair)
+				case EffectKind.HPPureDamage:
+				case EffectKind.HPPureDamageNL:
+					break;
+				case EffectKind.HPRepair:
+					action = this.OnRepairReceived;
+					goto IL_9C;
+				default:
+					if (effect != EffectKind.NonLethalDamageIgnoringTempHP)
 					{
-						action = this.OnRepairReceived;
-						goto IL_75;
+						goto IL_9C;
 					}
-					goto IL_75;
+					break;
 				}
 				break;
 			}
@@ -623,7 +682,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				this.OnDamageReceivedFullData(e.Amount, Vector3.zero, Vector3.zero);
 			}
-			IL_75:
+			IL_9C:
 			if (action != null)
 			{
 				action(e.Amount, e.OtherId);
@@ -643,31 +702,35 @@ namespace HeavyMetalMachines.Combat
 			{
 			case EffectKind.CooldownRepair:
 				action = this.OnCooldownRepairDealt;
-				goto IL_92;
+				goto IL_B8;
 			case EffectKind.HPLightDamage:
 			case EffectKind.HPHeavyDamage:
 			case EffectKind.HPGodDamage:
-				goto IL_8B;
+			case EffectKind.NonLethalDamageIgnoringTempHP:
+				break;
 			case EffectKind.Impulse:
 				action = this.OnImpulseDealt;
-				goto IL_92;
+				goto IL_B8;
+			default:
+				switch (effect)
+				{
+				case EffectKind.HPPureDamage:
+				case EffectKind.HPPureDamageNL:
+					break;
+				case EffectKind.HPRepair:
+					action = this.OnRepairDealt;
+					goto IL_B8;
+				default:
+					flag = false;
+					goto IL_B8;
+				}
+				break;
 			case EffectKind.HPTemp:
 				action = this.OnTempHPReceived;
-				goto IL_92;
+				goto IL_B8;
 			}
-			if (effect - EffectKind.HPPureDamage > 1)
-			{
-				if (effect == EffectKind.HPRepair)
-				{
-					action = this.OnRepairDealt;
-					goto IL_92;
-				}
-				flag = false;
-				goto IL_92;
-			}
-			IL_8B:
 			action = this.OnDamageDealt;
-			IL_92:
+			IL_B8:
 			if (action != null)
 			{
 				action(e.Amount, e.ObjId);
@@ -678,21 +741,19 @@ namespace HeavyMetalMachines.Combat
 				{
 				case GadgetSlot.CustomGadget0:
 					this.GadgetStates.G0StateObject.ClientGadgetHit(e.ObjId);
-					return;
+					break;
 				case GadgetSlot.CustomGadget1:
 					this.GadgetStates.G1StateObject.ClientGadgetHit(e.ObjId);
-					return;
+					break;
 				case GadgetSlot.CustomGadget2:
 					this.GadgetStates.G2StateObject.ClientGadgetHit(e.ObjId);
-					return;
+					break;
 				case GadgetSlot.BoostGadget:
 					this.GadgetStates.GBoostStateObject.ClientGadgetHit(e.ObjId);
-					return;
+					break;
 				case GadgetSlot.PassiveGadget:
 					this.GadgetStates.GPStateObject.ClientGadgetHit(e.ObjId);
 					break;
-				default:
-					return;
 				}
 			}
 		}
@@ -708,6 +769,10 @@ namespace HeavyMetalMachines.Combat
 
 		protected void OnDestroy()
 		{
+			foreach (IHMMGadgetContext ihmmgadgetContext in this.CustomGadgets)
+			{
+				ihmmgadgetContext.CleanUp();
+			}
 			this.Effects.Clear();
 			this.ListenToObjectUnspawn = null;
 			this.ListenToObjectSpawn = null;
@@ -737,16 +802,13 @@ namespace HeavyMetalMachines.Combat
 			this.ListenToCollisionEnter = null;
 			this.ListenToEnable = null;
 			this.ListenToIndestructibleAlmostDied = null;
-			this.CreepTeam = TeamKind.Zero;
-			checked
+			this.OwnerTeam = TeamKind.Zero;
+			if (GameHubBehaviour.Hub.Net.IsServer() && (this.IsPlayer || this.IsBot))
 			{
-				if (GameHubBehaviour.Hub.Net.IsServer() && (this.IsPlayer || this.IsBot))
+				TeamBlockController[] array = Object.FindObjectsOfType<TeamBlockController>();
+				for (int i = 0; i < array.Length; i++)
 				{
-					TeamBlockController[] array = UnityEngine.Object.FindObjectsOfType<TeamBlockController>();
-					for (int i = 0; i < array.Length; i++)
-					{
-						array[i].Remove(this);
-					}
+					array[i].Remove(this);
 				}
 			}
 		}
@@ -898,18 +960,6 @@ namespace HeavyMetalMachines.Combat
 			return (poState.GadgetState == GadgetState.Ready || poState.GadgetState == GadgetState.Toggled) && this.Data.EP >= (float)poGadget.Info.ActivationCost && !flag && !flag3 && !flag2;
 		}
 
-		public void BreakBombLink()
-		{
-			if (this.IsCarryingBomb)
-			{
-				this.BombGadget.Disable(BombGadget.DisableReason.LinkBroke);
-			}
-		}
-
-		public void Update()
-		{
-		}
-
 		public static readonly BitLogger Log = new BitLogger(typeof(CombatObject));
 
 		[SerializeField]
@@ -943,15 +993,9 @@ namespace HeavyMetalMachines.Combat
 		[NonSerialized]
 		public PlayerData Player;
 
-		public CreepController Creep;
-
 		public BaseFX WardEffect;
 
 		public bool HideOnUnspawn = true;
-
-		public bool IsPlayer;
-
-		public bool IsBot;
 
 		public bool IsCreep;
 
@@ -965,7 +1009,7 @@ namespace HeavyMetalMachines.Combat
 
 		public bool IsBomb;
 
-		public TeamKind CreepTeam;
+		public TeamKind OwnerTeam;
 
 		public int NeutralRewardIndex;
 
@@ -1024,7 +1068,9 @@ namespace HeavyMetalMachines.Combat
 
 		public GadgetBehaviour GridHighlightGadget;
 
-		private Dictionary<GadgetSlot, CombatGadget> _customGadgets = new Dictionary<GadgetSlot, CombatGadget>();
+		public readonly List<IHMMGadgetContext> CustomGadgets = new List<IHMMGadgetContext>();
+
+		private Dictionary<int, IHMMGadgetContext> _customGadgets = new Dictionary<int, IHMMGadgetContext>();
 
 		public List<BaseFX> Effects = new List<BaseFX>();
 

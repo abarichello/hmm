@@ -3,19 +3,16 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	[RequireComponent(typeof(Rigidbody))]
 	public class PerkBoomerang : PerkStraightMovement
 	{
 		public override void PerkInitialized()
 		{
 			this.goingBack = false;
 			base.PerkInitialized();
-			this._t = 0f;
 		}
 
 		public override Vector3 UpdatePosition()
 		{
-			this._t += Time.deltaTime;
 			if (!this.goingBack && base._deltaTime >= base._endDeltaTime)
 			{
 				this.goingBack = true;
@@ -51,19 +48,18 @@ namespace HeavyMetalMachines.Combat
 				return base.CalcNewPosition(out moved);
 			}
 			Vector3 position = this.Effect.Data.SourceCombat.transform.position;
-			this._direction = (position - base._trans.position).normalized;
+			Vector3 position2 = base._trans.position;
+			this._direction = (position - position2).normalized;
 			this._speed += this._accel * Time.deltaTime;
-			Vector3 a = this._direction * this._speed;
-			Vector3 vector = base._trans.position + a * Time.deltaTime;
+			Vector3 vector = this._direction * this._speed;
+			Vector3 vector2 = position2 + vector * Time.deltaTime;
 			this._end = position;
-			moved = Vector3.SqrMagnitude(vector - this._origin);
-			vector.y = base._trans.position.y;
-			this._origin = vector;
-			return vector;
+			moved = Vector3.SqrMagnitude(vector2 - this._origin);
+			vector2.y = position2.y;
+			this._origin = vector2;
+			return vector2;
 		}
 
 		private bool goingBack;
-
-		private float _t;
 	}
 }

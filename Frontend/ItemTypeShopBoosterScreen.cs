@@ -1,6 +1,7 @@
 ﻿using System;
-using Commons.Swordfish.Util;
-using HeavyMetalMachines.Swordfish.Player;
+using HeavyMetalMachines.Boosters.Business;
+using HeavyMetalMachines.DataTransferObjects.Util;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
 using Pocketverse;
 using UnityEngine;
 
@@ -25,13 +26,18 @@ namespace HeavyMetalMachines.Frontend
 			this.SetActiveBoosterTimeRemaining();
 		}
 
+		public override void Hide()
+		{
+			base.Hide();
+			base.gameObject.SetActive(false);
+		}
+
 		private void SetActiveBoosterTimeRemaining()
 		{
-			string text;
-			if (GameHubBehaviour.Hub.GuiScripts.TopMenu.TryToGetBoosterXpInfo(out text))
+			if (this._getLocalPlayerXpBooster.IsActive())
 			{
 				this._boosterActiveInfodescription.gameObject.SetActive(true);
-				this._boosterActiveInfodescription.text = text;
+				this._boosterActiveInfodescription.text = this._getLocalPlayerXpBooster.GetBoosterInfo();
 				this._boosterInactiveInfodescription.gameObject.SetActive(false);
 				return;
 			}
@@ -73,6 +79,9 @@ namespace HeavyMetalMachines.Frontend
 
 		[SerializeField]
 		private UILabel _boosterInactiveInfodescription;
+
+		[InjectOnClient]
+		private IGetLocalPlayerXpBooster _getLocalPlayerXpBooster;
 
 		private StoreItem _clickedBuyItem;
 	}

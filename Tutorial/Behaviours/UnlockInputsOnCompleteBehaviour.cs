@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using HeavyMetalMachines.Input.ControllerInput;
 using HeavyMetalMachines.Options;
 using HeavyMetalMachines.Tutorial.InGame;
 
@@ -22,14 +23,14 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 
 		private static void UnlockInputs()
 		{
-			List<ControlAction> list = new List<ControlAction>();
-			IEnumerator enumerator = Enum.GetValues(typeof(ControlAction)).GetEnumerator();
+			List<ControllerInputActions> list = new List<ControllerInputActions>();
+			IEnumerator enumerator = Enum.GetValues(typeof(ControllerInputActions)).GetEnumerator();
 			try
 			{
 				while (enumerator.MoveNext())
 				{
 					object obj = enumerator.Current;
-					ControlAction item = (ControlAction)obj;
+					ControllerInputActions item = (ControllerInputActions)obj;
 					list.Add(item);
 				}
 			}
@@ -41,8 +42,8 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 					disposable.Dispose();
 				}
 			}
-			ControlAction[] controlActions = list.ToArray();
-			ControlOptions.UnlockControlAction(controlActions);
+			ControllerInputActions[] inputActions = list.ToArray();
+			ControlOptions.UnlockControlAction(inputActions);
 		}
 	}
 }

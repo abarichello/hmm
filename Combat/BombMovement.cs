@@ -5,20 +5,35 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	[RequireComponent(typeof(Rigidbody))]
 	public class BombMovement : CombatMovement
 	{
 		public override MovementInfo Info
 		{
 			get
 			{
-				return this._info.Movement;
+				return this._bombInfo.Movement;
 			}
 		}
 
 		protected override void Awake()
 		{
 			GameHubBehaviour.Hub.BombManager.BombMovement = this;
+			this._body = base.GetComponent<Rigidbody>();
+			Collider[] componentsInChildren = base.gameObject.GetComponentsInChildren<Collider>(true);
+			if (GameHubBehaviour.Hub.Net.IsClient())
+			{
+				if (this._body)
+				{
+					Object.Destroy(this._body);
+				}
+				for (int i = 0; i < componentsInChildren.Length; i++)
+				{
+					if (componentsInChildren[i])
+					{
+						Object.Destroy(componentsInChildren[i]);
+					}
+				}
+			}
 			base.Awake();
 		}
 
@@ -50,7 +65,7 @@ namespace HeavyMetalMachines.Combat
 
 		public override void OnObjectSpawned(SpawnEvent msg)
 		{
-			this._info = GameHubBehaviour.Hub.BombManager.ActiveBomb.GetBombInfo();
+			this._bombInfo = GameHubBehaviour.Hub.BombManager.ActiveBomb.GetBombInfo();
 			if (GameHubBehaviour.Hub.Net.IsClient())
 			{
 				return;
@@ -62,13 +77,13 @@ namespace HeavyMetalMachines.Combat
 		{
 			if (pause)
 			{
-				base.LockMovement();
+				base.PauseSimulation();
 				return;
 			}
-			base.UnlockMovement();
+			base.UnpauseSimulation();
 		}
 
-		public override void AddLink(CombatLink newLink, bool force)
+		public override void AddLink(ICombatLink newLink, bool force)
 		{
 			base.AddLink(newLink, force);
 			if (force && !string.IsNullOrEmpty(newLink.Tag))
@@ -90,7 +105,7 @@ namespace HeavyMetalMachines.Combat
 
 		private const int VALIDATION_TIME = 1000;
 
-		private BombInfo _info;
+		private BombInfo _bombInfo;
 
 		private TimedUpdater _updater;
 

@@ -38,7 +38,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			return this.FireGadget(base.CannonInfo.Effect, modifier, this.Origin);
 		}
 
-		public override void OnDestroyEffect(DestroyEffect evt)
+		public override void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			base.OnDestroyEffect(evt);
 			if (evt.RemoveData.TargetEventId == this.LastWarmupId && evt.RemoveData.DestroyReason == BaseFX.EDestroyReason.Lifetime)

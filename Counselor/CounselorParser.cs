@@ -1,9 +1,10 @@
 ﻿using System;
+using HeavyMetalMachines.Playback;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Counselor
 {
-	public class CounselorParser : KeyStateParser
+	public class CounselorParser : KeyStateParser, ICounselorDispatcher
 	{
 		public override StateType Type
 		{
@@ -26,7 +27,7 @@ namespace HeavyMetalMachines.Counselor
 			stream.ResetBitsWritten();
 			stream.WriteCompressedInt(configIndex);
 			stream.WriteBool(isActive);
-			GameHubObject.Hub.PlaybackManager.SendFullState(targetPlayerAddress, this.Type, stream.RawBuffer);
+			this._serverDispatcher.SendSnapshot(targetPlayerAddress, this.Type.Convert(), this._serverDispatcher.GetNextFrameId(), -1, this._gameTime.GetPlaybackTime(), stream.RawBuffer);
 		}
 	}
 }

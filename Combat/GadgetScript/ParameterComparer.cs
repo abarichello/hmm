@@ -1,25 +1,24 @@
 ﻿using System;
-using Hoplon.GadgetScript;
 
 namespace HeavyMetalMachines.Combat.GadgetScript
 {
 	public static class ParameterComparer
 	{
-		public static bool CompareParameter(IParameterContext context, IParameterComparison[] comparisons, ParameterComparer.BooleanOperation booleanOperation)
+		public static bool CompareParameter(object context, IParameterComparison[] comparisons, ParameterComparer.BooleanOperation booleanOperation)
 		{
-			bool flag = comparisons[0].Compare(context);
-			for (int i = 1; i < comparisons.Length; i++)
+			bool flag = true;
+			if (booleanOperation == ParameterComparer.BooleanOperation.AND)
 			{
-				if (booleanOperation == ParameterComparer.BooleanOperation.AND)
+				flag = false;
+			}
+			for (int i = 0; i < comparisons.Length; i++)
+			{
+				if (comparisons[i].Compare(context) == flag)
 				{
-					flag &= comparisons[i].Compare(context);
-				}
-				else
-				{
-					flag |= comparisons[i].Compare(context);
+					return flag;
 				}
 			}
-			return flag;
+			return !flag;
 		}
 
 		public enum BooleanOperation

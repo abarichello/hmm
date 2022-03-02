@@ -1,7 +1,16 @@
 ﻿using System;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids;
-using HeavyMetalMachines.Utils;
+using ClientAPI;
+using HeavyMetalMachines.DataTransferObjects.Player;
+using HeavyMetalMachines.DataTransferObjects.Result;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Infra.Quiz;
+using HeavyMetalMachines.OpenUrl.Infra;
+using HeavyMetalMachines.ParentalControl;
+using HeavyMetalMachines.Swordfish;
+using Hoplon.Serialization;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Frontend
@@ -10,51 +19,34 @@ namespace HeavyMetalMachines.Frontend
 	{
 		public void Start()
 		{
+			this._skipSwordfish = GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish);
+			this._clickInQuestionButton = 0;
+			this._questionId = 1;
 			if (SpectatorController.IsSpectating)
 			{
 				base.gameObject.SetActive(false);
 				return;
 			}
-			this._questionId = 0;
-			this._selection = -1;
-			for (int i = 0; i < this._selectionToggles.Length; i++)
+			if (!this._skipSwordfish)
 			{
-				UIToggle uitoggle = this._selectionToggles[i];
-				uitoggle.Start();
-				EventDelegate eventDelegate = new EventDelegate(this, "GuiButtonSelection");
-				eventDelegate.parameters[0] = new EventDelegate.Parameter(i);
-				uitoggle.onChange.Add(eventDelegate);
+				this._getQuizTypeForPlayerDisposable = ObservableExtensions.Subscribe<QuizBag>(this.GetQuizTypeForPlayer());
 			}
 		}
 
-		protected void GuiButtonSelection(int index)
+		public void OnQuestionButtonClick()
 		{
-			bool value = this._selectionToggles[index].value;
-			int selection = this._selection;
-			if (value || selection != index)
+			Guid matchId = Guid.Empty;
+			if (!this._skipSwordfish)
 			{
-				for (int i = 0; i < this._selectionToggles.Length; i++)
-				{
-					this._selectionToggles[i].Set(i <= index, false);
-					this._selectionToggles[i].GetComponent<BoxCollider>().enabled = false;
-				}
-				this._selection = index;
-				this._selectionToggles[index].GetComponent<Animation>().Play();
+				matchId = GameHubBehaviour.Hub.Swordfish.Msg.ClientMatchId;
 			}
-			else
+			string url = this._quizUrlFileProvider.GetQuizUrl(matchId);
+			ObservableExtensions.Subscribe<bool>(Observable.Do<bool>(Observable.First<bool>(this._getUgcRestrictionIsEnabled.OfferToChangeGlobalRestriction(), (bool isRestricted) => !isRestricted), delegate(bool _)
 			{
-				for (int j = 0; j < this._selectionToggles.Length; j++)
-				{
-					if (j != index)
-					{
-						this._selectionToggles[j].Set(false, false);
-					}
-				}
-				this._selection = -1;
-			}
-			if (GameHubBehaviour.Hub)
-			{
-			}
+				this._openUrlService.OpenUrl(url);
+			}));
+			this._quizUrlFileProvider.TryDeleteQuizUrlFile();
+			this._clickInQuestionButton = 1;
 		}
 
 		public void CommitSelection()
@@ -63,42 +55,79 @@ namespace HeavyMetalMachines.Frontend
 			{
 				return;
 			}
-			int num = this._selection + 1;
-			string msg = string.Format("SteamID={0} QuestionID={1} Answer={2}", GameHubBehaviour.Hub.User.UniversalId, this._questionId, num);
-			GameHubBehaviour.Hub.Swordfish.Log.BILogClientMatchMsg(ClientBITags.MatchReview, msg, false);
+			string msg = string.Format("SteamID={0} QuestionID={1} Answer={2}", GameHubBehaviour.Hub.User.UniversalId, this._questionId, this._clickInQuestionButton);
+			GameHubBehaviour.Hub.Swordfish.Log.BILogClientMatchMsg(58, msg, false);
 		}
 
-		public void OnQuestionButtonClick()
+		private IObservable<QuizBag> GetQuizTypeForPlayer()
 		{
-			Guid guid = Guid.Empty;
-			if (!GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish))
+			return Observable.DoOnError<QuizBag>(Observable.Do<QuizBag>(Observable.Select<NetResult, QuizBag>(this.GetPlayerEligibleForRookieQuizFromCustomWs(), (NetResult netResult) => (QuizBag)((JsonSerializeable<!0>)netResult.Msg)), new Action<QuizBag>(this.OnPlayerEligibleSuccess)), new Action<Exception>(this.OnGetPlayerEligibleFailure));
+		}
+
+		private void OnGetPlayerEligibleFailure(Exception obj)
+		{
+			UIProgressionRating.Log.ErrorFormat("Failed to get PlayerEligibleForRookieQuiz. Exception: {0}", new object[]
 			{
-				guid = GameHubBehaviour.Hub.Swordfish.Msg.ClientMatchId;
+				obj
+			});
+		}
+
+		private void OnPlayerEligibleSuccess(QuizBag quizBag)
+		{
+			this._isPlayerEligibleForRookieQuiz = quizBag.IsPlayerEligibleForRookieQuiz;
+			if (this._isPlayerEligibleForRookieQuiz)
+			{
+				this._glowIdleAnimation.Play();
+				return;
 			}
-			OpenUrlUtils.OpenSteamUrl(GameHubBehaviour.Hub, string.Format("{0}?lang={1}&steamid={2}&matchid={3}", new object[]
-			{
-				GameHubBehaviour.Hub.Config.GetValue(ConfigAccess.SFQuizUrl),
-				Language.CurrentLanguage(),
-				GameHubBehaviour.Hub.User.UniversalId,
-				guid
-			}));
+			base.transform.localScale = new Vector3(this._scaleForVeteranQuiz, this._scaleForVeteranQuiz, 0f);
 		}
 
-		public void AnimateRating()
+		private IObservable<NetResult> GetPlayerEligibleForRookieQuizFromCustomWs()
 		{
-			this._ratingAnimator.SetBool("show", true);
+			return SwordfishObservable.FromStringSwordfishCall<NetResult>(delegate(SwordfishClientApi.ParameterizedCallback<string> onSuccess, SwordfishClientApi.ErrorCallback onError)
+			{
+				PlayerCustomWS.IsPlayerEligibleForRookieQuiz(GameHubBehaviour.Hub.User.UniversalId, onSuccess, onError);
+			});
+		}
+
+		private void OnDestroy()
+		{
+			if (this._getQuizTypeForPlayerDisposable != null)
+			{
+				this._getQuizTypeForPlayerDisposable.Dispose();
+				this._getQuizTypeForPlayerDisposable = null;
+			}
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(UIProgressionRating));
 
-		[SerializeField]
-		private UIToggle[] _selectionToggles;
+		[InjectOnClient]
+		private IQuizUrlFileProvider _quizUrlFileProvider;
+
+		[InjectOnClient]
+		private IGetUGCRestrictionIsEnabled _getUgcRestrictionIsEnabled;
+
+		[InjectOnClient]
+		private IUGCRestrictionDialogPresenter _ugcRestrictionDialogPresenter;
+
+		[InjectOnClient]
+		private IOpenUrlService _openUrlService;
 
 		[SerializeField]
-		private Animator _ratingAnimator;
+		private Animation _glowIdleAnimation;
+
+		[SerializeField]
+		private float _scaleForVeteranQuiz = 0.8f;
+
+		private bool _skipSwordfish;
+
+		private bool _isPlayerEligibleForRookieQuiz;
+
+		private int _clickInQuestionButton;
 
 		private int _questionId;
 
-		private int _selection;
+		private IDisposable _getQuizTypeForPlayerDisposable;
 	}
 }

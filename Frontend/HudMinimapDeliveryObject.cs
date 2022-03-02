@@ -11,7 +11,7 @@ namespace HeavyMetalMachines.Frontend
 		public override void Setup()
 		{
 			base.Setup(false);
-			this._arenaScaleModifier = GameHubBehaviour.Hub.ArenaConfig.Arenas[GameHubBehaviour.Hub.Match.ArenaIndex].OvertimeGuiDeliveryScaleModifier;
+			this._arenaScaleModifier = GameHubBehaviour.Hub.ArenaConfig.GetCurrentArena().OvertimeGuiDeliveryScaleModifier;
 			this.SetVisibility(GameHubBehaviour.Hub.BombManager.ScoreBoard.IsInOvertime);
 			GameHubBehaviour.Hub.BombManager.ScoreController.OnBombTriggersReady += this.ScoreControllerOnBombTriggersReady;
 		}
@@ -76,8 +76,8 @@ namespace HeavyMetalMachines.Frontend
 
 		private float _initialTargetEnemyDeliveryPointScale;
 
-		[Range(0f, 1f)]
 		[SerializeField]
+		[Range(0f, 1f)]
 		[Tooltip("Read Only Serialization. The Prefab Value Has No In-Game Effect.")]
 		private float _arenaScaleModifier = 1f;
 	}

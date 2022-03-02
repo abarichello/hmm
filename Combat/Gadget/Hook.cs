@@ -53,7 +53,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			this._hitCombat = false;
 		}
 
-		protected override void InnerOnDestroyEffect(DestroyEffect evt)
+		protected override void InnerOnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (evt.RemoveData.DestroyReason == BaseFX.EDestroyReason.Cleanup)
 			{
@@ -81,7 +81,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			List<Identifiable> list = new List<Identifiable>();
 			if (this._hookMoreThanOne)
 			{
-				Collider[] array = Physics.OverlapSphere(@object.transform.position, base.Radius, 1077058560);
+				Collider[] array = Physics.OverlapSphere(@object.transform.position, base.Radius, 1077054464);
 				for (int i = 0; i < array.Length; i++)
 				{
 					CombatObject combat = CombatRef.GetCombat(array[i]);

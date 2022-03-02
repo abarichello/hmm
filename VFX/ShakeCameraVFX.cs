@@ -1,24 +1,26 @@
 ﻿using System;
+using HeavyMetalMachines.GameCamera;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
 using UnityEngine;
 
 namespace HeavyMetalMachines.VFX
 {
-	internal class ShakeCameraVFX : BaseVFX
+	public class ShakeCameraVFX : BaseVFX
 	{
 		private void Update()
 		{
-			if (Time.time - this.startTime < this.duration)
+			if (this._gameCamera != null && Time.time - this.startTime < this.duration)
 			{
-				CarCamera.Singleton.Shake(this.shakeAmmount);
+				this._gameCamera.Shake(this.shakeAmmount);
 			}
 		}
 
 		protected override void OnActivate()
 		{
-			this.startTime = Time.time;
-			if (CarCamera.Singleton)
+			if (this._gameCamera != null)
 			{
-				CarCamera.Singleton.Shake(this.shakeAmmount);
+				this.startTime = Time.time;
+				this._gameCamera.Shake(this.shakeAmmount);
 			}
 		}
 
@@ -29,6 +31,9 @@ namespace HeavyMetalMachines.VFX
 		protected override void OnDeactivate()
 		{
 		}
+
+		[InjectOnClient]
+		private IGameCamera _gameCamera;
 
 		public float shakeAmmount;
 

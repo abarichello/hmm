@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace HeavyMetalMachines.VFX
@@ -21,6 +22,7 @@ namespace HeavyMetalMachines.VFX
 				this.targetGameObject.SetActive(true);
 			}
 			this.CanCollectToCache = false;
+			this.CheckAnimators();
 		}
 
 		private void Update()
@@ -47,6 +49,35 @@ namespace HeavyMetalMachines.VFX
 		{
 			this.deactivateTime = Time.time;
 			this.currentState = DeactivateGameObjectVFX.State.Deactivating;
+			if (this.deactivationDelay > 0f && this.triggerAnimOnDelay != string.Empty)
+			{
+				this.AnimTargetGameObject();
+			}
+		}
+
+		private void AnimTargetGameObject()
+		{
+			if (this.animators.Count <= 0)
+			{
+				return;
+			}
+			foreach (Animator animator in this.animators)
+			{
+				animator.SetTrigger(this.triggerAnimOnDelay);
+			}
+		}
+
+		public void CheckAnimators()
+		{
+			this.animators = new List<Animator>();
+			if (this.targetGameObject.GetComponent<Animator>())
+			{
+				this.animators.Add(this.targetGameObject.GetComponent<Animator>());
+			}
+			foreach (Animator item in this.targetGameObject.GetComponentsInChildren<Animator>())
+			{
+				this.animators.Add(item);
+			}
 		}
 
 		public GameObject targetGameObject;
@@ -56,6 +87,10 @@ namespace HeavyMetalMachines.VFX
 		private DeactivateGameObjectVFX.State currentState;
 
 		public float deactivationDelay;
+
+		public string triggerAnimOnDelay;
+
+		public List<Animator> animators;
 
 		private enum State
 		{

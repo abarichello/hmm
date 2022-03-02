@@ -10,6 +10,14 @@ namespace HeavyMetalMachines.VFX
 {
 	public class SkinHubMasterVFX : MasterVFX
 	{
+		public GameObject GetDefaultSkinVfx
+		{
+			get
+			{
+				return this._defaultSkinVfx.gameObject;
+			}
+		}
+
 		private void Awake()
 		{
 			if (this._defaultSkinVfx == null)
@@ -23,6 +31,10 @@ namespace HeavyMetalMachines.VFX
 			for (int i = 0; i < this._skinsVfx.Length; i++)
 			{
 				SkinHubMasterVFX.SkinVFXPair skinVFXPair = this._skinsVfx[i];
+				if (skinVFXPair.vfx == null)
+				{
+					Debug.LogError(string.Format("Preload of vfx for skin: {0} FAILED - Please check if HUB: {1} has correct skin vfx associated", skinVFXPair.skinItem.Name, base.name));
+				}
 				GameHubBehaviour.Hub.Resources.PrefabPreCache(skinVFXPair.vfx, 1);
 			}
 		}
@@ -49,14 +61,14 @@ namespace HeavyMetalMachines.VFX
 			MasterVFX masterVFX = null;
 			if (playerOrBotsByObjectId != null)
 			{
-				masterVFX = this.FindVFX(playerOrBotsByObjectId.Customizations.SelectedSkin);
+				masterVFX = this.FindVFX(playerOrBotsByObjectId.Customizations.GetGuidBySlot(59));
 			}
 			if (masterVFX == null)
 			{
 				masterVFX = this._defaultSkinVfx;
 			}
 			MasterVFX masterVFX2 = (MasterVFX)GameHubBehaviour.Hub.Resources.PrefabCacheInstantiate(masterVFX, transform.position, transform.rotation);
-			masterVFX2.transform.parent = GameHubBehaviour.Hub.Drawer.Effects;
+			GameHubBehaviour.Hub.Drawer.AddEffect(masterVFX2.transform);
 			masterVFX2.baseMasterVFX = masterVFX;
 			masterVFX2 = masterVFX2.Activate(this.TargetFX);
 			this._targetFXInfo.Owner = owner;
@@ -74,12 +86,12 @@ namespace HeavyMetalMachines.VFX
 		[Tooltip("This should be used to fix cases where 'owner' is not actually the owner of the effect (e.g. ModifierFeedback)")]
 		private SkinHubMasterVFX.OwnerTarget _actualOwner;
 
-		[FormerlySerializedAs("defaultSkinVFX")]
 		[SerializeField]
+		[FormerlySerializedAs("defaultSkinVFX")]
 		private MasterVFX _defaultSkinVfx;
 
-		[FormerlySerializedAs("skinsVFX")]
 		[SerializeField]
+		[FormerlySerializedAs("skinsVFX")]
 		public SkinHubMasterVFX.SkinVFXPair[] _skinsVfx;
 
 		[Serializable]

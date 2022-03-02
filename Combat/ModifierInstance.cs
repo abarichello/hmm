@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
 using HeavyMetalMachines.Combat.Gadget;
+using HeavyMetalMachines.Infra.Context;
 using Pocketverse;
 using UnityEngine;
 
@@ -36,7 +37,7 @@ namespace HeavyMetalMachines.Combat
 
 		public bool ShouldAccountDebuff()
 		{
-			return GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreBoard.State.BombDelivery && (this.Data.Info.IsDebuff && !this.NotBeingApplied && this.Causer != null && this.Causer.Stats != null) && this.Owner.Team != this.Causer.Team;
+			return GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreboardState.BombDelivery && (this.Data.Info.IsDebuff && !this.NotBeingApplied && this.Causer != null && this.Causer.Stats != null) && this.Owner.Team != this.Causer.Team;
 		}
 
 		public void SetupInstance(ModifierData data, CombatObject causer, CombatObject owner, int eventId, int startTime, float lifeTime, bool barrierHit)
@@ -83,6 +84,10 @@ namespace HeavyMetalMachines.Combat
 				else if (owner.Body)
 				{
 					this._direction = owner.Transform.forward;
+					ModifierInstance.Log.DebugFormat("BodyForward:{0}", new object[]
+					{
+						this._direction
+					});
 				}
 				else
 				{
@@ -90,6 +95,10 @@ namespace HeavyMetalMachines.Combat
 				}
 				this._direction.y = 0f;
 				this._direction = this._direction.normalized;
+				ModifierInstance.Log.DebugFormat("Final:{0}", new object[]
+				{
+					this._direction
+				});
 			}
 			if (data.PositionSet)
 			{

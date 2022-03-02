@@ -1,6 +1,7 @@
 ﻿using System;
 using HeavyMetalMachines.Car;
 using HeavyMetalMachines.Event;
+using HeavyMetalMachines.Match;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Combat.Gadget
@@ -34,7 +35,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			return base.FireGadget();
 		}
 
-		protected override void OnMyEffectDestroyed(DestroyEffect evt)
+		protected override void OnMyEffectDestroyed(DestroyEffectMessage evt)
 		{
 			if (evt.RemoveData.DestroyReason == BaseFX.EDestroyReason.Lifetime)
 			{
@@ -138,7 +139,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 				BoostGadget.Log.WarnFormat("GadgetBehaviour not found: GadgetSlot={0} Character={1}", new object[]
 				{
 					slot,
-					this.Combat.Player.Character.BIName
+					this.Combat.Player.GetCharacterBiName()
 				});
 				return false;
 			}
@@ -148,7 +149,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 				BoostGadget.Log.WarnFormat("GadgetInfo not found: GadgetSlot={0} Character={1}", new object[]
 				{
 					slot,
-					this.Combat.Player.Character.BIName
+					this.Combat.Player.GetCharacterBiName()
 				});
 				return false;
 			}

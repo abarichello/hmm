@@ -4,10 +4,12 @@ using System.Diagnostics;
 using System.Linq;
 using HeavyMetalMachines.Combat.Gadget;
 using HeavyMetalMachines.Event;
+using HeavyMetalMachines.Players.Business;
+using Hoplon.Unity.Loading;
 using Pocketverse;
 using Pocketverse.MuralContext;
-using SharedUtils.Loading;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Combat
 {
@@ -112,15 +114,7 @@ namespace HeavyMetalMachines.Combat
 				});
 				return;
 			}
-			if (GameHubBehaviour.Hub.Net.IsClient() && this.m_playerPositionTransformSet)
-			{
-				Vector3 a = this.m_oPlayerPositionTransform.position;
-				a -= content.Origin;
-				if (content.EffectInfo.ForceCreation || a.sqrMagnitude <= 14400f || content.EffectInfo.Instantaneous || content.LifeTime > 3f || content.LifeTime > 0f)
-				{
-				}
-			}
-			ResourcesContent.Content asset = LoadingManager.ResourceContent.GetAsset(content.EffectInfo.Effect);
+			Content asset = Loading.Content.GetAsset(content.EffectInfo.Effect);
 			if (asset == null)
 			{
 				EffectsManager.Log.ErrorFormat("Could not get effect '{0}'. EffectId: {1}  SourceGadget: {2}  SourceGadgetInfo: {3}!!", new object[]
@@ -134,7 +128,7 @@ namespace HeavyMetalMachines.Combat
 			}
 			if (asset == null)
 			{
-				UnityEngine.Debug.LogError("Resource null " + content.EffectInfo.Effect);
+				Debug.LogError("Resource null " + content.EffectInfo.Effect);
 				return;
 			}
 			Transform transform = (Transform)asset.Asset;
@@ -181,14 +175,14 @@ namespace HeavyMetalMachines.Combat
 			}
 			component3.name = string.Format("[{0}]{1}", data.EventId, content.EffectInfo.Effect);
 			component3.prefabRef = component;
-			component3.transform.parent = GameHubBehaviour.Hub.Drawer.Effects;
+			GameHubBehaviour.Hub.Drawer.AddEffect(component3.transform);
 			component3.Event = data;
 			component3.Data = content;
 			component3.EventId = data.EventId;
 			component3.Gadget = content.SourceGadget;
 			component3.Source = content.SourceId;
 			component3.Init();
-			if (GameHubBehaviour.Hub.Net.IsClient() || GameHubBehaviour.Hub.Net.IsTest())
+			if ((GameHubBehaviour.Hub.Net.IsClient() || GameHubBehaviour.Hub.Net.IsTest()) && !this.IsSprayBlocked(content))
 			{
 				component3.TriggerVFX(content);
 			}
@@ -225,7 +219,6 @@ namespace HeavyMetalMachines.Combat
 			}
 			if (GameHubBehaviour.Hub.Net.IsServer())
 			{
-				component3.RedCreated = (component3.BluCreated = true);
 				this.SendCreate(component3.Event);
 				((EffectEvent)component3.Event.Content).FirstPackageSent = true;
 				if (!content.EffectInfo.Instantaneous)
@@ -237,6 +230,16 @@ namespace HeavyMetalMachines.Combat
 			{
 				component3.Gadget.ClientOnEffectStarted(component3);
 			}
+		}
+
+		private bool IsSprayBlocked(EffectEvent effectEvent)
+		{
+			if (effectEvent.SourceGadget.Info is SprayGadgetInfo)
+			{
+				this._isPlayerRestrictedByTextChat = (this._isPlayerRestrictedByTextChat ?? this._diContainer.Resolve<IIsPlayerRestrictedByTextChat>());
+				return this._isPlayerRestrictedByTextChat.IsPlayerRestricted(effectEvent.SourceCombat.Player.PlayerId);
+			}
+			return false;
 		}
 
 		private void DestroyEffect(EventData data, EffectRemoveEvent content)
@@ -267,10 +270,12 @@ namespace HeavyMetalMachines.Combat
 				this.SendRemove(data, baseFX);
 				GameHubBehaviour.Hub.Events.ForgetEvent(num);
 			}
-			DestroyEffect destroyEffect = baseFX.DestroyEffect(content);
+			DestroyEffectMessage destroyEffectMessage = baseFX.DestroyEffect(content);
+			EventData.FreeContent(content);
+			EventManager.FreeEventData(data);
 			foreach (BasePerk basePerk in baseFX.GetComponentsInChildren<BasePerk>(true))
 			{
-				basePerk.PerkDestroyed(destroyEffect);
+				basePerk.PerkDestroyed(destroyEffectMessage);
 			}
 			EffectsManager.EffectDestroyListenerHolder effectDestroyListenerHolder;
 			if (this._listeners.TryGetValue(num, out effectDestroyListenerHolder))
@@ -312,12 +317,12 @@ namespace HeavyMetalMachines.Combat
 
 		private void SendCreate(EventData create)
 		{
-			GameHubBehaviour.Hub.Events.Send(create);
+			this._eventDispatcher.Send(create);
 		}
 
 		private void SendRemove(EventData data, BaseFX effect)
 		{
-			GameHubBehaviour.Hub.Events.Send(data);
+			this._eventDispatcher.Send(data);
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(EffectsManager));
@@ -327,6 +332,14 @@ namespace HeavyMetalMachines.Combat
 		private readonly Dictionary<int, BaseFX> _effects = new Dictionary<int, BaseFX>(200);
 
 		private readonly Dictionary<int, BaseFX> _hidden = new Dictionary<int, BaseFX>(200);
+
+		[Inject]
+		private IEventManagerDispatcher _eventDispatcher;
+
+		[Inject]
+		private DiContainer _diContainer;
+
+		private IIsPlayerRestrictedByTextChat _isPlayerRestrictedByTextChat;
 
 		public const int InvalidEventId = -1;
 

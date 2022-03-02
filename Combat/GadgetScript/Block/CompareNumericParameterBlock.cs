@@ -5,6 +5,7 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat.GadgetScript.Block
 {
+	[Obsolete("Obsolete! Use FilterBlock")]
 	[CreateAssetMenu(menuName = "GadgetScript/Block/Parameter/CompareNumericParameter")]
 	public class CompareNumericParameterBlock : BaseBlock
 	{
@@ -17,12 +18,7 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 			}
 		}
 
-		protected override bool CheckSanity(IGadgetContext gadgetContext, IEventContext eventContext)
-		{
-			return !((IHMMGadgetContext)gadgetContext).IsClient || true;
-		}
-
-		protected override IBlock InnerExecute(IGadgetContext gadgetContext, IEventContext eventContext)
+		public override IBlock Execute(IGadgetContext gadgetContext, IEventContext eventContext)
 		{
 			IHMMEventContext ihmmeventContext = (IHMMEventContext)eventContext;
 			if (((IHMMGadgetContext)gadgetContext).IsServer)
@@ -41,22 +37,6 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 			return this._falseBlock;
 		}
 
-		public override bool UsesParameterWithId(int parameterId)
-		{
-			for (int i = 0; i < this._comparisons.Length; i++)
-			{
-				BaseParameter[] parameterArray = this._comparisons[i].GetParameterArray();
-				for (int j = 0; j < parameterArray.Length; j++)
-				{
-					if (base.CheckIsParameterWithId(parameterArray[j], parameterId))
-					{
-						return true;
-					}
-				}
-			}
-			return false;
-		}
-
 		[SerializeField]
 		private BaseBlock _falseBlock;
 
@@ -70,11 +50,12 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 		private static BoolParameter _resultParameter;
 
 		[Serializable]
-		private class Comparison : IParameterComparison, IUsedParametersArray
+		private class Comparison : IParameterComparison
 		{
-			public bool Compare(IParameterContext context)
+			public bool Compare(object context)
 			{
-				int num = ((INumericParameter)this._parameter).GetFloatValue(context).CompareTo(this._valueToCompare);
+				IParameterTomate<float> parameterTomate = this._parameter.ParameterTomate as IParameterTomate<float>;
+				int num = parameterTomate.GetValue(context).CompareTo(this._valueToCompare);
 				switch (this._comparisonType)
 				{
 				case ComparisonType.Equal:

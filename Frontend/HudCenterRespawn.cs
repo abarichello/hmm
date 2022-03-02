@@ -16,7 +16,19 @@ namespace HeavyMetalMachines.Frontend
 			}
 			this.DeathTimeMillis = (float)this.Combat.SpawnController.GetDeathTimeRemainingMillis();
 			this.ShouldPlayRespawnCountdownAudio = true;
+			this.canHideUI = false;
+			this.Animations[this.UnspawnAnimationIndex].Animation.gameObject.SetActive(true);
 			base.PlayInAnimationsQueued(this.UnspawnAnimationIndex, new Action(this.PlayBarsAnimation), 1f);
+		}
+
+		protected override void OnPlayerSpawn(PlayerEvent data)
+		{
+			base.OnPlayerSpawn(data);
+			if (data.TargetId != this.Combat.Player.PlayerCarId)
+			{
+				return;
+			}
+			this.canHideUI = true;
 		}
 
 		private void PlayBarsAnimation()
@@ -28,6 +40,16 @@ namespace HeavyMetalMachines.Frontend
 			float num = (float)(this.Combat.SpawnController.GetDeathTimeRemainingMillis() + 500);
 			float num2 = num * HudUtils.MillisToSeconds;
 			GUIUtils.PlayAnimation(this.BarsAnimation, false, 1f / num2, string.Empty);
+		}
+
+		protected override void Update()
+		{
+			base.Update();
+			if (this.canHideUI && !this.Animations[this.PreSpawnAnimationIndex].Animation.isPlaying)
+			{
+				this.Animations[this.PreSpawnAnimationIndex].Animation.gameObject.SetActive(false);
+				this.canHideUI = false;
+			}
 		}
 
 		protected override void OnBombDelivery(int causerid, TeamKind scoredteam, Vector3 deliveryPosition)
@@ -50,5 +72,7 @@ namespace HeavyMetalMachines.Frontend
 		public Animation BarsAnimation;
 
 		public Animation TitleAnimation;
+
+		private bool canHideUI;
 	}
 }

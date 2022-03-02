@@ -11,7 +11,7 @@ namespace HeavyMetalMachines.Combat
 
 		public void ServerCreatePing(int pingKind)
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1052, 1, base.IsReliable, new object[]
+			base.Dispatch(base.DispatchDestination(), base.OID, 1077, 1, base.IsReliable, new object[]
 			{
 				pingKind
 			});

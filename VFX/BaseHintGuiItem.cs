@@ -13,6 +13,11 @@ namespace HeavyMetalMachines.VFX
 
 		public void ActivateHint()
 		{
+			if (base.gameObject == null)
+			{
+				BaseHintGuiItem<T, TContent>.Log.Warn("Trying to active a BaseHintGuiItem when the object is destroyed.");
+				return;
+			}
 			base.gameObject.SetActive(true);
 			TContent referenceObject = base.ReferenceObject;
 			if (referenceObject.TimeoutSeconds > 0f)
@@ -23,6 +28,11 @@ namespace HeavyMetalMachines.VFX
 
 		public void UpdateIndex(long index)
 		{
+			if (base.gameObject == null)
+			{
+				BaseHintGuiItem<T, TContent>.Log.Warn("Trying to update the index of a BaseHintGuiItem when the object is destroyed.");
+				return;
+			}
 			base.gameObject.name = string.Format("{0}_HintObject_{1}", index, base.GetType().Name);
 		}
 
@@ -121,6 +131,8 @@ namespace HeavyMetalMachines.VFX
 			this.SetAsFinished();
 			yield break;
 		}
+
+		private static readonly BitLogger Log = new BitLogger(typeof(BaseHintGuiItem<T, TContent>));
 
 		[SerializeField]
 		private UIWidget _widget;

@@ -74,7 +74,7 @@ namespace HeavyMetalMachines.Combat
 			this._rightFill.localScale = vector;
 			vector.x = -vector.x;
 			this._leftFill.localScale = vector;
-			float x2 = num / vector.y;
+			float num3 = num / vector.y;
 			vector = this._rightFill.localPosition;
 			vector.x = this._halfCenterPieceSize + num2;
 			this._rightFill.localPosition = vector;
@@ -85,8 +85,8 @@ namespace HeavyMetalMachines.Combat
 			this._rightTip.localPosition = vector;
 			vector.x = -vector.x;
 			this._leftTip.localPosition = vector;
-			this._leftFillMaterial.SetTextureScale("_MainTex", new Vector2(x2, 1f));
-			this._rightFillMaterial.SetTextureScale("_MainTex", new Vector2(x2, 1f));
+			this._leftFillMaterial.SetTextureScale("_MainTex", new Vector2(num3, 1f));
+			this._rightFillMaterial.SetTextureScale("_MainTex", new Vector2(num3, 1f));
 		}
 
 		[SerializeField]

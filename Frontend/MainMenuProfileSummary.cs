@@ -1,19 +1,45 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using Assets.Standard_Assets.Scripts.HMM.PlotKids.Infra;
-using Assets.Standard_Assets.Scripts.HMM.PlotKids.Social;
+using Assets.ClientApiObjects;
+using Assets.ClientApiObjects.Components;
 using ClientAPI.Objects;
-using HeavyMetalMachines.Character;
+using HeavyMetalMachines.Characters;
+using HeavyMetalMachines.Client.Matches;
+using HeavyMetalMachines.Localization;
+using HeavyMetalMachines.Matches;
+using HeavyMetalMachines.Players.Business;
 using HeavyMetalMachines.Swordfish.Player;
 using HeavyMetalMachines.Utils;
+using Hoplon.Input.UiNavigation;
+using Hoplon.Input.UiNavigation.AxisSelector;
+using Hoplon.Serialization;
+using Hoplon.ToggleableFeatures;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
 	public class MainMenuProfileSummary : MainMenuProfileWindow
 	{
+		private IUiNavigationSubGroupHolder UiNavigationSubGroupHolder
+		{
+			get
+			{
+				return this._uiNavigationSubGroupHolder;
+			}
+		}
+
+		private IUiNavigationRebuilder UiNavigationAxisSelectorRebuilder
+		{
+			get
+			{
+				return this._uiNavigationAxisSelector;
+			}
+		}
+
 		public override void OnLoading()
 		{
 			for (int i = 0; i < this.MasteryGuiComponentList.Length; i++)
@@ -28,7 +54,27 @@ namespace HeavyMetalMachines.Frontend
 				localPosition.x = (float)(-(float)this.MasteryMinSpriteBarSize);
 				masteryGuiComponents.BarSprite.transform.localPosition = localPosition;
 			}
-			TopMenuController.OnClientSetPlayerLevel += this.TopMenuControllerOnClientSetPlayerLevel;
+			DisposableExtensions.AddTo<IDisposable>(ObservableExtensions.Subscribe<int>(Observable.Merge<int>(new IObservable<int>[]
+			{
+				this.UpdateBattlepassLevel(),
+				this.UpdatePlayerLevel()
+			})), this);
+		}
+
+		private IObservable<int> UpdateBattlepassLevel()
+		{
+			return Observable.Do<int>(this._observeBattlepassProgress.ObserveLevelChanged(), delegate(int level)
+			{
+				this.StatisticsGui.PlayerLevelLabel.text = (level + 1).ToString("0");
+			});
+		}
+
+		private IObservable<int> UpdatePlayerLevel()
+		{
+			return Observable.Do<int>(this._observeLocalPlayerLevelChanged.GetAndObserve, delegate(int level)
+			{
+				this.StatisticsGui.PlayerLevelTotalLabel.text = (level + 1).ToString("0");
+			});
 		}
 
 		private void MasteryOnHoverOver()
@@ -40,7 +86,10 @@ namespace HeavyMetalMachines.Frontend
 				if (current == masteryGuiComponents.EventTrigger)
 				{
 					TooltipInfo tooltipInfo = new TooltipInfo(TooltipInfo.TooltipType.Normal, TooltipInfo.DescriptionSummaryType.None, PreferredDirection.Left, masteryGuiComponents.IconSprite.sprite2D, string.Empty, Language.Get(masteryGuiComponents.NameTranslationDraft, masteryGuiComponents.TranslationSheet), string.Empty, Language.Get(masteryGuiComponents.DescriptionTranslationDraft, masteryGuiComponents.TranslationSheet), string.Empty, string.Empty, string.Empty, masteryGuiComponents.TooltipPosition.position, string.Empty);
-					GameHubBehaviour.Hub.GuiScripts.TooltipController.TryToOpenWindow(tooltipInfo);
+					if (!GameHubBehaviour.Hub.GuiScripts.TooltipController.IsVisible())
+					{
+						GameHubBehaviour.Hub.GuiScripts.TooltipController.ToggleOpenWindow(tooltipInfo);
+					}
 					break;
 				}
 			}
@@ -59,14 +108,8 @@ namespace HeavyMetalMachines.Frontend
 				masteryGuiComponents.EventTrigger.onHoverOver.Clear();
 				masteryGuiComponents.EventTrigger.onHoverOut.Clear();
 			}
-			TopMenuController.OnClientSetPlayerLevel -= this.TopMenuControllerOnClientSetPlayerLevel;
-		}
-
-		private void TopMenuControllerOnClientSetPlayerLevel(int playerLevel, float levelProgress, int totalLevel)
-		{
-			this.PlayerNameLabel.text = GameHubBehaviour.Hub.User.PlayerSF.Name;
-			this.StatisticsGui.PlayerLevelLabel.text = (playerLevel + 1).ToString("0");
-			this.StatisticsGui.PlayerLevelTotalLabel.text = (totalLevel + 1).ToString("0");
+			this.DisableMasteryTooltips();
+			GameHubBehaviour.Hub.GuiScripts.TooltipController.HideWindow();
 		}
 
 		private void CreatePoolFromUpdateData()
@@ -89,6 +132,7 @@ namespace HeavyMetalMachines.Frontend
 						this._creatingPool = false;
 						this._poolCreated = true;
 						this.UpdateData();
+						this.UiNavigationAxisSelectorRebuilder.RebuildAndSelect();
 					}));
 				}));
 			}));
@@ -101,9 +145,10 @@ namespace HeavyMetalMachines.Frontend
 				this.CreatePoolFromUpdateData();
 				return;
 			}
+			this._playerNameLabel.text = this._localPlayer.Player.Nickname;
 			this.UpdateInfoCache();
 			this.UpdateMasteryData();
-			List<HeavyMetalMachines.Character.CharacterInfo> mostPlayedCharacters = this.GetMostPlayedCharacters();
+			List<ItemTypeScriptableObject> mostPlayedCharacters = this.GetMostPlayedCharacters();
 			this.SumaryPlayersGrid.hideInactive = false;
 			List<Transform> childList = this.SumaryPlayersGrid.GetChildList();
 			for (int i = 0; i < childList.Count; i++)
@@ -112,24 +157,25 @@ namespace HeavyMetalMachines.Frontend
 			}
 			for (int j = 0; j < mostPlayedCharacters.Count; j++)
 			{
-				HeavyMetalMachines.Character.CharacterInfo characterInfo = mostPlayedCharacters[j];
-				MainMenuProfileCharacterCard component = childList[j].GetComponent<MainMenuProfileCharacterCard>();
-				component.SetCharacterName(characterInfo.LocalizedName);
-				component.SetCharacterSprite(characterInfo.Asset + "_icon_char_128");
-				component.SetButtonEventListener(characterInfo.CharacterId);
-				component.SetCharacterLevelProgressBarVisibility(true);
+				ItemTypeScriptableObject itemTypeScriptableObject = mostPlayedCharacters[j];
+				CharacterItemTypeComponent component = itemTypeScriptableObject.GetComponent<CharacterItemTypeComponent>();
+				MainMenuProfileCharacterCard component2 = childList[j].GetComponent<MainMenuProfileCharacterCard>();
+				component2.SetCharacterName(component.GetCharacterLocalizedName());
+				component2.SetCharacterSprite(component.AssetPrefix + "_icon_char_128");
+				component2.SetButtonEventListener(component.CharacterId);
+				component2.SetCharacterLevelProgressBarVisibility(true);
 				CharacterBag characterBag;
-				if (HudUtils.TryToGetCharacterBag(GameHubBehaviour.Hub, characterInfo.CharacterItemTypeGuid, out characterBag))
+				if (HudUtils.TryToGetCharacterBag(GameHubBehaviour.Hub, itemTypeScriptableObject.Id, out characterBag))
 				{
 					int levelForXP = GameHubBehaviour.Hub.SharedConfigs.CharacterProgression.GetLevelForXP(characterBag.Xp);
-					component.SetInfo((float)levelForXP, HudUtils.GetNormalizedLevelInfo(GameHubBehaviour.Hub.SharedConfigs.CharacterProgression, levelForXP, characterBag.Xp), characterInfo.Role);
+					component2.SetInfo((float)levelForXP, HudUtils.GetNormalizedLevelInfo(GameHubBehaviour.Hub.SharedConfigs.CharacterProgression, levelForXP, characterBag.Xp), component.Role);
 				}
 				else
 				{
-					UnityEngine.Debug.Log(string.Format("(UpdateData) - CharacterBag not found for char typeId:[{0}]", characterInfo.CharacterItemTypeGuid));
-					component.SetInfo(0f, 0f, characterInfo.Role);
+					Debug.Log(string.Format("(UpdateData) - CharacterBag not found for char typeId:[{0}]", itemTypeScriptableObject.Id));
+					component2.SetInfo(0f, 0f, component.Role);
 				}
-				component.SetCornerVisibility(false);
+				component2.SetCornerVisibility(false);
 				childList[j].gameObject.SetActive(true);
 			}
 			this.SumaryPlayersGrid.hideInactive = true;
@@ -147,11 +193,11 @@ namespace HeavyMetalMachines.Frontend
 			{
 				MainMenuProfileSummary.MasteryGuiComponents masteryGuiComponents = this.MasteryGuiComponentList[i];
 				float num2 = (float)this._infoCache.CarrierMatchesCount;
-				if (masteryGuiComponents.RoleKind == HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Support)
+				if (masteryGuiComponents.RoleKind == null)
 				{
 					num2 = (float)this._infoCache.SupportMatchesCount;
 				}
-				else if (masteryGuiComponents.RoleKind == HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Tackler)
+				else if (masteryGuiComponents.RoleKind == 2)
 				{
 					num2 = (float)this._infoCache.TacklerMatchesCount;
 				}
@@ -168,8 +214,8 @@ namespace HeavyMetalMachines.Frontend
 				{
 					float num3 = num2 / num;
 					float num4 = (float)(this.MasteryMaxSpriteBarSize - this.MasteryMinSpriteBarSize);
-					float f = num4 * num3;
-					masteryGuiComponents.BarSprite.width = this.MasteryMinSpriteBarSize + Mathf.RoundToInt(f);
+					float num5 = num4 * num3;
+					masteryGuiComponents.BarSprite.width = this.MasteryMinSpriteBarSize + Mathf.RoundToInt(num5);
 					masteryGuiComponents.BarSprite.alpha = 1f;
 					masteryGuiComponents.BarBorderSprite.alpha = 1f;
 					localPosition.x = 0f;
@@ -282,32 +328,42 @@ namespace HeavyMetalMachines.Frontend
 		private void UpdateInfoCache()
 		{
 			this._infoCache = default(MainMenuProfileSummary.SummaryInfoCache);
+			PlayerMatchCharacterStats[] all = this._localPlayerMatchCharacterStatsProvider.GetAll();
+			PlayerMatchStats playerMatchStats = this._calculatePlayerMatchStats.Get(all);
+			this._infoCache.BombStolenCount = playerMatchStats.BombStolenCount;
+			this._infoCache.BombLostCount = playerMatchStats.BombLostCount;
+			this._infoCache.BombDeliveredCount = playerMatchStats.BombDeliveredCount;
+			this._infoCache.MatchesCount = playerMatchStats.MatchesCount;
+			this._infoCache.WinsCount = playerMatchStats.WinsCount;
+			this._infoCache.DefeatsCount = playerMatchStats.DefeatsCount;
+			this._infoCache.KillsCount = playerMatchStats.KillsCount;
+			this._infoCache.DeathsCount = playerMatchStats.DeathsCount;
+			this._infoCache.TotalDamage = playerMatchStats.TotalDamage;
+			this._infoCache.TotalRepair = playerMatchStats.TotalRepair;
+			this._infoCache.TravelledDistance = playerMatchStats.TravelledDistance;
+			this._infoCache.SpeedBoostCount = playerMatchStats.SpeedBoostCount;
+			this._infoCache.ScrapCollectedCount = playerMatchStats.ScrapCollectedCount;
 			for (int i = 0; i < GameHubBehaviour.Hub.User.Characters.Length; i++)
 			{
 				Character character = GameHubBehaviour.Hub.User.Characters[i];
-				CharacterBag characterBag = (CharacterBag)((JsonSerializeable<T>)character.Bag);
-				this._infoCache.BombStolenCount = this._infoCache.BombStolenCount + characterBag.BombStolenCount;
-				this._infoCache.BombLostCount = this._infoCache.BombLostCount + characterBag.BombLostCount;
-				this._infoCache.BombDeliveredCount = this._infoCache.BombDeliveredCount + characterBag.BombDeliveredCount;
-				this._infoCache.MatchesCount = this._infoCache.MatchesCount + characterBag.MatchesCount;
-				this._infoCache.WinsCount = this._infoCache.WinsCount + characterBag.WinsCount;
-				this._infoCache.DefeatsCount = this._infoCache.DefeatsCount + characterBag.DefeatsCount;
-				this._infoCache.KillsCount = this._infoCache.KillsCount + characterBag.KillsCount;
-				this._infoCache.DeathsCount = this._infoCache.DeathsCount + characterBag.DeathsCount;
-				this._infoCache.TotalDamage = this._infoCache.TotalDamage + characterBag.TotalDamage;
-				this._infoCache.TotalRepair = this._infoCache.TotalRepair + characterBag.TotalRepair;
-				this._infoCache.TravelledDistance = this._infoCache.TravelledDistance + characterBag.TravelledDistance;
-				this._infoCache.SpeedBoostCount = this._infoCache.SpeedBoostCount + characterBag.SpeedBoostCount;
-				this._infoCache.ScrapCollectedCount = this._infoCache.ScrapCollectedCount + characterBag.ScrapCollectedCount;
-				HeavyMetalMachines.Character.CharacterInfo characterInfoByCharacterGuid = GameHubBehaviour.Hub.InventoryColletion.GetCharacterInfoByCharacterGuid(characterBag.CharacterId);
-				if (!(characterInfoByCharacterGuid == null))
+				CharacterBag characterBag = (CharacterBag)((JsonSerializeable<!0>)character.Bag);
+				if (!GameHubBehaviour.Hub.InventoryColletion.AllItemTypes.ContainsKey(characterBag.CharacterId))
 				{
-					HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind role = characterInfoByCharacterGuid.Role;
-					if (role != HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Carrier)
+					MainMenuProfileSummary.Log.ErrorFormat("Skipping character {0}, data not found in collection. Is this a unreleased character? The QA database must be reset after testing a new character.", new object[]
 					{
-						if (role != HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Support)
+						characterBag.CharacterId
+					});
+				}
+				else
+				{
+					ItemTypeScriptableObject itemTypeScriptableObject = GameHubBehaviour.Hub.InventoryColletion.AllItemTypes[characterBag.CharacterId];
+					CharacterItemTypeComponent component = itemTypeScriptableObject.GetComponent<CharacterItemTypeComponent>();
+					DriverRoleKind role = component.Role;
+					if (role != 1)
+					{
+						if (role != null)
 						{
-							if (role == HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Tackler)
+							if (role == 2)
 							{
 								this._infoCache.TacklerMatchesCount = this._infoCache.TacklerMatchesCount + characterBag.MatchesCount;
 							}
@@ -323,12 +379,6 @@ namespace HeavyMetalMachines.Frontend
 					}
 				}
 			}
-			if (GameHubBehaviour.Hub.ClientApi.friend != null)
-			{
-				FriendBag friendBag = (FriendBag)((JsonSerializeable<T>)GameHubBehaviour.Hub.ClientApi.friend.GetMyBag());
-				friendBag.MatchesWon = this._infoCache.WinsCount;
-				ManagerController.Get<FriendBagManager>().SaveMyFriendBagOnNextFrame();
-			}
 		}
 
 		public override void SetWindowVisibility(bool visible)
@@ -338,12 +388,37 @@ namespace HeavyMetalMachines.Frontend
 			{
 				base.gameObject.SetActive(true);
 				this.ScreenAlphaAnimation.Play("profileGeneralIn");
+				this.EnableMasteryTooltips();
 			}
 			else if (base.gameObject.activeInHierarchy)
 			{
 				this.ScreenAlphaAnimation.Play("profileGeneralOut");
 				this.disableCoroutine = base.StartCoroutine(GUIUtils.WaitAndDisable(this.ScreenAlphaAnimation.clip.length, base.gameObject));
 			}
+			if (!visible)
+			{
+				this.DisableMasteryTooltips();
+				GameHubBehaviour.Hub.GuiScripts.TooltipController.HideWindow();
+			}
+			this.SetUiNavigationFocus(visible);
+		}
+
+		private void SetUiNavigationFocus(bool focused)
+		{
+			if (focused)
+			{
+				this.UiNavigationSubGroupHolder.SubGroupFocusGet();
+			}
+			else
+			{
+				this.UiNavigationSubGroupHolder.SubGroupFocusRelease();
+			}
+		}
+
+		public override void OnPreBackToMainMenu()
+		{
+			this.DisableMasteryTooltips();
+			GameHubBehaviour.Hub.GuiScripts.TooltipController.HideWindow();
 		}
 
 		public override void OnBackToMainMenu()
@@ -351,13 +426,13 @@ namespace HeavyMetalMachines.Frontend
 			this.SetWindowVisibility(false);
 		}
 
-		private List<HeavyMetalMachines.Character.CharacterInfo> GetMostPlayedCharacters()
+		private List<ItemTypeScriptableObject> GetMostPlayedCharacters()
 		{
 			List<CharacterBag> list = new List<CharacterBag>(GameHubBehaviour.Hub.User.Characters.Length);
-			List<HeavyMetalMachines.Character.CharacterInfo> list2 = new List<HeavyMetalMachines.Character.CharacterInfo>(this.PlayerGridQuantity);
+			List<ItemTypeScriptableObject> list2 = new List<ItemTypeScriptableObject>(this.PlayerGridQuantity);
 			for (int i = 0; i < GameHubBehaviour.Hub.User.Characters.Length; i++)
 			{
-				CharacterBag item = (CharacterBag)((JsonSerializeable<T>)GameHubBehaviour.Hub.User.Characters[i].Bag);
+				CharacterBag item = (CharacterBag)((JsonSerializeable<!0>)GameHubBehaviour.Hub.User.Characters[i].Bag);
 				list.Add(item);
 			}
 			List<CharacterBag> list3 = list;
@@ -368,13 +443,27 @@ namespace HeavyMetalMachines.Frontend
 			list3.Sort(MainMenuProfileSummary.<>f__mg$cache0);
 			for (int j = 0; j < list.Count; j++)
 			{
-				HeavyMetalMachines.Character.CharacterInfo characterInfoByCharacterGuid = GameHubBehaviour.Hub.InventoryColletion.GetCharacterInfoByCharacterGuid(list[j].CharacterId);
-				if (!(characterInfoByCharacterGuid == null))
+				ItemTypeScriptableObject itemTypeScriptableObject;
+				if (GameHubBehaviour.Hub.InventoryColletion.AllItemTypes.TryGetValue(list[j].CharacterId, out itemTypeScriptableObject))
 				{
-					list2.Add(characterInfoByCharacterGuid);
-					if (list2.Count >= this.PlayerGridQuantity)
+					if (!(itemTypeScriptableObject == null))
 					{
-						break;
+						if (list2.Contains(itemTypeScriptableObject))
+						{
+							CharacterItemTypeComponent component = itemTypeScriptableObject.GetComponent<CharacterItemTypeComponent>();
+							MainMenuProfileSummary.Log.WarnFormat("GetMostPlayedCharacters. Duplicated char info: CharacterId[{0}].", new object[]
+							{
+								component.CharacterId
+							});
+						}
+						else
+						{
+							list2.Add(itemTypeScriptableObject);
+							if (list2.Count >= this.PlayerGridQuantity)
+							{
+								break;
+							}
+						}
 					}
 				}
 			}
@@ -394,9 +483,28 @@ namespace HeavyMetalMachines.Frontend
 			mainMenuProfileMachines.OnCharacterClickFromProfileSummary(id);
 		}
 
+		private void EnableMasteryTooltips()
+		{
+			this.SetMasteryIconsCollidersEnableState(true);
+		}
+
+		private void DisableMasteryTooltips()
+		{
+			this.SetMasteryIconsCollidersEnableState(false);
+		}
+
+		private void SetMasteryIconsCollidersEnableState(bool isEnabled)
+		{
+			for (int i = 0; i < this.MasteryGuiComponentList.Length; i++)
+			{
+				this.MasteryGuiComponentList[i].IconSprite.GetComponent<BoxCollider>().enabled = isEnabled;
+			}
+		}
+
 		private static readonly BitLogger Log = new BitLogger(typeof(MainMenuProfileSummary));
 
-		public UILabel PlayerNameLabel;
+		[SerializeField]
+		private UILabel _playerNameLabel;
 
 		public int PlayerGridQuantity = 3;
 
@@ -408,6 +516,24 @@ namespace HeavyMetalMachines.Frontend
 		public int MasteryMaxSpriteBarSize = 400;
 
 		public MainMenuProfileSummary.MasteryGuiComponents[] MasteryGuiComponentList;
+
+		[Inject]
+		private ILocalPlayerStorage _localPlayer;
+
+		[Inject]
+		private IIsFeatureToggled _isFeatureToggled;
+
+		[Inject]
+		private ILocalPlayerMatchCharacterStatsProvider _localPlayerMatchCharacterStatsProvider;
+
+		[Inject]
+		private ICalculatePlayerMatchStats _calculatePlayerMatchStats;
+
+		[Inject]
+		private IObserveBattlepassProgress _observeBattlepassProgress;
+
+		[Inject]
+		private IObserveLocalPlayerLevelChanged _observeLocalPlayerLevelChanged;
 
 		private bool _creatingPool;
 
@@ -421,6 +547,12 @@ namespace HeavyMetalMachines.Frontend
 		[SerializeField]
 		protected MainMenuProfileSummary.StatisticsInfo[] StatisticsInfoList;
 
+		[SerializeField]
+		private UiNavigationSubGroupHolder _uiNavigationSubGroupHolder;
+
+		[SerializeField]
+		private UiNavigationAxisSelector _uiNavigationAxisSelector;
+
 		private Coroutine disableCoroutine;
 
 		[CompilerGenerated]
@@ -429,7 +561,7 @@ namespace HeavyMetalMachines.Frontend
 		[Serializable]
 		public struct MasteryGuiComponents
 		{
-			public HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind RoleKind;
+			public DriverRoleKind RoleKind;
 
 			public UI2DSprite IconSprite;
 

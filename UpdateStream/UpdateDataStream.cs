@@ -40,8 +40,16 @@ namespace HeavyMetalMachines.UpdateStream
 				t.ApplyStreamData(objects.Contents);
 				T t2 = this.Objects[obj.Id.ObjId];
 				t2.Version = objects.Version;
+				ByteArrayCache.Free(objects.Contents);
 				this.ObjectsUpdatedButNotFound.Remove(obj.Id.ObjId);
 			}
+		}
+
+		public T GetObject(int id)
+		{
+			T result;
+			this.Objects.TryGetValue(id, out result);
+			return result;
 		}
 
 		public void AddObject(Identifiable obj)
@@ -126,13 +134,14 @@ namespace HeavyMetalMachines.UpdateStream
 			{
 				int num = stream.ReadCompressedInt();
 				short num2 = stream.ReadShort();
-				byte[] array = stream.ReadByteArray();
+				byte[] array = stream.CachedReadByteArray();
 				T t;
 				if (this.Objects.TryGetValue(num, out t))
 				{
 					if (array != null)
 					{
 						t.ApplyStreamData(array);
+						ByteArrayCache.Free(array);
 					}
 					t.Version = num2;
 					if (t is StreamContent)

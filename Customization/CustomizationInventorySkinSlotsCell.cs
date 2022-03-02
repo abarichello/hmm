@@ -1,5 +1,6 @@
 ﻿using System;
 using HeavyMetalMachines.Frontend;
+using HeavyMetalMachines.Localization;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Customization
@@ -10,8 +11,9 @@ namespace HeavyMetalMachines.Customization
 		{
 			base.RefreshItem(index);
 			CustomizationInventoryCellItemData customizationInventoryCellItemData = this._itemsData[index];
-			this._items[index].NameText.text = ((customizationInventoryCellItemData == null) ? string.Empty : Language.Get(customizationInventoryCellItemData.ItemDescription, TranslationSheets.Items));
+			this._items[index].NameText.text = ((customizationInventoryCellItemData == null) ? string.Empty : Language.Get(customizationInventoryCellItemData.ItemDescription, TranslationContext.Items));
 			this._items[index].BgImage.SetAlpha((customizationInventoryCellItemData == null) ? this._disabledBgAlpha : 1f);
+			this._items[index].Image.gameObject.SetActive(this._items[index].Image.enabled);
 		}
 
 		[SerializeField]

@@ -10,14 +10,14 @@ namespace HeavyMetalMachines.VFX
 		protected override void OnActivate()
 		{
 			bool flag = this._targetFXInfo.Owner != null && this._targetFXInfo.Gadget != null && this.Explosion != null && this.Release != null;
-			HeavyMetalMachines.Utils.Debug.Assert(flag, string.Format("Null in {0}. Owner:{1}, Gadget: {2}, Release: {3}, Explosion: {4}", new object[]
+			Debug.Assert(flag, string.Format("Null in {0}. Owner:{1}, Gadget: {2}, Release: {3}, Explosion: {4}", new object[]
 			{
 				base.name,
 				this._targetFXInfo.Owner,
 				this._targetFXInfo.Gadget,
 				this.Release,
 				this.Explosion
-			}), HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+			}), Debug.TargetTeam.All);
 			if (!flag)
 			{
 				return;
@@ -43,7 +43,7 @@ namespace HeavyMetalMachines.VFX
 			}
 			if (this.gadgetStateObject != null && this.gadgetStateObject.Heat > 0.99f)
 			{
-				HeavyMetalMachines.Utils.Debug.Assert(this.Explosion.IsOneShot, string.Format("{0} trying to play an explosion audio but it is not OneShot. Audio: {1}", base.name, this.Explosion), HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+				Debug.Assert(this.Explosion.IsOneShot, string.Format("{0} trying to play an explosion audio but it is not OneShot. Audio: {1}", base.name, this.Explosion), Debug.TargetTeam.All);
 				float volume;
 				Transform targetFor = base.GetTargetFor(this.ReleaseTarget, out volume);
 				base.CallFMOD(this.Explosion, targetFor, volume);
@@ -61,7 +61,7 @@ namespace HeavyMetalMachines.VFX
 				return;
 			}
 			this.released = true;
-			HeavyMetalMachines.Utils.Debug.Assert(this.Release.IsOneShot, string.Format("{0} trying to play a release audio but it is not OneShot. Audio: {1}", base.name, this.Release), HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+			Debug.Assert(this.Release.IsOneShot, string.Format("{0} trying to play a release audio but it is not OneShot. Audio: {1}", base.name, this.Release), Debug.TargetTeam.All);
 			float volume;
 			Transform targetFor = base.GetTargetFor(this.ReleaseTarget, out volume);
 			base.CallFMOD(this.Release, targetFor, volume);
@@ -69,9 +69,9 @@ namespace HeavyMetalMachines.VFX
 
 		public AbstractAudioVFX.TargetType ReleaseTarget;
 
-		public FMODAsset Release;
+		public AudioEventAsset Release;
 
-		public FMODAsset Explosion;
+		public AudioEventAsset Explosion;
 
 		private GadgetData.GadgetStateObject gadgetStateObject;
 

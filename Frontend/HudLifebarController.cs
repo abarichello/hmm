@@ -1,9 +1,10 @@
 ﻿using System;
 using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.Match;
 using HeavyMetalMachines.Utils;
 using Pocketverse;
-using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
@@ -11,49 +12,22 @@ namespace HeavyMetalMachines.Frontend
 	{
 		public void Awake()
 		{
-			ObjectPoolUtils.CreateObjectPool<HudLifebarPlayerObject>(this.HudLifebarPlayerObjectReference, out this._hudLifebarPlayerObjects, this.HudLifebarSettings.PlayerMaxPool);
+			ObjectPoolUtils.CreateInjectedObjectPool<HudLifebarPlayerObject>(this.HudLifebarPlayerObjectReference, out this._hudLifebarPlayerObjects, this.HudLifebarSettings.PlayerMaxPool, this._container, 1, null);
 			for (int i = 0; i < this._hudLifebarPlayerObjects.Length; i++)
 			{
 				this._hudLifebarPlayerObjects[i].CreatePool();
 			}
 			GameHubBehaviour.Hub.BombManager.ListenToPhaseChange += this.OnBombPhaseChanged;
-			if (GameHubBehaviour.Hub.Match.LevelIsTutorial())
-			{
-				ObjectPoolUtils.CreateObjectPool<HudLifebarCreepObject>(this.HudLifebarCreepObjectReference, out this._hudLifebarCreepObjects, this.HudLifebarSettings.CreepMaxPool);
-				for (int j = 0; j < this._hudLifebarCreepObjects.Length; j++)
-				{
-					this._hudLifebarCreepObjects[j].CreatePool();
-				}
-				GameHubBehaviour.Hub.Events.Creeps.ListenToCreepSpawn += this.OnCreepSpawn;
-			}
-			else
-			{
-				UnityEngine.Object.Destroy(this.HudLifebarCreepObjectReference.transform.parent.gameObject);
-			}
+			GameHubBehaviour.Hub.Options.Game.OnCounselorActiveChanged += this.OnCounselorActiveChanged;
 		}
 
 		public void OnDestroy()
 		{
 			GameHubBehaviour.Hub.BombManager.ListenToPhaseChange -= this.OnBombPhaseChanged;
-			GameHubBehaviour.Hub.Events.Creeps.ListenToCreepSpawn -= this.OnCreepSpawn;
+			GameHubBehaviour.Hub.Options.Game.OnCounselorActiveChanged -= this.OnCounselorActiveChanged;
 		}
 
-		private void OnCreepSpawn(CreepController creepController)
-		{
-			HudLifebarCreepObject hudLifebarCreepObject = null;
-			if (!ObjectPoolUtils.TryToGetFreeObject<HudLifebarCreepObject>(this._hudLifebarCreepObjects, ref hudLifebarCreepObject))
-			{
-				HudLifebarController.Log.ErrorFormat("No lifebar available for creep: {0}", new object[]
-				{
-					creepController.Combat.Id.ObjId
-				});
-				return;
-			}
-			hudLifebarCreepObject.Setup(creepController.Combat);
-			hudLifebarCreepObject.gameObject.SetActive(true);
-		}
-
-		private void OnBombPhaseChanged(BombScoreBoard.State bombState)
+		private void OnBombPhaseChanged(BombScoreboardState bombState)
 		{
 			if (!GameHubBehaviour.Hub.GuiScripts.AfkControllerGui.IsWindowVisible())
 			{
@@ -76,10 +50,19 @@ namespace HeavyMetalMachines.Frontend
 			CombatObject bitComponent = playerOrBotsByObjectId.CharacterInstance.GetBitComponent<CombatObject>();
 			hudLifebarPlayerObject.Setup(bitComponent);
 			hudLifebarPlayerObject.gameObject.SetActive(true);
-			if (playerOrBotsByObjectId.IsCurrentPlayer)
+			if (playerOrBotsByObjectId.IsCurrentPlayer && GameHubBehaviour.Hub.Options.Game.CounselorActive)
 			{
 				this.HudLifebarCounselorReference.Setup(hudLifebarPlayerObject.CounselorParentGameObject.transform);
 				this.HudLifebarCounselorReference.gameObject.SetActive(true);
+			}
+		}
+
+		public void OnCounselorActiveChanged()
+		{
+			this.HudLifebarCounselorReference.gameObject.SetActive(GameHubBehaviour.Hub.Options.Game.CounselorActive);
+			if (GameHubBehaviour.Hub.Options.Game.CounselorActive)
+			{
+				this.HudLifebarCounselorReference.Setup(this.HudLifebarPlayerObjectReference.CounselorParentGameObject.transform);
 			}
 		}
 
@@ -90,7 +73,7 @@ namespace HeavyMetalMachines.Frontend
 				HudLifebarPlayerObject hudLifebarPlayerObject = this._hudLifebarPlayerObjects[i];
 				if (!(hudLifebarPlayerObject.CombatObject == null))
 				{
-					hudLifebarPlayerObject.SetVisible(visibility);
+					hudLifebarPlayerObject.SetVisibility(visibility);
 				}
 			}
 		}
@@ -113,7 +96,7 @@ namespace HeavyMetalMachines.Frontend
 			for (int i = 0; i < this._hudLifebarPlayerObjects.Length; i++)
 			{
 				HudLifebarPlayerObject hudLifebarPlayerObject = this._hudLifebarPlayerObjects[i];
-				if (hudLifebarPlayerObject.CombatObject.Id.ObjId == lifebarOwnerId)
+				if (!(hudLifebarPlayerObject.CombatObject != null) || hudLifebarPlayerObject.CombatObject.Id.ObjId == lifebarOwnerId)
 				{
 					hudLifebarPlayerObject.SetAttachedGroupVisibility(attachedObjectId, visible);
 				}
@@ -133,18 +116,30 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
+		public HudLifebarPlayerObject GetLifebarObject(int combatId)
+		{
+			for (int i = 0; i < this._hudLifebarPlayerObjects.Length; i++)
+			{
+				HudLifebarPlayerObject hudLifebarPlayerObject = this._hudLifebarPlayerObjects[i];
+				if (hudLifebarPlayerObject.CombatObject.Id.ObjId == combatId)
+				{
+					return hudLifebarPlayerObject;
+				}
+			}
+			return null;
+		}
+
 		private static readonly BitLogger Log = new BitLogger(typeof(HudLifebarController));
 
 		public HudLifebarSettings HudLifebarSettings;
 
 		public HudLifebarPlayerObject HudLifebarPlayerObjectReference;
 
-		public HudLifebarCreepObject HudLifebarCreepObjectReference;
-
 		public HudLifebarCounselor HudLifebarCounselorReference;
 
 		private HudLifebarPlayerObject[] _hudLifebarPlayerObjects;
 
-		private HudLifebarCreepObject[] _hudLifebarCreepObjects;
+		[Inject]
+		private DiContainer _container;
 	}
 }

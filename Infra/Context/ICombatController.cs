@@ -1,6 +1,5 @@
 ﻿using System;
 using HeavyMetalMachines.Combat;
-using UnityEngine;
 
 namespace HeavyMetalMachines.Infra.Context
 {
@@ -8,7 +7,9 @@ namespace HeavyMetalMachines.Infra.Context
 	{
 		void AddModifiers(ModifierData[] datas, ICombatObject causer, int eventId, bool barrierHit);
 
-		void AddModifiers(ModifierData[] datas, ICombatObject causer, int eventId, Vector3 direction, Vector3 position, bool barrierHit);
+		void AddModifier(ModifierData datas, ICombatObject causer, int eventId, bool barrierHit);
+
+		void AddPassiveModifier(ModifierData data, ICombatObject causer, int eventId);
 
 		void AddPassiveModifiers(ModifierData[] datas, ICombatObject causer, int eventId);
 

@@ -35,7 +35,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			return this.missileEffectID;
 		}
 
-		protected override void InnerOnDestroyEffect(DestroyEffect evt)
+		protected override void InnerOnDestroyEffect(DestroyEffectMessage evt)
 		{
 			base.InnerOnDestroyEffect(evt);
 			if (!this.UseEffect3.BoolGet() || this.missileEffectID != evt.RemoveData.TargetEventId)
@@ -58,7 +58,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			base.ExistingFiredEffectsAdd(effectID);
 		}
 
-		protected override int FireExtraGadgetOnDeath(DestroyEffect destroyEvt)
+		protected override int FireExtraGadgetOnDeath(DestroyEffectMessage destroyEvt)
 		{
 			int num = base.FireExtraGadgetOnDeath(destroyEvt);
 			if (num == -1)

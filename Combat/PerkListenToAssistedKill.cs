@@ -4,7 +4,7 @@ using Pocketverse;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkListenToAssistedKill : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkListenToAssistedKill : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		public override void PerkInitialized()
 		{
@@ -16,7 +16,7 @@ namespace HeavyMetalMachines.Combat
 			this._listening.ListenToPosDamageCaused += this.OnDamageCaused;
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (GameHubBehaviour.Hub.Net.IsClient())
 			{

@@ -11,7 +11,7 @@ namespace HeavyMetalMachines.Combat
 		{
 			if (GameHubBehaviour.Hub != null && GameHubBehaviour.Hub.Net.IsClient())
 			{
-				UnityEngine.Object.Destroy(this);
+				Object.Destroy(this);
 				return;
 			}
 			BombFlagTrigger.lastKindTriggered = BombFlagTrigger.TriggerKind.None;
@@ -19,7 +19,7 @@ namespace HeavyMetalMachines.Combat
 			if (this.kind == BombFlagTrigger.TriggerKind.None)
 			{
 				BombFlagTrigger.Log.Warn(string.Format("A bombflagtrigger is not setup: {0}. Cleaning!", base.name));
-				UnityEngine.Object.Destroy(base.gameObject);
+				Object.Destroy(base.gameObject);
 				return;
 			}
 		}

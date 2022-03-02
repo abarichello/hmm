@@ -10,7 +10,7 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 		public void Awake()
 		{
 			TutorialPathNode componentInParent = base.GetComponentInParent<TutorialPathNode>();
-			HeavyMetalMachines.Utils.Debug.Assert(componentInParent != null, string.Format("WaypointNodeInfo must have a parent with script: TutorialPathNode. {0} ObjectPath:{1}", Environment.NewLine, base.gameObject.GetFullPath()), HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+			Debug.Assert(componentInParent != null, string.Format("WaypointNodeInfo must have a parent with script: TutorialPathNode. {0} ObjectPath:{1}", Environment.NewLine, base.gameObject.GetFullPath()), Debug.TargetTeam.All);
 			UnityUtils.SnapToGroundPlane(componentInParent.transform, 0f);
 		}
 

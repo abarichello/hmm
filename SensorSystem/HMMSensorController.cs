@@ -3,11 +3,13 @@ using HeavyMetalMachines.BI;
 using HeavyMetalMachines.BotAI;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Counselor;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.Infra.Counselor;
 using HeavyMetalMachines.Utils.Bezier;
 using Hoplon.SensorSystem;
 using Pocketverse;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.SensorSystem
 {
@@ -36,7 +38,7 @@ namespace HeavyMetalMachines.SensorSystem
 				value = 0f;
 				return false;
 			}
-			return this._sensorContext.GetParameter(id, out value);
+			return this._sensorContext.GetParameter(id, ref value);
 		}
 
 		public float DistanceToRedGoal
@@ -44,7 +46,7 @@ namespace HeavyMetalMachines.SensorSystem
 			get
 			{
 				float result;
-				if (this._sensorContext != null && this._sensorContext.GetParameter(this._redBombDistanceToGoalId, out result))
+				if (this._sensorContext != null && this._sensorContext.GetParameter(this._redBombDistanceToGoalId, ref result))
 				{
 					return result;
 				}
@@ -57,7 +59,7 @@ namespace HeavyMetalMachines.SensorSystem
 			get
 			{
 				float result;
-				if (this._sensorContext != null && this._sensorContext.GetParameter(this._blueBombDistanceToGoalId, out result))
+				if (this._sensorContext != null && this._sensorContext.GetParameter(this._blueBombDistanceToGoalId, ref result))
 				{
 					return result;
 				}
@@ -67,12 +69,14 @@ namespace HeavyMetalMachines.SensorSystem
 
 		private void OnEnable()
 		{
+			HMMSensorController.Log.Debug("HMMSensorController enabled");
 			if (GameHubBehaviour.Hub.Net.IsClient())
 			{
 				HMMSensorController.Log.Error("HMMSensorController on client. This is unexpected behaviour");
-				UnityEngine.Object.Destroy(this);
+				Object.Destroy(this);
 				return;
 			}
+			this._sensorContext = new SensorController(new Func<int>(GameHubBehaviour.Hub.GameTime.MatchTimer.GetTime));
 			GameHubBehaviour.Hub.Events.Players.ListenToAllPlayersSpawned += this.ListenToAllPlayersSpawned;
 			GameHubBehaviour.Hub.Events.Bots.ListenToAllPlayersSpawned += this.ListenToAllPlayersSpawned;
 			GameHubBehaviour.Hub.BombManager.ListenToPhaseChange += this.BombManagerOnListenToPhaseChange;
@@ -80,6 +84,7 @@ namespace HeavyMetalMachines.SensorSystem
 
 		private void OnDisable()
 		{
+			HMMSensorController.Log.Debug("HMMSensorController disabled");
 			if (GameHubBehaviour.Hub.Net.IsClient())
 			{
 				return;
@@ -91,7 +96,7 @@ namespace HeavyMetalMachines.SensorSystem
 
 		public void Update()
 		{
-			if (this._sensorContext != null && GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreBoard.State.BombDelivery)
+			if (this._sensorContext != null && GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreboardState.BombDelivery)
 			{
 				if (PauseController.Instance.IsGamePaused)
 				{
@@ -111,7 +116,7 @@ namespace HeavyMetalMachines.SensorSystem
 				if (this.TryInitialize())
 				{
 					this._counselorController = new ServerCounselorController();
-					this._counselorController.Initialize(this._sensorContext, "RedBombDistanceToGoal", "BlueBombDistanceToGoal");
+					this._counselorController.Initialize(this._sensorContext, "RedBombDistanceToGoal", "BlueBombDistanceToGoal", this._counselorDispatcher);
 				}
 				return;
 			}
@@ -122,19 +127,18 @@ namespace HeavyMetalMachines.SensorSystem
 			if (this.TryInitialize())
 			{
 				this._counselorController = new ServerCounselorController();
-				this._counselorController.Initialize(this._sensorContext, "RedBombDistanceToGoal", "BlueBombDistanceToGoal");
+				this._counselorController.Initialize(this._sensorContext, "RedBombDistanceToGoal", "BlueBombDistanceToGoal", this._counselorDispatcher);
 			}
 		}
 
 		private bool TryInitialize()
 		{
-			ApproximatedPathDistance approximatedPathDistance = UnityEngine.Object.FindObjectOfType<ApproximatedPathDistance>();
+			ApproximatedPathDistance approximatedPathDistance = Object.FindObjectOfType<ApproximatedPathDistance>();
 			if (approximatedPathDistance == null)
 			{
 				return false;
 			}
-			BombTargetTrigger[] targets = UnityEngine.Object.FindObjectsOfType<BombTargetTrigger>();
-			this._sensorContext = new SensorController(new Func<int>(GameHubBehaviour.Hub.GameTime.MatchTimer.GetTime));
+			BombTargetTrigger[] targets = Object.FindObjectsOfType<BombTargetTrigger>();
 			for (int i = 0; i < GameHubBehaviour.Hub.Players.PlayersAndBots.Count; i++)
 			{
 				BotAIGoalManager bitComponent = GameHubBehaviour.Hub.Players.PlayersAndBots[i].CharacterInstance.GetBitComponent<BotAIGoalManager>();
@@ -148,19 +152,22 @@ namespace HeavyMetalMachines.SensorSystem
 			return true;
 		}
 
-		private void BombManagerOnListenToPhaseChange(BombScoreBoard.State state)
+		private void BombManagerOnListenToPhaseChange(BombScoreboardState state)
 		{
 			if (this._sensorContext != null)
 			{
 				this._sensorContext.Reset();
 			}
-			if (state == BombScoreBoard.State.EndGame || (state == BombScoreBoard.State.BombDelivery && GameHubBehaviour.Hub.BombManager.Round == 0))
+			if (state == BombScoreboardState.EndGame || (state == BombScoreboardState.BombDelivery && GameHubBehaviour.Hub.BombManager.Round == 0))
 			{
 				MatchLogWriter.WriteCounselorBI();
 			}
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(HMMSensorController));
+
+		[Inject]
+		private ICounselorDispatcher _counselorDispatcher;
 
 		private const string redBombDistanceToGoalParameterName = "RedBombDistanceToGoal";
 

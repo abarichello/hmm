@@ -22,10 +22,11 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Body
 		{
 			this.Finished = false;
 			this._elapsedTime = 0f;
-			GadgetBodyParameter gadgetBodyParameter = (GadgetBodyParameter)BaseParameter.GetParameter(this._targetBody.ContentId);
-			GadgetBody value = gadgetBodyParameter.GetValue(gadgetContext);
+			BaseParameter parameter = BaseParameter.GetParameter(this._targetBody.ContentId);
+			GadgetBody value = parameter.GetValue<GadgetBody>(gadgetContext);
 			this._targetTransform = value.transform;
-			this._durationTime = this._duration.GetValue(gadgetContext);
+			IParameterTomate<float> parameterTomate = this._duration.ParameterTomate as IParameterTomate<float>;
+			this._durationTime = parameterTomate.GetValue(gadgetContext);
 			this._initialPosition = base.transform.position;
 		}
 
@@ -43,11 +44,15 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Body
 			this.Finished = (this._elapsedTime >= this._durationTime);
 		}
 
+		[Restrict(true, new Type[]
+		{
+			typeof(GadgetBody)
+		})]
 		[SerializeField]
-		private GadgetBodyParameter _targetBody;
+		private BaseParameter _targetBody;
 
 		[SerializeField]
-		private FloatParameter _duration;
+		private BaseParameter _duration;
 
 		private Vector3 _initialPosition;
 

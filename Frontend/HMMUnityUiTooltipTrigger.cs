@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections;
+using HeavyMetalMachines.Localization;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -6,88 +8,94 @@ using UnityEngine.UI;
 namespace HeavyMetalMachines.Frontend
 {
 	[RequireComponent(typeof(Selectable))]
-	public class HMMUnityUiTooltipTrigger : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IEventSystemHandler
+	public class HMMUnityUiTooltipTrigger : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, ISelectHandler, IDeselectHandler, IEventSystemHandler
 	{
-		public static bool IsDisplayingTooltip
-		{
-			get
-			{
-				return HMMUnityUiTooltipTrigger._isDisplayingTooltip;
-			}
-		}
-
-		protected void OnValidate()
+		private void Reset()
 		{
 			this._selectable = base.GetComponent<Selectable>();
 		}
 
+		private void OnDisable()
+		{
+			this.StopScheduledShowIfNecessary();
+			UITooltip.Hide();
+		}
+
 		public void OnPointerEnter(PointerEventData eventData)
 		{
-			if (!base.enabled || !this._selectable.IsInteractable())
-			{
-				return;
-			}
-			if (this._mustShowTooltip)
-			{
-				return;
-			}
-			this._nextDisplayTime = Time.unscaledTime + this.DelayInSec;
-			this._mustShowTooltip = true;
+			this.ShowDelayed();
+		}
+
+		public void OnSelect(BaseEventData eventData)
+		{
+			this.ShowDelayed();
 		}
 
 		public void OnPointerExit(PointerEventData eventData)
 		{
-			if (!base.enabled)
-			{
-				return;
-			}
-			this.HideTooltip();
-		}
-
-		private void ShowTooltip()
-		{
-			if (HMMUnityUiTooltipTrigger._isDisplayingTooltip)
-			{
-				return;
-			}
-			HMMUnityUiTooltipTrigger._isDisplayingTooltip = true;
-			Vector3 targetPosition = (!(this.TargetPosition != null)) ? Vector3.zero : this.TargetPosition.position;
-			UITooltip.Show((!this.TranslateText) ? this.TooltipText : Language.Get(this.TooltipText, this.Sheet.ToString()), this.FollowMouse, this.ScaleTextInOverflow, targetPosition);
-		}
-
-		private void HideTooltip()
-		{
-			if (!HMMUnityUiTooltipTrigger._isDisplayingTooltip)
-			{
-				return;
-			}
-			HMMUnityUiTooltipTrigger._isDisplayingTooltip = false;
-			this._mustShowTooltip = false;
+			this.StopScheduledShowIfNecessary();
 			UITooltip.Hide();
 		}
 
-		protected void Update()
+		public void OnDeselect(BaseEventData eventData)
 		{
-			if (HMMUnityUiTooltipTrigger._isDisplayingTooltip)
-			{
-				return;
-			}
-			if (!this._mustShowTooltip)
-			{
-				return;
-			}
-			if (this._nextDisplayTime < Time.unscaledTime)
-			{
-				return;
-			}
-			this.ShowTooltip();
+			this.StopScheduledShowIfNecessary();
+			UITooltip.Hide();
 		}
 
-		protected void OnDisable()
+		private void StopScheduledShowIfNecessary()
 		{
-			this.HideTooltip();
+			if (this._scheduledCoroutine != null)
+			{
+				base.StopCoroutine(this._scheduledCoroutine);
+			}
 		}
 
+		private void ShowDelayed()
+		{
+			if (!this.ShouldShow())
+			{
+				return;
+			}
+			this.StopScheduledShowIfNecessary();
+			this._scheduledCoroutine = base.StartCoroutine(this.Coroutine_ShowDelayed());
+		}
+
+		private IEnumerator Coroutine_ShowDelayed()
+		{
+			yield return new WaitForSeconds(this.DelayInSec);
+			this.Show();
+			yield break;
+		}
+
+		private void Show()
+		{
+			Vector3 targetPosition = (!(this.TargetPosition != null)) ? Vector3.zero : this.TargetPosition.position;
+			string text = (!this.TranslateText) ? this.TooltipText : Language.Get(this.TooltipText, this.Sheet);
+			UITooltip.Show(text, this.FollowMouse, this.ScaleTextInOverflow, targetPosition);
+		}
+
+		private bool ShouldShow()
+		{
+			bool flag = this._selectable.IsInteractable();
+			switch (this.IteractableStateToShow)
+			{
+			case HMMUnityUiTooltipTrigger.ShowOnInteractableState.Enabled:
+				return flag.Equals(true);
+			case HMMUnityUiTooltipTrigger.ShowOnInteractableState.Disabled:
+				return flag.Equals(false);
+			case HMMUnityUiTooltipTrigger.ShowOnInteractableState.Any:
+				return true;
+			default:
+				throw new InvalidOperationException(string.Format("UnityGUITooltip ShowInteractableState enum value \"{0}\" unhandled.", this.IteractableStateToShow));
+			}
+		}
+
+		[Header("Dependencies")]
+		[SerializeField]
+		private Selectable _selectable;
+
+		[Header("Settings")]
 		public string TooltipText;
 
 		public TranslationSheets Sheet;
@@ -98,17 +106,19 @@ namespace HeavyMetalMachines.Frontend
 
 		public bool ScaleTextInOverflow;
 
+		public HMMUnityUiTooltipTrigger.ShowOnInteractableState IteractableStateToShow;
+
 		public bool FollowMouse;
 
 		public Transform TargetPosition;
 
-		private float _nextDisplayTime;
+		private Coroutine _scheduledCoroutine;
 
-		private bool _mustShowTooltip;
-
-		private static bool _isDisplayingTooltip;
-
-		[SerializeField]
-		private Selectable _selectable;
+		public enum ShowOnInteractableState
+		{
+			Enabled,
+			Disabled,
+			Any
+		}
 	}
 }

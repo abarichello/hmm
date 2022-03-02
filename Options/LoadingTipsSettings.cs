@@ -6,5 +6,7 @@ namespace HeavyMetalMachines.Options
 	public class LoadingTipsSettings : GameHubScriptableObject
 	{
 		public LoadingTip[] Tips;
+
+		public LoadingTip[] ConsoleTips;
 	}
 }

@@ -2,8 +2,9 @@
 using Assets.ClientApiObjects;
 using Assets.ClientApiObjects.Components;
 using Assets.Customization;
-using Commons.Swordfish.Battlepass;
+using HeavyMetalMachines.DataTransferObjects.Battlepass;
 using HeavyMetalMachines.Match;
+using Hoplon.Unity.Loading;
 using Pocketverse;
 using SharedUtils.Loading;
 using UnityEngine;
@@ -44,7 +45,7 @@ namespace HeavyMetalMachines.VFX
 				return;
 			}
 			string texture = component.Texture;
-			if (!SingletonMonoBehaviour<LoadingManager>.Instance.TextureManager.GetAssetAsync(texture, this))
+			if (!Loading.TextureManager.GetAssetAsync(texture, this))
 			{
 				CustomizationTextureVFX.Log.ErrorFormat("Texture not found: {0}", new object[]
 				{
@@ -72,17 +73,17 @@ namespace HeavyMetalMachines.VFX
 			this._renderer = base.GetComponent<Renderer>();
 			if (!CustomizationAssetsScriptableObject.SlotIsTexture(this._itemSlot))
 			{
-				this._itemSlot = PlayerCustomizationSlot.Spray;
+				this._itemSlot = 1;
 			}
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(CustomizationTextureVFX));
 
 		[SerializeField]
-		private PlayerCustomizationSlot _itemSlot = PlayerCustomizationSlot.Spray;
+		private PlayerCustomizationSlot _itemSlot = 1;
 
-		[HideInInspector]
 		[SerializeField]
+		[HideInInspector]
 		private Renderer _renderer;
 
 		[NonSerialized]

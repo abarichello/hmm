@@ -15,6 +15,11 @@ namespace HeavyMetalMachines.Audio
 			{
 				return;
 			}
+			SFXController.Log.DebugFormat("[AUDIO] {0} StopAll. Count={1}", new object[]
+			{
+				base.name,
+				this._audios.Count
+			});
 			foreach (FMODAudioManager.FMODAudio fmodaudio in this._audios.Values)
 			{
 				if (fmodaudio == null)
@@ -35,10 +40,10 @@ namespace HeavyMetalMachines.Audio
 			this.StopAll();
 		}
 
-		public void Play(FMODAsset asset, Transform target, float volume, byte[] parameterBytes, int parameterValue, bool forceResetTimeline)
+		public void Play(AudioEventAsset asset, Transform target, float volume, byte[] parameterNameBytes, int parameterValue, bool forceResetTimeline)
 		{
 			FMODAudioManager.FMODAudio fmodaudio;
-			if (this._audios.TryGetValue(asset.idGUID, out fmodaudio))
+			if (this._audios.TryGetValue(asset.Id, out fmodaudio))
 			{
 				if (fmodaudio.IsStopped() || forceResetTimeline)
 				{
@@ -48,7 +53,16 @@ namespace HeavyMetalMachines.Audio
 			else
 			{
 				fmodaudio = FMODAudioManager.PlayAtVolume(asset, target, volume, true);
-				this._audios.Add(asset.idGUID, fmodaudio);
+				if (fmodaudio == null)
+				{
+					SFXController.Log.WarnFormat("Play called null audio. Ignoring. Id={0} Name={2}", new object[]
+					{
+						asset.Id,
+						base.name
+					});
+					return;
+				}
+				this._audios.Add(asset.Id, fmodaudio);
 			}
 			if (fmodaudio.IsInvalidated())
 			{
@@ -59,9 +73,9 @@ namespace HeavyMetalMachines.Audio
 				});
 				return;
 			}
-			if (parameterBytes.Length > 0)
+			if (parameterNameBytes.Length > 0)
 			{
-				fmodaudio.SetParameter(parameterBytes, (float)parameterValue);
+				fmodaudio.SetParameter(parameterNameBytes, (float)parameterValue);
 			}
 		}
 

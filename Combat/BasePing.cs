@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using HeavyMetalMachines.Event;
 using HeavyMetalMachines.Frontend;
 using HeavyMetalMachines.HMMChat;
+using HeavyMetalMachines.Localization;
 using HeavyMetalMachines.Match;
 using NewParticleSystem;
 using Pocketverse;
@@ -53,9 +54,9 @@ namespace HeavyMetalMachines.Combat
 				BasePing.EventPing3D eventPing3D = this.Pings[i];
 				if (eventPing3D.Prefab3D)
 				{
-					GameObject gameObject = UnityEngine.Object.Instantiate<GameObject>(eventPing3D.Prefab3D, Vector3.zero, Quaternion.identity);
+					GameObject gameObject = Object.Instantiate<GameObject>(eventPing3D.Prefab3D, Vector3.zero, Quaternion.identity);
 					eventPing3D.Instance3D = gameObject.GetComponentInChildren<HoplonParticleSystem>();
-					eventPing3D.Instance3D.transform.parent.parent = GameHubBehaviour.Hub.Drawer.Effects;
+					GameHubBehaviour.Hub.Drawer.AddEffect(eventPing3D.Instance3D.transform.parent);
 					Vector3 zero = Vector3.zero;
 					zero.y = 0.1f;
 					eventPing3D.Instance3D.transform.parent.localPosition = zero;
@@ -80,7 +81,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				if (this.Pings[i].Instance3D && this.Pings[i].Instance3D.transform.parent)
 				{
-					UnityEngine.Object.Destroy(this.Pings[i].Instance3D.transform.parent.gameObject);
+					Object.Destroy(this.Pings[i].Instance3D.transform.parent.gameObject);
 					this.Pings[i].Instance3D = null;
 				}
 			}
@@ -121,8 +122,8 @@ namespace HeavyMetalMachines.Combat
 			}
 			if (!string.IsNullOrEmpty(pingInstance.PingDraftText))
 			{
-				string msg = Language.Get(pingInstance.PingDraftText, TranslationSheets.HUDChat);
-				GameHubBehaviour.Hub.Chat.SetupPlayerMessage(false, msg, playerAddress, ChatService.ChatMessageKind.PlayerNotification);
+				string msg = Language.Get(pingInstance.PingDraftText, TranslationContext.HUDChat);
+				GameHubBehaviour.Hub.Chat.SetupPlayerMessage(false, msg, playerAddress, ChatService.ChatMessageKind.PlayerNotification, true);
 			}
 			if (pingInstance.Instance3D)
 			{

@@ -91,7 +91,7 @@ namespace HeavyMetalMachines.VFX
 
 		public override Transform GetDummy(CDummy.DummyKind kind)
 		{
-			return this.Target.GetComponent<CombatObject>().Dummy.GetDummy(kind, null);
+			return this.Target.GetComponent<CombatObject>().Dummy.GetDummy(kind, null, null);
 		}
 
 		public override bool WasCreatedInFog()
@@ -123,14 +123,14 @@ namespace HeavyMetalMachines.VFX
 				if (this.VFX)
 				{
 					this.vfxInstance = (MasterVFX)GameHubBehaviour.Hub.Resources.PrefabCacheInstantiate(this.VFX, base.transform.position, base.transform.rotation);
-					this.vfxInstance.transform.parent = GameHubBehaviour.Hub.Drawer.Effects;
+					GameHubBehaviour.Hub.Drawer.AddEffect(this.vfxInstance.transform);
 					this.vfxInstance.baseMasterVFX = this.VFX;
 					this.vfxInstance = this.vfxInstance.Activate(this);
 				}
 				if (this.SFX)
 				{
 					this.sfxInstance = (MasterVFX)GameHubBehaviour.Hub.Resources.PrefabCacheInstantiate(this.SFX, base.transform.position, base.transform.rotation);
-					this.sfxInstance.transform.parent = GameHubBehaviour.Hub.Drawer.Effects;
+					GameHubBehaviour.Hub.Drawer.AddEffect(this.sfxInstance.transform);
 					this.sfxInstance.baseMasterVFX = this.SFX;
 					this.sfxInstance = this.sfxInstance.Activate(this);
 				}
@@ -141,7 +141,7 @@ namespace HeavyMetalMachines.VFX
 		{
 		}
 
-		public void DestroyFeedbackEffect(DestroyFeedbackEffect evt)
+		public void DestroyFeedbackEffect(DestroyFeedbackEffectMessage evt)
 		{
 			if (this.vfxInstance)
 			{
@@ -153,9 +153,9 @@ namespace HeavyMetalMachines.VFX
 			}
 			for (int i = 0; i < base.DestroyEffectListenerScripts.Length; i++)
 			{
-				if (base.DestroyEffectListenerScripts[i] is DestroyFeedbackEffect.IDestroyFeedbackEffectListener)
+				if (base.DestroyEffectListenerScripts[i] is DestroyFeedbackEffectMessage.IDestroyFeedbackEffectListener)
 				{
-					((DestroyFeedbackEffect.IDestroyFeedbackEffectListener)base.DestroyEffectListenerScripts[i]).OnDestroyFeedbackEffect(evt);
+					((DestroyFeedbackEffectMessage.IDestroyFeedbackEffectListener)base.DestroyEffectListenerScripts[i]).OnDestroyFeedbackEffect(evt);
 				}
 			}
 			this._gadget = null;

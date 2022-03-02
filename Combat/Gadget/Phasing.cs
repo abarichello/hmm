@@ -101,7 +101,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			this.ActivatePhasing();
 		}
 
-		protected override void InnerOnDestroyEffect(DestroyEffect evt)
+		protected override void InnerOnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (evt.RemoveData.TargetEventId != this._currentPhasing)
 			{

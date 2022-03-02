@@ -11,6 +11,7 @@ namespace HeavyMetalMachines.Frontend
 		{
 			this.Component = comp;
 			this._buffer = matchBuffer;
+			this._bufferReader = new IndexedMatchBufferReader(this._buffer);
 		}
 
 		private void Awake()
@@ -25,7 +26,7 @@ namespace HeavyMetalMachines.Frontend
 				return;
 			}
 			this.UpdateFrames(new FrameCheck(this.CheckFrameOlderThanCurrentTime));
-			if (this._buffer.FramesLeft == 0)
+			if (this._bufferReader.FramesLeft == 0)
 			{
 				this.Component.EndGame();
 				this.Running = false;
@@ -35,7 +36,7 @@ namespace HeavyMetalMachines.Frontend
 		private void UpdateFrames(FrameCheck check)
 		{
 			IFrame frame;
-			while (this._buffer.ReadNext(check, out frame))
+			while (this._bufferReader.ReadNext(check, out frame))
 			{
 				this.ProcessKeyFrame(frame);
 			}
@@ -43,7 +44,13 @@ namespace HeavyMetalMachines.Frontend
 
 		private void ProcessKeyFrame(IFrame frame)
 		{
-			KeyStateParser stateParser = PlaybackManager.GetStateParser((StateType)frame.Type);
+			HORTAStatePlayback.Log.DebugFormat("Processing state frame={0} time={1}", new object[]
+			{
+				frame.FrameId,
+				frame.Time,
+				(StateType)frame.Type
+			});
+			IKeyStateParser stateParser = PlaybackManager.GetStateParser((StateType)frame.Type);
 			if (stateParser != null)
 			{
 				stateParser.Update(frame.GetReadData());
@@ -75,5 +82,7 @@ namespace HeavyMetalMachines.Frontend
 		public HORTAComponent Component;
 
 		private IMatchBuffer _buffer;
+
+		private IMatchBufferReader _bufferReader;
 	}
 }

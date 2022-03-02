@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using HeavyMetalMachines.Bank;
-using HeavyMetalMachines.Character;
+using HeavyMetalMachines.Characters;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Event;
 using HeavyMetalMachines.Match;
@@ -42,6 +42,13 @@ namespace HeavyMetalMachines.BotAI
 		protected override void CreatePlayer(PlayerData bot)
 		{
 			int objId = bot.PlayerCarId;
+			BotAISpawnManager.Log.InfoFormat("Creating bot character={1} for={0} ObjectId={2} Botname={3}", new object[]
+			{
+				bot.PlayerAddress,
+				bot.GetCharacter(),
+				objId,
+				bot.Name
+			});
 			Transform transform = (!base.Spawn) ? base.transform : base.Spawn.GetStart(bot);
 			PlayerEvent spawnData = this.CreateSpawnData();
 			spawnData.TargetId = objId;
@@ -58,6 +65,10 @@ namespace HeavyMetalMachines.BotAI
 			this.BuildQueue.Add(objId, fut);
 			fut.WhenDone(delegate(IFuture future)
 			{
+				BotAISpawnManager.Log.DebugFormat("CreateBot: factory ordered: ", new object[]
+				{
+					this.name
+				});
 				bot.CharacterInstance = fut.Result;
 				bot.CharacterInstance.transform.position = spawnPos;
 				bot.CharacterInstance.transform.rotation = spawnRot;

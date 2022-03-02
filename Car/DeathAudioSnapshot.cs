@@ -56,7 +56,7 @@ namespace HeavyMetalMachines.Car
 			this.deathSnapshotInstance = null;
 		}
 
-		public FMODAsset deathSnapshot;
+		public AudioEventAsset deathSnapshot;
 
 		private FMODAudioManager.FMODAudio deathSnapshotInstance;
 

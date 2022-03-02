@@ -1,11 +1,11 @@
 ﻿using System;
-using HeavyMetalMachines.Character;
+using HeavyMetalMachines.Characters;
 
 namespace HeavyMetalMachines
 {
 	[Serializable]
 	public class BotPickConfig
 	{
-		public CharacterInfo.DriverRoleKind[] roles = new CharacterInfo.DriverRoleKind[4];
+		public DriverRoleKind[] roles = new DriverRoleKind[4];
 	}
 }

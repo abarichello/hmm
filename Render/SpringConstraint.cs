@@ -48,55 +48,55 @@ namespace HeavyMetalMachines.Render
 		{
 			for (SpringConstraint springConstraint = this; springConstraint != null; springConstraint = springConstraint.neighbor)
 			{
-				Vector3 a = springConstraint.currentSpringPosition;
+				Vector3 vector = springConstraint.currentSpringPosition;
 				springConstraint.currentSpringPosition += this.gravity * this.deltaTime;
 				if (!springConstraint.isAnchor)
 				{
 					SpringConstraint springConstraint2 = springConstraint.neighbor;
 					if (springConstraint2 != null)
 					{
-						Vector3 a2 = springConstraint.currentSpringPosition - springConstraint2.currentSpringPosition;
-						float magnitude = a2.magnitude;
-						Vector3 a3 = a2 / magnitude;
+						Vector3 vector2 = springConstraint.currentSpringPosition - springConstraint2.currentSpringPosition;
+						float magnitude = vector2.magnitude;
+						Vector3 vector3 = vector2 / magnitude;
 						if (magnitude > 0.001f)
 						{
-							float d = (magnitude - springConstraint.restLength) / springConstraint.restLength;
-							Vector3 b = a3 * d;
-							a = springConstraint.currentSpringPosition - b;
+							float num = (magnitude - springConstraint.restLength) / springConstraint.restLength;
+							Vector3 vector4 = vector3 * num;
+							vector = springConstraint.currentSpringPosition - vector4;
 						}
 					}
 					springConstraint2 = springConstraint.previousNeighbor;
 					if (springConstraint2 != null)
 					{
-						Vector3 a4 = springConstraint.currentSpringPosition - springConstraint2.currentSpringPosition;
-						float magnitude2 = a4.magnitude;
-						Vector3 a5 = a4 / magnitude2;
+						Vector3 vector5 = springConstraint.currentSpringPosition - springConstraint2.currentSpringPosition;
+						float magnitude2 = vector5.magnitude;
+						Vector3 vector6 = vector5 / magnitude2;
 						if (magnitude2 > 0.001f)
 						{
-							float d2 = (magnitude2 - springConstraint.restLength) / springConstraint.restLength;
-							Vector3 b2 = a5 * d2;
-							a = (a + (springConstraint.currentSpringPosition - b2)) * 0.5f;
+							float num2 = (magnitude2 - springConstraint.restLength) / springConstraint.restLength;
+							Vector3 vector7 = vector6 * num2;
+							vector = (vector + (springConstraint.currentSpringPosition - vector7)) * 0.5f;
 						}
 					}
 				}
-				springConstraint.targetSpringPosition = a;
+				springConstraint.targetSpringPosition = vector;
 			}
 			for (SpringConstraint springConstraint = this; springConstraint != null; springConstraint = springConstraint.neighbor)
 			{
-				Vector3 b3 = springConstraint.targetSpringPosition - springConstraint.currentSpringPosition;
-				if (b3.magnitude > 0.01f)
+				Vector3 vector8 = springConstraint.targetSpringPosition - springConstraint.currentSpringPosition;
+				if (vector8.magnitude > 0.01f)
 				{
-					springConstraint.velocity += b3;
+					springConstraint.velocity += vector8;
 				}
 				springConstraint.velocity = Vector3.ClampMagnitude(springConstraint.velocity, 50f);
 				float magnitude3 = springConstraint.velocity.magnitude;
-				Vector3 a6 = springConstraint.velocity / magnitude3;
+				Vector3 vector9 = springConstraint.velocity / magnitude3;
 				if (magnitude3 > 50f)
 				{
-					springConstraint.currentSpringPosition += a6 * (magnitude3 - 50f);
-					springConstraint.velocity = a6 * 50f;
+					springConstraint.currentSpringPosition += vector9 * (magnitude3 - 50f);
+					springConstraint.velocity = vector9 * 50f;
 				}
-				springConstraint.velocity = Vector3.Lerp(springConstraint.velocity, Vector3.zero, Mathf.Clamp01(this.deltaTime * (springConstraint.restLength / b3.magnitude)));
+				springConstraint.velocity = Vector3.Lerp(springConstraint.velocity, Vector3.zero, Mathf.Clamp01(this.deltaTime * (springConstraint.restLength / vector8.magnitude)));
 				springConstraint.currentSpringPosition += springConstraint.velocity * this.deltaTime;
 			}
 		}
@@ -114,28 +114,28 @@ namespace HeavyMetalMachines.Render
 				SpringConstraint springConstraint2 = springConstraint.neighbor;
 				if (springConstraint2 != null)
 				{
-					Vector3 a = springConstraint.currentSpringPosition - springConstraint2.currentSpringPosition;
-					float magnitude = a.magnitude;
-					Vector3 a2 = a / magnitude;
+					Vector3 vector = springConstraint.currentSpringPosition - springConstraint2.currentSpringPosition;
+					float magnitude = vector.magnitude;
+					Vector3 vector2 = vector / magnitude;
 					if (magnitude > this.restLength)
 					{
 						if (!springConstraint2.isAnchor)
 						{
-							springConstraint2.currentSpringPosition += a2 * (magnitude - this.restLength) * 0.5f;
-							springConstraint2.velocity += a2 * (magnitude - this.restLength) * 0.2f;
+							springConstraint2.currentSpringPosition += vector2 * (magnitude - this.restLength) * 0.5f;
+							springConstraint2.velocity += vector2 * (magnitude - this.restLength) * 0.2f;
 						}
 						else
 						{
-							springConstraint2.velocity -= a2 * (magnitude - this.restLength) * 0.2f;
+							springConstraint2.velocity -= vector2 * (magnitude - this.restLength) * 0.2f;
 						}
 						if (!springConstraint.isAnchor)
 						{
-							springConstraint.currentSpringPosition -= a2 * (magnitude - this.restLength) * 0.5f;
-							springConstraint.velocity -= a2 * (magnitude - this.restLength) * 0.2f;
+							springConstraint.currentSpringPosition -= vector2 * (magnitude - this.restLength) * 0.5f;
+							springConstraint.velocity -= vector2 * (magnitude - this.restLength) * 0.2f;
 						}
 						else
 						{
-							springConstraint.velocity += a2 * (magnitude - this.restLength) * 0.2f;
+							springConstraint.velocity += vector2 * (magnitude - this.restLength) * 0.2f;
 						}
 					}
 				}

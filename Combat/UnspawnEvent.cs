@@ -6,11 +6,12 @@ namespace HeavyMetalMachines.Combat
 {
 	public struct UnspawnEvent : Mural.IMuralMessage
 	{
-		public UnspawnEvent(Vector3 pos, SpawnReason reason, int causer)
+		public UnspawnEvent(Vector3 pos, SpawnReason reason, int causer, int objId = -1)
 		{
 			this.Position = pos;
 			this.Reason = reason;
 			this.Causer = causer;
+			this.ObjId = objId;
 		}
 
 		public string Message
@@ -28,5 +29,7 @@ namespace HeavyMetalMachines.Combat
 		public Vector3 Position;
 
 		public int Causer;
+
+		public int ObjId;
 	}
 }

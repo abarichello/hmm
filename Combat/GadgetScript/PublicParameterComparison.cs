@@ -6,6 +6,7 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat.GadgetScript
 {
+	[Obsolete("Obsolete! Use FilterBlock")]
 	[Serializable]
 	public class PublicParameterComparison<T> : IParameterComparison where T : IComparable
 	{
@@ -39,12 +40,12 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 			this.DoCompare(this._context, true);
 		}
 
-		private T GetCurrentParameterValue(IParameterContext context)
+		private T GetCurrentParameterValue(object context)
 		{
 			return (!this._isValidParameter) ? default(T) : this._gadgetParameter.GetValue(context);
 		}
 
-		public bool Compare(IParameterContext context)
+		public bool Compare(object context)
 		{
 			if (context == null)
 			{
@@ -53,7 +54,7 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 			return this.DoCompare(context, false);
 		}
 
-		private bool DoCompare(IParameterContext context, bool forceComparison = false)
+		private bool DoCompare(object context, bool forceComparison = false)
 		{
 			T currentParameterValue = this.GetCurrentParameterValue(context);
 			if (!forceComparison && this._parameterValue.CompareTo(currentParameterValue) == 0)

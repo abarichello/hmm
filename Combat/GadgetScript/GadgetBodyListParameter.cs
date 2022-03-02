@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using HeavyMetalMachines.Combat.GadgetScript.Body;
-using Hoplon.GadgetScript;
 using Pocketverse;
 using UnityEngine;
 
@@ -10,16 +9,16 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 	[CreateAssetMenu(menuName = "Parameter/List/GadgetBodyList")]
 	public class GadgetBodyListParameter : Parameter<List<GadgetBody>>
 	{
-		protected override void OnEnable()
+		protected override void Initialize()
 		{
-			base.OnEnable();
+			base.Initialize();
 			if (GadgetBodyListParameter._tempParameter == null)
 			{
-				GadgetBodyListParameter._tempParameter = new GadgetBodyParameter();
+				GadgetBodyListParameter._tempParameter = ScriptableObject.CreateInstance<GadgetBodyParameter>();
 			}
 		}
 
-		protected override void WriteToBitStream(IParameterContext context, Pocketverse.BitStream bs)
+		protected override void WriteToBitStream(object context, BitStream bs)
 		{
 			List<GadgetBody> value = base.GetValue(context);
 			if (value == null || value.Count == 0)
@@ -35,13 +34,13 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 				bs.WriteBool(flag);
 				if (flag)
 				{
-					GadgetBodyListParameter._tempParameter.SetValue(context, gadgetBody);
+					GadgetBodyListParameter._tempParameter.SetValue<GadgetBody>(context, gadgetBody);
 					GadgetBodyListParameter._tempParameter.WriteToBitStreamWithContentId(context, bs);
 				}
 			}
 		}
 
-		protected override void ReadFromBitStream(IParameterContext context, Pocketverse.BitStream bs)
+		protected override void ReadFromBitStream(object context, BitStream bs)
 		{
 			int num = bs.ReadCompressedInt();
 			List<GadgetBody> list = new List<GadgetBody>(num);
@@ -50,7 +49,7 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 				if (bs.ReadBool())
 				{
 					GadgetBodyListParameter._tempParameter.ReadFromBitStreamWithContentId(context, bs);
-					list.Add(GadgetBodyListParameter._tempParameter.GetValue(context));
+					list.Add(GadgetBodyListParameter._tempParameter.GetValue<GadgetBody>(context));
 				}
 				else
 				{
@@ -60,6 +59,10 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 			base.SetValue(context, list);
 		}
 
-		private static GadgetBodyParameter _tempParameter;
+		[Restrict(true, new Type[]
+		{
+			typeof(GadgetBody)
+		})]
+		private static BaseParameter _tempParameter;
 	}
 }

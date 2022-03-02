@@ -3,7 +3,7 @@ using Pocketverse;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkFixedAddPassiveModifier : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkFixedAddPassiveModifier : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		protected override void Awake()
 		{
@@ -32,7 +32,7 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (GameHubBehaviour.Hub.Net.IsClient())
 			{

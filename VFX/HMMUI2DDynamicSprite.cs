@@ -1,5 +1,6 @@
 ﻿using System;
 using HeavyMetalMachines.Utils;
+using Hoplon.Unity.Loading;
 using Pocketverse;
 using SharedUtils.Loading;
 using UnityEngine;
@@ -31,9 +32,9 @@ namespace HeavyMetalMachines.VFX
 					return;
 				}
 				this._spriteName = value.ToLower();
-				if (!SingletonMonoBehaviour<LoadingManager>.Instance.TextureManager.GetAssetAsync(this._spriteName, this))
+				if (!Loading.TextureManager.GetAssetAsync(this._spriteName, this))
 				{
-					HeavyMetalMachines.Utils.Debug.Assert(false, string.Format("HMMUI2DDynamicSprite: Image/Bundle not found -> [{0},{1}]", base.name, this._spriteName), HeavyMetalMachines.Utils.Debug.TargetTeam.GUI);
+					Debug.Assert(false, string.Format("HMMUI2DDynamicSprite: Image/Bundle not found -> [{0},{1}]", base.name, this._spriteName), Debug.TargetTeam.GUI);
 				}
 			}
 		}
@@ -42,7 +43,7 @@ namespace HeavyMetalMachines.VFX
 		{
 			if (texture == null)
 			{
-				HeavyMetalMachines.Utils.Debug.Assert(false, string.Format("[HMMUI2DDynamicSprite.OnTextureLoaded] Image failed to load -> {0}. GameObject: {1}", this._spriteName, base.gameObject.name), HeavyMetalMachines.Utils.Debug.TargetTeam.GUI);
+				Debug.Assert(false, string.Format("[HMMUI2DDynamicSprite.OnTextureLoaded] Image failed to load -> {0}. GameObject: {1}", this._spriteName, base.gameObject.name), Debug.TargetTeam.GUI);
 				return;
 			}
 			try

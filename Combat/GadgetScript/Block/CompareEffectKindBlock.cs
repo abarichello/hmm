@@ -4,15 +4,11 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat.GadgetScript.Block
 {
+	[Obsolete("Obsolete! Use FilterBlock")]
 	[CreateAssetMenu(menuName = "GadgetScript/Block/Parameter/CompareEffectKind")]
 	public class CompareEffectKindBlock : BaseBlock
 	{
-		protected override bool CheckSanity(IGadgetContext gadgetContext, IEventContext eventContext)
-		{
-			return !((IHMMGadgetContext)gadgetContext).IsClient || true;
-		}
-
-		protected override IBlock InnerExecute(IGadgetContext gadgetContext, IEventContext eventContext)
+		public override IBlock Execute(IGadgetContext gadgetContext, IEventContext eventContext)
 		{
 			bool flag;
 			if (((IHMMGadgetContext)gadgetContext).IsServer)
@@ -31,22 +27,6 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 				return this._nextBlock;
 			}
 			return this._kindNotEqualBlock;
-		}
-
-		public override bool UsesParameterWithId(int parameterId)
-		{
-			for (int i = 0; i < this._comparisons.Length; i++)
-			{
-				BaseParameter[] parameterArray = this._comparisons[i].GetParameterArray();
-				for (int j = 0; j < parameterArray.Length; j++)
-				{
-					if (base.CheckIsParameterWithId(parameterArray[j], parameterId))
-					{
-						return true;
-					}
-				}
-			}
-			return false;
 		}
 
 		protected override void OnEnable()
@@ -68,9 +48,9 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 		private static BoolParameter _serverResult;
 
 		[Serializable]
-		private class Comparison : IParameterComparison, IUsedParametersArray
+		private class Comparison : IParameterComparison
 		{
-			public bool Compare(IParameterContext context)
+			public bool Compare(object context)
 			{
 				return this._effectKind == this._parameter.GetValue(context).Info.Effect;
 			}

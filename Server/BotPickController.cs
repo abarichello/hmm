@@ -1,20 +1,22 @@
 ﻿using System;
 using System.Collections.Generic;
 using Assets.ClientApiObjects;
+using Assets.ClientApiObjects.Components;
 using HeavyMetalMachines.AI;
-using HeavyMetalMachines.Character;
-using HeavyMetalMachines.Frontend;
+using HeavyMetalMachines.Characters;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Pick;
+using HeavyMetalMachines.Server.Apis;
+using HeavyMetalMachines.Server.BotPick;
 using HeavyMetalMachines.Server.Pick.Rules;
 using HeavyMetalMachines.Server.Pick.Rules.Apis;
 using Pocketverse;
-using UnityEngine;
 
 namespace HeavyMetalMachines.Server
 {
-	public class BotPickController
+	public class BotPickController : IBotPickController
 	{
-		public BotPickController(CharacterService pickService, MatchPlayers matchPlayers, ConfigLoader configLoader, BotAIMatchRules botAIMatchRules, CollectionScriptableObject inventoryCollection, ScreenConfig pickConfig)
+		public BotPickController(CharacterService pickService, MatchPlayers matchPlayers, IConfigLoader configLoader, BotAIMatchRules botAIMatchRules, CollectionScriptableObject inventoryCollection, MatchPickModeConfig pickConfig)
 		{
 			this._pickService = pickService;
 			this._matchPlayers = matchPlayers;
@@ -29,10 +31,10 @@ namespace HeavyMetalMachines.Server
 
 		private void InitializeRules()
 		{
-			HeavyMetalMachines.Character.CharacterInfo[] allAvailableCharacterInfos = this._inventoryCollection.GetAllAvailableCharacterInfos();
+			IItemType[] allAvailableCharactersItemTypes = this._inventoryCollection.GetAllAvailableCharactersItemTypes();
 			PriorityRolesProvider priorityRolesProvider = new PriorityRolesProvider(this._matchPlayers, this._botAIMatchRules.BotPickConfig.roles, new PriorityRolesProvider.GetBotDesiredPickCb(this.BotDesiredPickGetter), new PriorityRolesProvider.GetDriverRoleKindByCharIdCb(this.DriverRoleKindByCharacterIdGetter));
 			BotsCharacterFilter botsCharacterFilter = new BotsCharacterFilter();
-			HeavyMetalMachines.Character.CharacterInfo[] validCharactersForBots = botsCharacterFilter.FilterCharacters(allAvailableCharacterInfos);
+			IItemType[] validCharactersForBots = botsCharacterFilter.FilterCharacters(allAvailableCharactersItemTypes);
 			this._priorityBotCharacterSelector = new PriorityBotCharacterSelector(validCharactersForBots, this._matchPlayers, new PriorityBotCharacterSelector.GetBotDesiredPickCb(this.BotDesiredPickGetter), priorityRolesProvider);
 			this._randomBotCharacterSelector = new RandomBotCharacterSelector(validCharactersForBots, this._matchPlayers.Players, this._matchPlayers.Bots);
 		}
@@ -42,9 +44,11 @@ namespace HeavyMetalMachines.Server
 			return this._botsPickData[address].DesiredPick;
 		}
 
-		public HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind DriverRoleKindByCharacterIdGetter(int characterId)
+		public DriverRoleKind DriverRoleKindByCharacterIdGetter(int characterId)
 		{
-			return this._inventoryCollection.GetCharacterInfoByCharacterId(characterId).Role;
+			IItemType itemType = this._inventoryCollection.AllCharactersByCharacterId[characterId];
+			CharacterItemTypeComponent component = itemType.GetComponent<CharacterItemTypeComponent>();
+			return component.Role;
 		}
 
 		public void Initialize()
@@ -57,61 +61,12 @@ namespace HeavyMetalMachines.Server
 				botPickData.SetupRandomSelectionDelay();
 				this._botsPickData.Add(playerData.PlayerAddress, botPickData);
 			}
+			this._botPickDesiresDefiner = new BotPickDesiresDefiner(this._matchPlayers, new BotPickDesiresDefiner.SelectPriorityCharacterForBotCb(this.SelectPriorityCharacterForBot), this._configLoader, this._botsPickData);
 		}
 
 		public void DefineBotsDesires()
 		{
-			List<PlayerData> list = new List<PlayerData>();
-			List<PlayerData> list2 = new List<PlayerData>();
-			for (int i = 0; i < this._matchPlayers.Bots.Count; i++)
-			{
-				PlayerData playerData = this._matchPlayers.Bots[i];
-				if (playerData.Team == TeamKind.Blue)
-				{
-					list.Add(playerData);
-				}
-				else
-				{
-					list2.Add(playerData);
-				}
-			}
-			while (list2.Count > 0 || list.Count > 0)
-			{
-				PlayerData playerData2;
-				if (UnityEngine.Random.Range(0, list2.Count + list.Count) < list2.Count)
-				{
-					int index = UnityEngine.Random.Range(0, list2.Count);
-					playerData2 = list2[index];
-					list2.RemoveAt(index);
-				}
-				else
-				{
-					int index2 = UnityEngine.Random.Range(0, list.Count);
-					playerData2 = list[index2];
-					list.RemoveAt(index2);
-				}
-				playerData2.SelectedChar = -1;
-				TeamKind team = playerData2.Team;
-				if (team != TeamKind.Blue)
-				{
-					if (team != TeamKind.Red)
-					{
-						BotPickController.Log.ErrorFormat("invalid team for bot {1} team {2}", new object[]
-						{
-							playerData2.PlayerAddress,
-							playerData2.Team
-						});
-					}
-					else
-					{
-						this.SelectPriorityCharacterForBot(playerData2);
-					}
-				}
-				else
-				{
-					this.SelectPriorityCharacterForBot(playerData2);
-				}
-			}
+			this._botPickDesiresDefiner.DefineBotsDesires();
 		}
 
 		public void UpdateAllBot(float deltaTime)
@@ -156,9 +111,14 @@ namespace HeavyMetalMachines.Server
 			{
 				this._pickService.PickCharacter(botEntry, true);
 				botEntry.SelectedChar = botEntry.CharacterId;
-				ItemTypeScriptableObject defaultSkin = this._inventoryCollection.GetDefaultSkin(botEntry.Character.CharacterItemTypeGuid);
-				botEntry.Customizations.SelectedSkin = defaultSkin.Id;
-				this._pickService.DispatchConfirmSkinCallback(botEntry.PlayerAddress, botEntry.Team, true, botEntry.Customizations.SelectedSkin);
+				Guid guid = botEntry.Customizations.GetGuidBySlot(59);
+				if (guid == Guid.Empty)
+				{
+					ItemTypeScriptableObject defaultSkin = this._inventoryCollection.GetDefaultSkin(botEntry.CharacterItemType.Id);
+					guid = defaultSkin.Id;
+					botEntry.Customizations.SetGuidAndSlot(59, guid);
+				}
+				this._pickService.DispatchConfirmSkinCallback(botEntry.PlayerAddress, botEntry.Team, true, guid);
 			}
 		}
 
@@ -243,11 +203,12 @@ namespace HeavyMetalMachines.Server
 				});
 				return;
 			}
-			HeavyMetalMachines.Character.CharacterInfo characterInfoByCharacterId = this._inventoryCollection.GetCharacterInfoByCharacterId(num);
+			IItemType itemType = this._inventoryCollection.AllCharactersByCharacterId[num];
+			CharacterItemTypeComponent component = itemType.GetComponent<CharacterItemTypeComponent>();
 			BotPickData botPickData = this._botsPickData[bot.PlayerAddress];
-			botPickData.DesiredPick = characterInfoByCharacterId.CharacterId;
-			bot.autoDesiredGrid = characterInfoByCharacterId.PreferedGridPosition;
-			bot.autoGridPriority = characterInfoByCharacterId.PreferedGridPosition;
+			botPickData.DesiredPick = component.CharacterId;
+			bot.autoDesiredGrid = component.PreferredGridPosition;
+			bot.autoGridPriority = component.PreferredGridPosition;
 			BotPickController.Log.InfoFormat("Bot={0} team={1} botDesiredPick={2}", new object[]
 			{
 				bot.PlayerAddress,
@@ -289,15 +250,17 @@ namespace HeavyMetalMachines.Server
 
 		private readonly MatchPlayers _matchPlayers;
 
-		private readonly ConfigLoader _configLoader;
+		private readonly IConfigLoader _configLoader;
 
 		private readonly BotAIMatchRules _botAIMatchRules;
 
 		private readonly CollectionScriptableObject _inventoryCollection;
 
-		private readonly ScreenConfig _pickConfig;
+		private readonly MatchPickModeConfig _pickConfig;
 
 		private Dictionary<byte, BotPickData> _botsPickData;
+
+		private BotPickDesiresDefiner _botPickDesiresDefiner;
 
 		private IBotCharacterSelector _priorityBotCharacterSelector;
 

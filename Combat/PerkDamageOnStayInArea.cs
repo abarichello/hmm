@@ -28,7 +28,7 @@ namespace HeavyMetalMachines.Combat
 		{
 			Rigidbody component = base.GetComponent<Rigidbody>();
 			component.position += PerkDamageOnStayInArea.Translation;
-			RaycastHit[] array = component.SweepTestAll(Vector3.down, 100f, QueryTriggerInteraction.Collide);
+			RaycastHit[] array = component.SweepTestAll(Vector3.down, 100f, 2);
 			PerkDamageOnStayInArea.CombatHits.Clear();
 			for (int i = 0; i < array.Length; i++)
 			{

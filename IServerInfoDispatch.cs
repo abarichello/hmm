@@ -8,6 +8,8 @@ namespace HeavyMetalMachines
 	{
 		void SetInfo(MatchData data);
 
+		void SetPlayerCompetitiveState(string state);
+
 		void SetPlayerRewards(string rewardString);
 
 		void PlaybackReady(long playbackStartTime, int lastSynchTimeScaleChange, int accumulatedSynchDelay, float timeScale);

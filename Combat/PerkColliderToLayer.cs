@@ -10,6 +10,10 @@ namespace HeavyMetalMachines.Combat
 	{
 		public override void PerkInitialized()
 		{
+			if (GameHubBehaviour.Hub.Net.IsClient())
+			{
+				return;
+			}
 			CombatObject targetCombat = this.Effect.GetTargetCombat(this.Target);
 			if (!targetCombat)
 			{

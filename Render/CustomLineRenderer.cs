@@ -20,7 +20,7 @@ namespace HeavyMetalMachines.Render
 
 		private void OnDisable()
 		{
-			UnityEngine.Object.Destroy(this.mesh);
+			Object.Destroy(this.mesh);
 			this.mesh = null;
 		}
 
@@ -77,26 +77,26 @@ namespace HeavyMetalMachines.Render
 			float num = 0f;
 			Vector3 vector = this.LinePoints[1] - this.LinePoints[0];
 			Vector3 forward = this.Camera.transform.forward;
-			Vector3 b = Vector3.zero;
+			Vector3 vector2 = Vector3.zero;
 			for (int i = 0; i < this.LinePoints.Length; i++)
 			{
-				Vector3 a = this.LinePoints[i];
+				Vector3 vector3 = this.LinePoints[i];
 				int num2 = i * 2;
 				if (i > 0)
 				{
-					vector = a - this.LinePoints[i - 1];
+					vector = vector3 - this.LinePoints[i - 1];
 					num += vector.magnitude * this.TileSize;
 				}
-				ReallyFastMath.FastCross(ref vector, ref forward, ref b);
-				b = b.normalized * this.LineWidth;
+				ReallyFastMath.FastCross(ref vector, ref forward, ref vector2);
+				vector2 = vector2.normalized * this.LineWidth;
 				this.uvs[num2].x = num;
 				this.uvs[num2 + 1].x = num;
-				this.vertices[num2] = a + b;
-				this.vertices[num2 + 1] = a - b;
+				this.vertices[num2] = vector3 + vector2;
+				this.vertices[num2 + 1] = vector3 - vector2;
 			}
 			this.mesh.vertices = this.vertices;
 			this.mesh.uv = this.uvs;
-			this.mesh.SetIndices(this.indices, MeshTopology.Triangles, 0);
+			this.mesh.SetIndices(this.indices, 0, 0);
 			this.mesh.RecalculateBounds();
 		}
 
@@ -104,8 +104,8 @@ namespace HeavyMetalMachines.Render
 		{
 			for (int i = 0; i < this.LinePoints.Length; i++)
 			{
-				Vector3 center = this.LinePoints[i];
-				Gizmos.DrawSphere(center, this.LineWidth * 0.25f);
+				Vector3 vector = this.LinePoints[i];
+				Gizmos.DrawSphere(vector, this.LineWidth * 0.25f);
 			}
 		}
 

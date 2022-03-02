@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkCancelEffectsByAction : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkCancelEffectsByAction : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		private IPlayerController Controller
 		{
@@ -50,7 +50,7 @@ namespace HeavyMetalMachines.Combat
 			this.Effect.TriggerDestroy(this.Effect.Data.SourceCombat.Id.ObjId, base.transform.position, false, null, Vector3.zero, BaseFX.EDestroyReason.Default, false);
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			this.Controller.ListenToCancelAction -= this.OnCancelAction;
 		}

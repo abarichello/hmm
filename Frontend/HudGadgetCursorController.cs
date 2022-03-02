@@ -4,7 +4,11 @@ using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Combat.Gadget;
 using HeavyMetalMachines.Combat.GadgetScript;
 using HeavyMetalMachines.Event;
+using HeavyMetalMachines.Infra.Context;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using Hoplon.Input;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -23,6 +27,10 @@ namespace HeavyMetalMachines.Frontend
 			GameHubBehaviour.Hub.BombManager.ListenToPhaseChange += this.BombManagerOnListenToPhaseChange;
 			GameHubBehaviour.Hub.CursorManager.ChangeVisibilityCallback += this.CursorManagerOnChangeVisibilityCallback;
 			GameHubBehaviour.Hub.CursorManager.CursorTypeChangedCallback += this.CursorManagerOnCursorTypeChangedCallback;
+			this._activeDeviceChangeNotifierDisposable = ObservableExtensions.Subscribe<InputDevice>(this._inputActiveDeviceChangeNotifier.ObserveActiveDeviceChange(), delegate(InputDevice activeDevice)
+			{
+				this.SetVisibility(this.CanBeVisible(GameHubBehaviour.Hub.BombManager.CurrentBombGameState));
+			});
 		}
 
 		protected void OnDestroy()
@@ -40,6 +48,11 @@ namespace HeavyMetalMachines.Frontend
 				this._combatObject.ListenToObjectUnspawn -= this.CombatObjectOnListenToObjectUnspawn;
 			}
 			this._combatObject = null;
+			if (this._activeDeviceChangeNotifierDisposable != null)
+			{
+				this._activeDeviceChangeNotifierDisposable.Dispose();
+				this._activeDeviceChangeNotifierDisposable = null;
+			}
 		}
 
 		private void SetVisibility(bool isVisible)
@@ -47,19 +60,20 @@ namespace HeavyMetalMachines.Frontend
 			this._mainCanvasGroup.alpha = ((!isVisible) ? 0f : 1f);
 		}
 
-		private bool CanBeVisible(BombScoreBoard.State state)
+		private bool CanBeVisible(BombScoreboardState state)
 		{
-			bool flag = state == BombScoreBoard.State.Warmup || state == BombScoreBoard.State.Shop || state == BombScoreBoard.State.PreBomb || state == BombScoreBoard.State.BombDelivery || state == BombScoreBoard.State.PreReplay || state == BombScoreBoard.State.Replay;
-			return this.IsEnabledInOptions() && (flag || GameHubBehaviour.Hub.Match.LevelIsTutorial());
+			bool flag = state == BombScoreboardState.Warmup || state == BombScoreboardState.Shop || state == BombScoreboardState.PreBomb || state == BombScoreboardState.BombDelivery || state == BombScoreboardState.PreReplay || state == BombScoreboardState.Replay;
+			bool flag2 = this._inputGetActiveDevicePoller.GetActiveDevice() != 3;
+			return this.IsEnabledInOptions() && flag2 && (flag || GameHubBehaviour.Hub.Match.LevelIsTutorial());
 		}
 
-		private bool CanRenderVfx(BombScoreBoard.State state)
+		private bool CanRenderVfx(BombScoreboardState state)
 		{
-			bool flag = state != BombScoreBoard.State.PreReplay && state != BombScoreBoard.State.Replay && state != BombScoreBoard.State.EndGame;
+			bool flag = state != BombScoreboardState.PreReplay && state != BombScoreboardState.Replay && state != BombScoreboardState.EndGame;
 			return flag && this._playerIsAlive;
 		}
 
-		private void BombManagerOnListenToPhaseChange(BombScoreBoard.State state)
+		private void BombManagerOnListenToPhaseChange(BombScoreboardState state)
 		{
 			if (!this.CanRenderVfx(state))
 			{
@@ -112,7 +126,7 @@ namespace HeavyMetalMachines.Frontend
 			GadgetData.GadgetStateObject gadgetState = this._combatObject.GadgetStates.GetGadgetState(gadgetSlot);
 			if (gadgetState.GadgetState == GadgetState.Cooldown)
 			{
-				long num = gadgetState.CoolDown - (long)GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
+				long num = gadgetState.Cooldown - (long)GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
 				float num2 = (float)num * 0.001f / gadgetBehaviour.Cooldown;
 				gadgetInfo.FillImage.fillAmount = 1f - num2;
 				if (gadgetInfo.BaseCanvasGroup.alpha > 0.001f)
@@ -129,15 +143,15 @@ namespace HeavyMetalMachines.Frontend
 
 		private bool TryRenderCustomGadgetUpdate(HudGadgetCursorController.GadgetInfo gadgetInfo)
 		{
-			CombatGadget combatGadget;
-			if (!this._combatObject.CustomGadgets.TryGetValue(gadgetInfo.Slot, out combatGadget))
+			CombatGadget combatGadget = (CombatGadget)this._combatObject.GetGadgetContext((int)gadgetInfo.Slot);
+			if (null == combatGadget)
 			{
 				return false;
 			}
 			float fillAmount = 0f;
 			if (combatGadget.HasCooldownParameters())
 			{
-				int playbackTime = GameHubBehaviour.Hub.Clock.GetPlaybackTime();
+				int playbackTime = GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
 				int cooldownEndTime = combatGadget.GetCooldownEndTime();
 				bool flag = cooldownEndTime > playbackTime;
 				if (flag)
@@ -236,6 +250,14 @@ namespace HeavyMetalMachines.Frontend
 		private bool _initialized;
 
 		private bool _playerIsAlive;
+
+		[InjectOnClient]
+		private IInputGetActiveDevicePoller _inputGetActiveDevicePoller;
+
+		[InjectOnClient]
+		private IInputActiveDeviceChangeNotifier _inputActiveDeviceChangeNotifier;
+
+		private IDisposable _activeDeviceChangeNotifierDisposable;
 
 		[Serializable]
 		private struct GadgetInfo

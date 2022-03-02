@@ -9,17 +9,15 @@ namespace HeavyMetalMachines.VFX
 {
 	public class SurfaceEffectVFX : BaseVFX
 	{
-		[HideInInspector]
 		public ManagedPropertyBlock ExternalBlock { get; private set; }
 
 		protected virtual void Awake()
 		{
 			this._rendererHolders = new List<SurfaceEffectVFX.RendererHolder>(5);
+			this._getComponentCache = new List<MeshRenderer>(5);
 			this.ExternalBlock = new ManagedPropertyBlock();
-			this.MaterialInstance = UnityEngine.Object.Instantiate<Material>(this.overlapMaterial);
+			this.MaterialInstance = Object.Instantiate<Material>(this.overlapMaterial);
 			this.PropertyIds.Color = Shader.PropertyToID("_Color");
-			this.PropertyIds.MainTex = Shader.PropertyToID("_MainTex");
-			this.PropertyIds.BumpMap = Shader.PropertyToID("_BumpMap");
 			this.PropertyIds.MainObjectTransform = Shader.PropertyToID("_MainObjectTransform");
 			this.PropertyIds.MainObjectInverseTransform = Shader.PropertyToID("_MainObjectInverseTransform");
 			this.PropertyIds.DirectionShaderPropName = Shader.PropertyToID(this.DirectionShaderPropName);
@@ -35,29 +33,18 @@ namespace HeavyMetalMachines.VFX
 			}
 		}
 
-		public void InitializeFX(MeshRenderer[] renderersList)
+		private void InitializeFX()
 		{
-			if (renderersList == null)
+			if (this._rendererHolders.Capacity < this._getComponentCache.Count)
 			{
-				return;
+				this._rendererHolders.Capacity = this._getComponentCache.Count;
 			}
-			if (this._rendererHolders.Capacity < renderersList.Length)
+			for (int i = 0; i < this._getComponentCache.Count; i++)
 			{
-				this._rendererHolders.Capacity = renderersList.Length;
-			}
-			foreach (MeshRenderer meshRenderer in renderersList)
-			{
+				MeshRenderer meshRenderer = this._getComponentCache[i];
 				if (!(meshRenderer == null))
 				{
-					if (meshRenderer.sharedMaterial.mainTexture == null)
-					{
-						SurfaceEffectVFX.Log.WarnFormat("MainTexture is null. GO Name: {0} Effect GO Name: {1}", new object[]
-						{
-							this._targetTransform.gameObject.name,
-							base.gameObject.name
-						});
-					}
-					else if ((this.ignoreLayer.value & 1 << meshRenderer.gameObject.layer) == 0)
+					if ((this.ignoreLayer.value & 1 << meshRenderer.gameObject.layer) == 0)
 					{
 						MeshFilter component = meshRenderer.GetComponent<MeshFilter>();
 						if (component.sharedMesh == null)
@@ -74,16 +61,8 @@ namespace HeavyMetalMachines.VFX
 							{
 								MeshFilter = component,
 								Renderer = meshRenderer,
-								PropertyBlock = new MaterialPropertyBlock()
+								PropertyBlock = SurfaceEffectVFX.GetPropertyBlockFromCache()
 							};
-							if (item.Renderer.sharedMaterial.HasProperty(this.PropertyIds.MainTex))
-							{
-								item.PropertyBlock.SetTexture(this.PropertyIds.MainTex, item.Renderer.sharedMaterial.mainTexture);
-							}
-							if (item.Renderer.sharedMaterial.HasProperty(this.PropertyIds.BumpMap))
-							{
-								item.PropertyBlock.SetTexture(this.PropertyIds.BumpMap, item.Renderer.sharedMaterial.GetTexture(this.PropertyIds.BumpMap));
-							}
 							if (this.EnableFading)
 							{
 								item.PropertyBlock.SetColor(this.PropertyIds.Color, this.OriginalColor);
@@ -98,6 +77,7 @@ namespace HeavyMetalMachines.VFX
 					}
 				}
 			}
+			this._getComponentCache.Clear();
 			this._initialized = true;
 			this._isDeactivating = false;
 			this.CanCollectToCache = false;
@@ -119,9 +99,9 @@ namespace HeavyMetalMachines.VFX
 			}
 			if (this.ignoreXZRotation)
 			{
-				Matrix4x4 value = Matrix4x4.TRS(this._targetTransform.position, Quaternion.Euler(0f, this._targetTransform.eulerAngles.y, 0f), Vector3.one);
-				Matrix4x4 inverse = value.inverse;
-				this.MaterialInstance.SetMatrix(this.PropertyIds.MainObjectTransform, value);
+				Matrix4x4 matrix4x = Matrix4x4.TRS(this._targetTransform.position, Quaternion.Euler(0f, this._targetTransform.eulerAngles.y, 0f), Vector3.one);
+				Matrix4x4 inverse = matrix4x.inverse;
+				this.MaterialInstance.SetMatrix(this.PropertyIds.MainObjectTransform, matrix4x);
 				this.MaterialInstance.SetMatrix(this.PropertyIds.MainObjectInverseTransform, inverse);
 			}
 			else
@@ -135,49 +115,51 @@ namespace HeavyMetalMachines.VFX
 			{
 				this._direction = (this._directionTarget.position - this._directionOrigin.position).normalized;
 			}
+			Color originalColor = this.OriginalColor;
+			if (this.EnableFading)
+			{
+				SurfaceEffectVFX.FadeState fadeState = this._fadeState;
+				if (fadeState != SurfaceEffectVFX.FadeState.FadeIn)
+				{
+					if (fadeState == SurfaceEffectVFX.FadeState.FadeOut)
+					{
+						if (time < this._fadeStartTime + this.FadeOutDuration)
+						{
+							originalColor.a *= Mathf.Clamp01(1f - (time - this._fadeStartTime) / this.FadeOutDuration);
+						}
+						else
+						{
+							this._fadeState = SurfaceEffectVFX.FadeState.Complete;
+						}
+					}
+				}
+				else if (time < this._fadeStartTime + this.FadeInDuration)
+				{
+					originalColor.a *= Mathf.Clamp01((time - this._fadeStartTime) / this.FadeInDuration);
+				}
+				else if (this._isDeactivating)
+				{
+					this._fadeState = SurfaceEffectVFX.FadeState.FadeOut;
+					this._fadeStartTime = time;
+				}
+				else
+				{
+					this._fadeState = SurfaceEffectVFX.FadeState.Idle;
+				}
+			}
 			for (int i = 0; i < this._rendererHolders.Count; i++)
 			{
 				SurfaceEffectVFX.RendererHolder rendererHolder = this._rendererHolders[i];
 				Renderer renderer = rendererHolder.Renderer;
 				if ((renderer.enabled || this.shouldHideObject) && renderer.gameObject.activeInHierarchy)
 				{
-					if (this.EnableFading)
-					{
-						Color originalColor = this.OriginalColor;
-						SurfaceEffectVFX.FadeState fadeState = this._fadeState;
-						if (fadeState != SurfaceEffectVFX.FadeState.FadeIn)
-						{
-							if (fadeState == SurfaceEffectVFX.FadeState.FadeOut)
-							{
-								if (time < this._fadeStartTime + this.FadeOutDuration)
-								{
-									originalColor.a *= Mathf.Clamp01(1f - (time - this._fadeStartTime) / this.FadeOutDuration);
-									rendererHolder.PropertyBlock.SetVector(this.PropertyIds.Color, originalColor);
-								}
-								else
-								{
-									this._fadeState = SurfaceEffectVFX.FadeState.Complete;
-								}
-							}
-						}
-						else if (time < this._fadeStartTime + this.FadeInDuration)
-						{
-							originalColor.a *= Mathf.Clamp01((time - this._fadeStartTime) / this.FadeInDuration);
-							rendererHolder.PropertyBlock.SetVector(this.PropertyIds.Color, originalColor);
-						}
-						else if (this._isDeactivating)
-						{
-							this._fadeState = SurfaceEffectVFX.FadeState.FadeOut;
-							this._fadeStartTime = time;
-						}
-						else
-						{
-							this._fadeState = SurfaceEffectVFX.FadeState.Idle;
-						}
-					}
 					if (this.EnableDirection)
 					{
 						rendererHolder.PropertyBlock.SetVector(this.PropertyIds.DirectionShaderPropName, this._direction);
+					}
+					if (this.EnableFading)
+					{
+						rendererHolder.PropertyBlock.SetVector(this.PropertyIds.Color, originalColor);
 					}
 					this.ExternalBlock.CopyTo(rendererHolder.PropertyBlock);
 					for (int j = 0; j < rendererHolder.MeshFilter.sharedMesh.subMeshCount; j++)
@@ -212,12 +194,12 @@ namespace HeavyMetalMachines.VFX
 				this._targetTransform = base.transform;
 				break;
 			default:
-				HeavyMetalMachines.Utils.Debug.Assert(true, "There's no code for the selected target type!", HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+				Debug.Assert(true, "There's no code for the selected target type!", Debug.TargetTeam.All);
 				break;
 			}
 			if (this._targetTransform == null)
 			{
-				HeavyMetalMachines.Utils.Debug.Assert(true, "Ops, something is wrong with the " + base.gameObject.name + " prefab config! SurfaceEffectVFX target is null!", HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+				Debug.Assert(true, "Ops, something is wrong with the " + base.gameObject.name + " prefab config! SurfaceEffectVFX target is null!", Debug.TargetTeam.All);
 				return;
 			}
 			if (this.EnableDirection)
@@ -264,7 +246,7 @@ namespace HeavyMetalMachines.VFX
 			}
 			CarComponentHub component = this._targetTransform.GetComponent<CarComponentHub>();
 			Transform transform;
-			if (component != null && component.carGenerator != null)
+			if (component != null)
 			{
 				transform = component.carGenerator.transform;
 			}
@@ -272,7 +254,8 @@ namespace HeavyMetalMachines.VFX
 			{
 				transform = this._targetTransform;
 			}
-			this.InitializeFX(transform.GetComponentsInChildren<MeshRenderer>(true));
+			transform.GetComponentsInChildren<MeshRenderer>(true, this._getComponentCache);
+			this.InitializeFX();
 		}
 
 		protected override void WillDeactivate()
@@ -307,12 +290,31 @@ namespace HeavyMetalMachines.VFX
 				{
 					rendererHolder.Renderer.enabled = true;
 				}
+				SurfaceEffectVFX.PropertyBlockCache.Push(rendererHolder.PropertyBlock);
+				rendererHolder.PropertyBlock = null;
 			}
 			this._rendererHolders.Clear();
 			this.ExternalBlock.Clear();
 		}
 
+		private static MaterialPropertyBlock GetPropertyBlockFromCache()
+		{
+			MaterialPropertyBlock materialPropertyBlock;
+			if (SurfaceEffectVFX.PropertyBlockCache.Count > 0)
+			{
+				materialPropertyBlock = SurfaceEffectVFX.PropertyBlockCache.Pop();
+				materialPropertyBlock.Clear();
+			}
+			else
+			{
+				materialPropertyBlock = new MaterialPropertyBlock();
+			}
+			return materialPropertyBlock;
+		}
+
 		private static readonly BitLogger Log = new BitLogger(typeof(SurfaceEffectVFX));
+
+		private static readonly Stack<MaterialPropertyBlock> PropertyBlockCache = new Stack<MaterialPropertyBlock>();
 
 		public SurfaceEffectVFX.ESurfaceTarget surfaceTarget = SurfaceEffectVFX.ESurfaceTarget.Self;
 
@@ -354,8 +356,6 @@ namespace HeavyMetalMachines.VFX
 
 		protected Material MaterialInstance;
 
-		private List<SurfaceEffectVFX.RendererHolder> _rendererHolders;
-
 		private bool _initialized;
 
 		private SurfaceEffectVFX.FadeState _fadeState;
@@ -370,6 +370,10 @@ namespace HeavyMetalMachines.VFX
 
 		private Vector4 _direction = Vector4.zero;
 
+		private List<SurfaceEffectVFX.RendererHolder> _rendererHolders;
+
+		private List<MeshRenderer> _getComponentCache;
+
 		public enum ESurfaceTarget
 		{
 			EffectOwner,
@@ -378,13 +382,17 @@ namespace HeavyMetalMachines.VFX
 			Self
 		}
 
+		private enum FadeState
+		{
+			Idle,
+			FadeIn,
+			FadeOut,
+			Complete
+		}
+
 		protected struct MaterialProperties
 		{
 			public int Color;
-
-			public int MainTex;
-
-			public int BumpMap;
 
 			public int MainObjectTransform;
 
@@ -403,14 +411,6 @@ namespace HeavyMetalMachines.VFX
 			public MeshRenderer Renderer;
 
 			public bool ShouldReenable;
-		}
-
-		private enum FadeState
-		{
-			Idle,
-			FadeIn,
-			FadeOut,
-			Complete
 		}
 	}
 }

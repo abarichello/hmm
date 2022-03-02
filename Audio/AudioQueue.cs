@@ -62,12 +62,12 @@ namespace HeavyMetalMachines.Audio
 		{
 		}
 
-		private void AddCooldown(FMODAsset asset, float cooldown)
+		private void AddCooldown(AudioEventAsset asset, float cooldown)
 		{
 			if (cooldown > 0f)
 			{
 				AudioQueue.TimedAudioDescriptor item = default(AudioQueue.TimedAudioDescriptor);
-				item.assetId = asset.idGUID;
+				item.assetId = asset.Id;
 				item.time = cooldown + Time.timeSinceLevelLoad;
 				this._cooldownList.Add(item);
 			}
@@ -84,9 +84,9 @@ namespace HeavyMetalMachines.Audio
 			this.SetSettings(GameHubBehaviour.Hub.AudioSettings);
 		}
 
-		private bool IsCooldownReady(FMODVoiceOverAsset asset, out float cooldown)
+		private bool IsCooldownReady(AudioEventAsset asset, out float cooldown)
 		{
-			cooldown = asset.Cooldown;
+			cooldown = asset.Cooldown.Value;
 			for (int i = this._cooldownList.Count - 1; i >= 0; i--)
 			{
 				if (this._cooldownList[i].time <= Time.timeSinceLevelLoad)
@@ -98,7 +98,7 @@ namespace HeavyMetalMachines.Audio
 			{
 				for (int j = 0; j < this._cooldownList.Count; j++)
 				{
-					if (this._cooldownList[j].assetId == asset.idGUID)
+					if (this._cooldownList[j].assetId == asset.Id)
 					{
 						return false;
 					}
@@ -112,7 +112,7 @@ namespace HeavyMetalMachines.Audio
 			this._audioSettings = audioSettings;
 		}
 
-		public void Enqueue(FMODVoiceOverAsset asset, Transform target)
+		public void Enqueue(AudioEventAsset asset, Transform target)
 		{
 			float cooldown;
 			if (!this.IsCooldownReady(asset, out cooldown))
@@ -122,11 +122,44 @@ namespace HeavyMetalMachines.Audio
 			this.EnqueueAudio(asset, target, cooldown);
 		}
 
-		private void EnqueueAudio(FMODVoiceOverAsset asset, Transform target, float cooldown)
+		private static void Validate(AudioEventAsset asset)
 		{
-			float timeout = asset.Timeout;
-			int priority = asset.Priority;
-			if (priority == 0)
+			if (asset.Warned)
+			{
+				return;
+			}
+			if (!asset.Priority.HasValue)
+			{
+				asset.Warned = true;
+				AudioQueue.Log.WarnFormat("Enqueueing voice over '{0}' without priority is not allowed, redirect this error to audio team.", new object[]
+				{
+					asset.Path
+				});
+			}
+			if (!asset.Cooldown.HasValue)
+			{
+				asset.Warned = true;
+				AudioQueue.Log.WarnFormat("Enqueueing voice over '{0}' without cooldown is not allowed, redirect this error to audio team.", new object[]
+				{
+					asset.Path
+				});
+			}
+			if (!asset.Timeout.HasValue)
+			{
+				asset.Warned = true;
+				AudioQueue.Log.WarnFormat("Enqueueing voice over '{0}' without timeout is not allowed, redirect this error to audio team.", new object[]
+				{
+					asset.Path
+				});
+			}
+		}
+
+		private void EnqueueAudio(AudioEventAsset asset, Transform target, float cooldown)
+		{
+			AudioQueue.Validate(asset);
+			float value = asset.Timeout.Value;
+			int num = (int)asset.Priority.Value;
+			if (num == 0)
 			{
 				this.StopAll();
 				this._currentPlayingAudio = FMODAudioManager.PlayAtVolume(asset, target, this.volume, false);
@@ -136,7 +169,7 @@ namespace HeavyMetalMachines.Audio
 			if (this._queue.Count > 7)
 			{
 				int index = this._queue.Count - 1;
-				if (this._queue[index].priority <= priority)
+				if (this._queue[index].priority <= num)
 				{
 					return;
 				}
@@ -145,9 +178,9 @@ namespace HeavyMetalMachines.Audio
 			AudioQueue.QueuedAudioDescriptor item = default(AudioQueue.QueuedAudioDescriptor);
 			item.asset = asset;
 			item.target = target;
-			item.priority = priority;
+			item.priority = num;
 			item.playTime = Time.timeSinceLevelLoad;
-			item.timeout = timeout;
+			item.timeout = value;
 			item.cooldown = cooldown;
 			this._queue.Add(item);
 		}
@@ -183,7 +216,7 @@ namespace HeavyMetalMachines.Audio
 
 		public struct QueuedAudioDescriptor
 		{
-			public FMODAsset asset;
+			public AudioEventAsset asset;
 
 			public float playTime;
 

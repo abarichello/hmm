@@ -1,12 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
-using Commons.Swordfish.Battlepass;
-using Commons.Swordfish.Progression;
+using Assets.Standard_Assets.Scripts.HMM.PlotKids;
+using HeavyMetalMachines.DataTransferObjects.Battlepass;
+using HeavyMetalMachines.DataTransferObjects.Player;
+using HeavyMetalMachines.DataTransferObjects.Progression;
 using HeavyMetalMachines.Infra.ScriptableObjects;
-using HeavyMetalMachines.Swordfish.Player;
+using HeavyMetalMachines.Localization;
+using HeavyMetalMachines.Localization.Business;
+using Hoplon.Unity.Loading;
 using Pocketverse;
-using SharedUtils.Loading;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.EndMatch.Battlepass
 {
@@ -19,11 +23,11 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 
 		public bool TryToShowWindow(EndMatchBattlepassView.OnWindowClosed onWindowClosedCallback, BattlepassProgressScriptableObject battlepassProgress)
 		{
-			this._onWindowClosedCallback = onWindowClosedCallback;
-			if (!this.HasPendingMissions())
+			if (SpectatorController.IsSpectating)
 			{
 				return false;
 			}
+			this._onWindowClosedCallback = onWindowClosedCallback;
 			base.gameObject.SetActive(true);
 			if (GameHubBehaviour.Hub == null)
 			{
@@ -51,7 +55,7 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 		private void FakeSetup()
 		{
 			GameObject gameObject = new GameObject("FakeLoadingManager - Dont Save In Scene");
-			gameObject.AddComponent<LoadingManager>();
+			gameObject.AddComponent<Loading>();
 			gameObject.transform.SetSiblingIndex(2);
 			BitLogger.Initialize(CppFileAppender.GetMainLogger());
 			EndMatchBattlepassViewHeader.HeaderData headerData = new EndMatchBattlepassViewHeader.HeaderData
@@ -81,10 +85,16 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 					IsPremium = (i % 2 == 0),
 					IsCompleted = (i >= 2),
 					XpAmount = 1750,
-					CurrentProgressAmount = 5 * i,
-					ProgressMaxAmount = ((i < 2) ? (6 * i + 1) : (5 * i)),
-					NameText = "mission_" + i,
-					DescriptionText = "description_" + i
+					Objectives = new EndMatchBattlepassMissionSlot.ObjectiveSlotData[]
+					{
+						new EndMatchBattlepassMissionSlot.ObjectiveSlotData
+						{
+							CurrentProgressAmount = 5 * i,
+							DescriptionText = "description_" + i,
+							ProgressMaxAmount = ((i < 2) ? (6 * i + 1) : (5 * i))
+						}
+					},
+					NameText = "mission_" + i
 				};
 				EndMatchBattlepassMissionSlot.MissionSlotData item = missionSlotData;
 				flag |= item.IsCompleted;
@@ -117,11 +127,6 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 				this._onWindowClosedCallback();
 				this._onWindowClosedCallback = null;
 			}
-		}
-
-		private bool HasPendingMissions()
-		{
-			return true;
 		}
 
 		protected void OnDestroy()
@@ -158,7 +163,7 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 			};
 		}
 
-		private List<EndMatchBattlepassMissionSlot.MissionSlotData> LoadMissions(int[] missionsCompleted, MissionProgress[] oldMissionProgresses, MissionProgress[] missionProgresses, MissionConfig bpMissionConfig)
+		private List<EndMatchBattlepassMissionSlot.MissionSlotData> LoadMissions(MissionCompleted[] missionsCompleted, MissionProgress[] oldMissionProgresses, MissionProgress[] missionProgresses, MissionConfig bpMissionConfig)
 		{
 			List<EndMatchBattlepassMissionSlot.MissionSlotData> list = new List<EndMatchBattlepassMissionSlot.MissionSlotData>(4);
 			int num = 0;
@@ -168,9 +173,9 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 				bool flag = false;
 				for (int i = 0; i < missionsCompleted.Length; i++)
 				{
-					if (missionProgress.MissionIndex == missionsCompleted[i])
+					if (missionProgress.MissionIndex == missionsCompleted[i].MissionIndex)
 					{
-						list.Add(this.CreateMissionSlotData(true, missionProgress, bpMissionConfig));
+						list.Add(this.CreateMissionSlotData(true, missionProgress, bpMissionConfig, missionsCompleted[i]));
 						flag = true;
 						break;
 					}
@@ -181,9 +186,9 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 					{
 						if (missionProgress2.MissionIndex == missionProgress.MissionIndex)
 						{
-							if (missionProgress2.CurrentValue != missionProgress.CurrentValue)
+							if (this.CheckForProgressInMission(missionProgress, missionProgress2))
 							{
-								list.Add(this.CreateMissionSlotData(false, missionProgress2, bpMissionConfig));
+								list.Add(this.CreateMissionSlotData(false, missionProgress2, bpMissionConfig, null));
 							}
 							break;
 						}
@@ -194,20 +199,42 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 			return list;
 		}
 
-		private EndMatchBattlepassMissionSlot.MissionSlotData CreateMissionSlotData(bool isCompleted, MissionProgress missionProgress, MissionConfig bpMissionConfig)
+		private bool CheckForProgressInMission(MissionProgress oldMissionProgress, MissionProgress currentMissionProgress)
 		{
-			Mission mission = bpMissionConfig.Missions[missionProgress.MissionIndex];
+			for (int i = 0; i < currentMissionProgress.CurrentProgressValue.Length; i++)
+			{
+				if (currentMissionProgress.CurrentProgressValue[i].CurrentValue != oldMissionProgress.CurrentProgressValue[i].CurrentValue)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		private EndMatchBattlepassMissionSlot.MissionSlotData CreateMissionSlotData(bool isCompleted, MissionProgress missionProgress, MissionConfig bpMissionConfig, MissionCompleted missionCompleted)
+		{
+			Mission missionConfig = bpMissionConfig.Missions[missionProgress.MissionIndex];
 			return new EndMatchBattlepassMissionSlot.MissionSlotData
 			{
 				MissionIndex = missionProgress.MissionIndex,
 				IsPremium = missionProgress.IsPremium(bpMissionConfig),
 				IsCompleted = isCompleted,
-				XpAmount = mission.XpReward,
-				CurrentProgressAmount = ((!isCompleted) ? Mathf.FloorToInt(missionProgress.CurrentValue) : mission.Target),
-				ProgressMaxAmount = mission.Target,
-				NameText = Language.Get(mission.NameDraft, TranslationSheets.BattlepassMissions),
-				DescriptionText = string.Format(Language.Get(mission.DescriptionDraft, TranslationSheets.BattlepassMissions), mission.Target)
+				XpAmount = missionConfig.XpReward,
+				NameText = Language.Get(missionConfig.NameDraft, TranslationContext.BattlepassMissions),
+				Objectives = this.InitializeObjectiveSlotDatas(missionConfig, missionProgress, isCompleted, missionCompleted)
 			};
+		}
+
+		private EndMatchBattlepassMissionSlot.ObjectiveSlotData[] InitializeObjectiveSlotDatas(Mission missionConfig, MissionProgress missionProgress, bool isCompleted, MissionCompleted missionCompleted)
+		{
+			EndMatchBattlepassMissionSlot.ObjectiveSlotData[] array = new EndMatchBattlepassMissionSlot.ObjectiveSlotData[missionConfig.Objectives.Length];
+			for (int i = 0; i < array.Length; i++)
+			{
+				array[i].CurrentProgressAmount = ((!isCompleted) ? Mathf.FloorToInt(missionProgress.CurrentProgressValue[i].CurrentValue) : Mathf.FloorToInt(missionCompleted.CurrentProgressValue[i].CurrentValue));
+				array[i].ProgressMaxAmount = missionConfig.Objectives[i].Target;
+				array[i].DescriptionText = this._missionTranslator.GetLocalizedDescription(missionProgress.MissionIndex, i);
+			}
+			return array;
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(EndMatchBattlepassView));
@@ -229,6 +256,9 @@ namespace HeavyMetalMachines.EndMatch.Battlepass
 		private List<EndMatchBattlepassMissionSlot.MissionSlotData> _missionSlotDatasTest;
 
 		private EndMatchBattlepassView.OnWindowClosed _onWindowClosedCallback;
+
+		[Inject]
+		private IMissionTranslator _missionTranslator;
 
 		public delegate void OnWindowClosed();
 	}

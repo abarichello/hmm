@@ -12,6 +12,11 @@ namespace HeavyMetalMachines.UnityUI
 			this._toggle.onValueChanged.RemoveListener(onValueChanged);
 			this._toggle.isOn = isOnPreCallback;
 			this._toggle.onValueChanged.AddListener(onValueChanged);
+			this.SetTitleText(titleText, titleTextStyle);
+		}
+
+		public void SetTitleText(string titleText, HmmUiText.TextStyles titleTextStyle = HmmUiText.TextStyles.Default)
+		{
 			this._titleText.TextStyle = titleTextStyle;
 			this._titleText.text = titleText;
 		}

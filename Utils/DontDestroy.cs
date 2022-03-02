@@ -1,14 +1,13 @@
 ﻿using System;
-using Pocketverse;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Utils
 {
-	public class DontDestroy : GameHubBehaviour
+	public class DontDestroy : MonoBehaviour
 	{
 		private void Awake()
 		{
-			UnityEngine.Object.DontDestroyOnLoad(base.gameObject);
+			Object.DontDestroyOnLoad(base.gameObject);
 		}
 	}
 }

@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using HeavyMetalMachines.Character;
+using Assets.ClientApiObjects;
+using Assets.ClientApiObjects.Components;
+using HeavyMetalMachines.Characters;
 using Pocketverse;
 using UnityEngine;
 
@@ -16,15 +18,15 @@ namespace HeavyMetalMachines.Frontend
 			for (int i = 0; i < closedPilots.Count; i++)
 			{
 				int key = closedPilots[i];
-				HeavyMetalMachines.Character.CharacterInfo characterInfo;
-				if (GameHubBehaviour.Hub.InventoryColletion.AllCharactersByInfoId.TryGetValue(key, out characterInfo))
+				IItemType itemType;
+				if (GameHubBehaviour.Hub.InventoryColletion.AllCharactersByCharacterId.TryGetValue(key, out itemType))
 				{
-					HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind role = characterInfo.Role;
-					if (role != HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Carrier)
+					DriverRoleKind role = itemType.GetComponent<CharacterItemTypeComponent>().Role;
+					if (role != 1)
 					{
-						if (role != HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Tackler)
+						if (role != 2)
 						{
-							if (role == HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Support)
+							if (role == null)
 							{
 								flag3 = true;
 							}

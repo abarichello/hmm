@@ -4,7 +4,6 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	[RequireComponent(typeof(Rigidbody))]
 	public class PerkAttachToObject : BasePerk
 	{
 		protected Identifiable TargetIdentifiable
@@ -74,6 +73,10 @@ namespace HeavyMetalMachines.Combat
 			if (this.PullObjOnAttach)
 			{
 				this._targetTransform.position = this._myTransform.position;
+				PerkAttachToObject.Log.DebugFormat("PullObjOnAttach:{0}", new object[]
+				{
+					this._targetTransform.position
+				});
 			}
 			if (this._targetCombat)
 			{
@@ -85,7 +88,7 @@ namespace HeavyMetalMachines.Combat
 				}
 				if (this.LockTargetMovement && this._targetCombat.Movement)
 				{
-					this._targetCombat.Movement.LockMovement();
+					this._targetCombat.Movement.PauseSimulation();
 				}
 			}
 			this.isSleeping = false;
@@ -115,9 +118,9 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
-		public override void PerkDestroyed(DestroyEffect destroyEffect)
+		public override void PerkDestroyed(DestroyEffectMessage destroyEffectMessage)
 		{
-			base.PerkDestroyed(destroyEffect);
+			base.PerkDestroyed(destroyEffectMessage);
 			this.isSleeping = true;
 			if (this._targetCombat)
 			{
@@ -125,7 +128,7 @@ namespace HeavyMetalMachines.Combat
 				this.Effect.Attached = null;
 				if (this.LockTargetMovement && this._targetCombat.Movement)
 				{
-					this._targetCombat.Movement.UnlockMovement();
+					this._targetCombat.Movement.UnpauseSimulation();
 				}
 			}
 		}

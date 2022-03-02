@@ -8,7 +8,6 @@ namespace HeavyMetalMachines.Render
 	{
 		private new void Start()
 		{
-			base.Start();
 			if (!string.IsNullOrEmpty(this.OnGadgetReadyBoolean))
 			{
 				this.OnGadgetReadyBooleanId = Animator.StringToHash(this.OnGadgetReadyBoolean);
@@ -21,6 +20,7 @@ namespace HeavyMetalMachines.Render
 
 		protected override void OnEnable()
 		{
+			this.InitializeGadgetFeedback();
 			this.OnGadgetStateChanged();
 		}
 

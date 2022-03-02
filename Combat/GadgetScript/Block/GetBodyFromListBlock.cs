@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using HeavyMetalMachines.Combat.GadgetScript.Body;
 using Hoplon.GadgetScript;
+using Pocketverse;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Combat.GadgetScript.Block
@@ -9,27 +10,7 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 	[CreateAssetMenu(menuName = "GadgetScript/Block/List/GetBodyFromListBlock")]
 	public class GetBodyFromListBlock : BaseBlock
 	{
-		protected override bool CheckSanity(IGadgetContext gadgetContext, IEventContext eventContext)
-		{
-			if (this._list == null)
-			{
-				base.LogSanitycheckError("'List' parameter cannot be null.");
-				return false;
-			}
-			if (this._index == null)
-			{
-				base.LogSanitycheckError("'Index' parameter cannot be null.");
-				return false;
-			}
-			if (this._body == null)
-			{
-				base.LogSanitycheckError("'Body' parameter cannot be null.");
-				return false;
-			}
-			return true;
-		}
-
-		protected override IBlock InnerExecute(IGadgetContext gadgetContext, IEventContext eventContext)
+		public override IBlock Execute(IGadgetContext gadgetContext, IEventContext eventContext)
 		{
 			IHMMGadgetContext ihmmgadgetContext = (IHMMGadgetContext)gadgetContext;
 			IHMMEventContext ihmmeventContext = (IHMMEventContext)eventContext;
@@ -39,33 +20,35 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 				return this._nextBlock;
 			}
 			List<GadgetBody> value = this._list.GetValue(gadgetContext);
-			int value2 = this._index.GetValue(gadgetContext);
-			if (value2 > -1 && value2 < value.Count)
+			IParameterTomate<float> parameterTomate = this._index.ParameterTomate as IParameterTomate<float>;
+			int num = (int)parameterTomate.GetValue(gadgetContext);
+			if (num > -1 && num < value.Count)
 			{
-				GadgetBody value3 = value[value2];
-				this._body.SetValue(gadgetContext, value3);
+				GadgetBody value2 = value[num];
+				this._body.SetValue<GadgetBody>(gadgetContext, value2);
 				ihmmeventContext.SaveParameter(this._body);
 				return this._nextBlock;
 			}
 			ihmmeventContext.SaveParameter(this._body);
-			base.LogSanitycheckError(string.Format("Invalid index value: {0}", value2));
+			GetBodyFromListBlock.Log.ErrorFormat(string.Format("Invalid index value: {0} Block: {1}", num, base.name), new object[0]);
 			return null;
 		}
 
-		public override bool UsesParameterWithId(int parameterId)
-		{
-			return base.CheckIsParameterWithId(this._body, parameterId) || base.CheckIsParameterWithId(this._list, parameterId) || base.CheckIsParameterWithId(this._index, parameterId);
-		}
+		private static readonly BitLogger Log = new BitLogger(typeof(GetBodyFromListBlock));
 
 		[Header("Read")]
 		[SerializeField]
 		private GadgetBodyListParameter _list;
 
 		[SerializeField]
-		private IntParameter _index;
+		private BaseParameter _index;
 
 		[Header("Write")]
+		[Restrict(true, new Type[]
+		{
+			typeof(GadgetBody)
+		})]
 		[SerializeField]
-		private GadgetBodyParameter _body;
+		private BaseParameter _body;
 	}
 }

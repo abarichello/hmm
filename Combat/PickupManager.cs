@@ -4,17 +4,28 @@ using System.Diagnostics;
 using HeavyMetalMachines.BI;
 using HeavyMetalMachines.Event;
 using HeavyMetalMachines.Scene;
-using HeavyMetalMachines.Swordfish.Logs;
 using Pocketverse;
 using Pocketverse.MuralContext;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Combat
 {
 	public class PickupManager : GameHubBehaviour, ICleanupListener
 	{
+		public static int GetPickupId(int eventId)
+		{
+			return ObjectId.New(ContentKind.Scrap.Byte(), eventId);
+		}
+
 		public void Trigger(IEventContent pickup, int eventId)
 		{
+			PickupManager.Log.DebugFormat("Received event={0} k={1} t={2}", new object[]
+			{
+				eventId,
+				pickup.GetKind(),
+				pickup.GetType()
+			});
 			PickupDropEvent pickupDropEvent = pickup as PickupDropEvent;
 			if (pickupDropEvent != null)
 			{
@@ -30,13 +41,19 @@ namespace HeavyMetalMachines.Combat
 
 		private void Spawn(PickupDropEvent data, int eventId)
 		{
-			int num = ObjectId.New(ContentKind.Scrap.Byte(), eventId);
-			if (this._missingPickups.ContainsKey(num))
+			PickupManager.Log.DebugFormat("Pickup spawned={0} pos={1} asset={2}", new object[]
 			{
-				this._missingPickups.Remove(num);
+				eventId,
+				data.Position,
+				data.PickupAsset
+			});
+			int pickupId = PickupManager.GetPickupId(eventId);
+			if (this._missingPickups.ContainsKey(pickupId))
+			{
+				this._missingPickups.Remove(pickupId);
 				return;
 			}
-			if (this._pickups.ContainsKey(num))
+			if (this._pickups.ContainsKey(pickupId))
 			{
 				return;
 			}
@@ -57,11 +74,11 @@ namespace HeavyMetalMachines.Combat
 				"[",
 				eventId,
 				"-",
-				num,
+				pickupId,
 				"] ",
 				data.PickupAsset
 			});
-			component.Register(num);
+			component.Register(pickupId);
 			BasePickup component2 = component.GetComponent<BasePickup>();
 			if (component2)
 			{
@@ -103,9 +120,8 @@ namespace HeavyMetalMachines.Combat
 						data.Killer,
 						(float)GameHubBehaviour.Hub.GameTime.GetPlaybackTime() / 1000f
 					});
-					BombMatchBI.BombDropped(data.Causer, data.Reason);
 					MatchLogWriter.BombDropped(data.Causer, data.Reason, data.Position);
-					MatchLogWriter.BombEvent(-1, GameServerBombEvent.EventKind.RoundStart, 0f, data.Position, -1f, false);
+					MatchLogWriter.BombEvent(-1, 1, 0f, data.Position, -1f, false);
 				}
 				return;
 			}
@@ -115,7 +131,6 @@ namespace HeavyMetalMachines.Combat
 				GameHubBehaviour.Hub.BombManager.OnDetonatorCreated(data, component2);
 				if (GameHubBehaviour.Hub.Net.IsServer())
 				{
-					BombMatchBI.BombDeliverd(data.Causer);
 					MatchLogWriter.WriteDamage();
 				}
 			}
@@ -123,6 +138,12 @@ namespace HeavyMetalMachines.Combat
 
 		private void Unspawn(PickupRemoveEvent data, int eventId)
 		{
+			PickupManager.Log.DebugFormat("Pickup Unspawned pickup={0} reason={1} position={2}", new object[]
+			{
+				data.PickupId.GetInstanceId(),
+				data.Reason,
+				data.Position
+			});
 			PickupManager.PickupInstance pickupInstance;
 			if (!this._pickups.TryGetValue(data.PickupId, out pickupInstance))
 			{
@@ -133,7 +154,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				this.ListenToPickupUnspawn(data);
 			}
-			Mural.PostDeep(new UnspawnEvent(data.Position, data.Reason, data.Causer), pickupInstance.Pickup);
+			Mural.PostDeep(new UnspawnEvent(data.Position, data.Reason, data.Causer, -1), pickupInstance.Pickup);
 			this._pickups.Remove(data.PickupId);
 			this._pickupList.Remove(pickupInstance);
 			int instanceId = data.PickupId.GetInstanceId();
@@ -174,7 +195,7 @@ namespace HeavyMetalMachines.Combat
 
 		private void SendShow(PickupManager.PickupInstance pickup)
 		{
-			GameHubBehaviour.Hub.Events.Send(new EventData
+			this._eventDispatcher.Send(new EventData
 			{
 				Content = pickup.DropEvent,
 				EventId = pickup.EventId,
@@ -185,7 +206,7 @@ namespace HeavyMetalMachines.Combat
 
 		private void SendRemove(PickupRemoveEvent data, int eventId)
 		{
-			GameHubBehaviour.Hub.Events.Send(new EventData
+			this._eventDispatcher.Send(new EventData
 			{
 				Content = data,
 				EventId = eventId,
@@ -202,6 +223,9 @@ namespace HeavyMetalMachines.Combat
 		}
 
 		public static readonly BitLogger Log = new BitLogger(typeof(PickupManager));
+
+		[Inject]
+		private IEventManagerDispatcher _eventDispatcher;
 
 		public readonly List<PickupManager.PickupInstance> _pickupList = new List<PickupManager.PickupInstance>();
 
@@ -227,7 +251,8 @@ namespace HeavyMetalMachines.Combat
 						{
 							Causer = -1,
 							PickupId = this.Id,
-							Reason = SpawnReason.Hide
+							Reason = SpawnReason.Hide,
+							TargetEventId = -1
 						};
 					}
 					this._hideEvent.Position = this.Pickup.transform.position;

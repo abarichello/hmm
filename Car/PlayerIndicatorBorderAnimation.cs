@@ -19,10 +19,15 @@ namespace HeavyMetalMachines.Car
 		public void SetConfig(PlayerIndicatorBorderAnimationConfig playerIndicatorBorderAnimationConfig)
 		{
 			this._config = playerIndicatorBorderAnimationConfig;
+			PlayerIndicatorBorderAnimation.Log.DebugFormat("Border animation config was set! Null: {0}", new object[]
+			{
+				(!(playerIndicatorBorderAnimationConfig != null)) ? "null" : "not null"
+			});
 		}
 
 		public void Trigger(Action callback = null)
 		{
+			PlayerIndicatorBorderAnimation.Log.DebugFormat("Border animation was triggered!", new object[0]);
 			this.IsInProgress = true;
 			this._triggerCallback = callback;
 			this._targetTransform.gameObject.SetActive(true);
@@ -35,6 +40,7 @@ namespace HeavyMetalMachines.Car
 		public void SetupExternalCleanupAction(Action action)
 		{
 			this._externalCleanupAction = action;
+			PlayerIndicatorBorderAnimation.Log.Debug("Saved cleanup action to execute after player indicator border animation.");
 		}
 
 		private void InitializeScale()
@@ -90,8 +96,8 @@ namespace HeavyMetalMachines.Car
 		{
 			for (int i = 0; i < this._targetMeshRenderers.Length; i++)
 			{
-				float b = this._targetAlphas[i];
-				float newAlpha = Mathf.Lerp(this._config.StartingAlpha, b, progress);
+				float num = this._targetAlphas[i];
+				float newAlpha = Mathf.Lerp(this._config.StartingAlpha, num, progress);
 				MeshRenderer renderer = this._targetMeshRenderers[i];
 				this.SetMeshAlpha(renderer, newAlpha);
 			}
@@ -125,13 +131,15 @@ namespace HeavyMetalMachines.Car
 		{
 			if (this._externalCleanupAction != null)
 			{
+				PlayerIndicatorBorderAnimation.Log.Debug("Invoking cleanunp action to cleanup after player indicator border animation.");
 				this._externalCleanupAction();
 			}
 		}
 
 		private void RestoreScale()
 		{
-			Vector3 localScale = new Vector3(this._targetSize, this._targetTransform.localScale.y, this._targetSize);
+			Vector3 localScale;
+			localScale..ctor(this._targetSize, this._targetTransform.localScale.y, this._targetSize);
 			this._targetTransform.localScale = localScale;
 		}
 

@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections;
 using HeavyMetalMachines.VFX;
 using NewParticleSystem;
 using Pocketverse;
+using UnityEngine;
 
 namespace HeavyMetalMachines.Render
 {
@@ -30,7 +32,15 @@ namespace HeavyMetalMachines.Render
 		protected override void Start()
 		{
 			base.Start();
-			bool flag = this.combatObject.Team == GameHubBehaviour.Hub.Players.CurrentPlayerTeam;
+			bool flag;
+			if (this.previzMode)
+			{
+				flag = this.previzIsAlly;
+			}
+			else
+			{
+				flag = (this.combatObject.Team == GameHubBehaviour.Hub.Players.CurrentPlayerTeam);
+			}
 			for (int i = 0; i < this.particleSystems.Length; i++)
 			{
 				if (!(this.particleSystems[i] == null))
@@ -51,6 +61,22 @@ namespace HeavyMetalMachines.Render
 			{
 				return;
 			}
+			if (this.DelayStart > 0f)
+			{
+				base.StartCoroutine(this.WaitToActivate());
+			}
+			else
+			{
+				this.StartParticles();
+			}
+			if (this.stopOnTimer > 0f)
+			{
+				base.StartCoroutine(this.WaitToDeactivate());
+			}
+		}
+
+		private void StartParticles()
+		{
 			for (int i = 0; i < this.particleSystems.Length; i++)
 			{
 				if (!(this.particleSystems[i] == null))
@@ -77,7 +103,28 @@ namespace HeavyMetalMachines.Render
 			}
 		}
 
+		private IEnumerator WaitToActivate()
+		{
+			yield return new WaitForSeconds(this.DelayStart);
+			this.StartParticles();
+			yield break;
+		}
+
+		private IEnumerator WaitToDeactivate()
+		{
+			yield return new WaitForSeconds(this.stopOnTimer);
+			base.OnDeactivate();
+			this.OnDeactivateInternal();
+			yield break;
+		}
+
 		public HoplonParticleSystem[] particleSystems;
+
+		[SerializeField]
+		private float DelayStart;
+
+		[SerializeField]
+		private float stopOnTimer;
 
 		private bool _canBeActivated = true;
 	}

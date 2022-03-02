@@ -7,17 +7,19 @@ namespace HeavyMetalMachines.Utils
 	{
 		public static string FormatTime(TimeSpan timeSpan)
 		{
-			if (timeSpan.Hours > 0)
-			{
-				return string.Format("{0:00}:{1:00}:{2:00}", timeSpan.Hours, timeSpan.Minutes, timeSpan.Seconds);
-			}
-			return string.Format("{0:00}:{1:00}", timeSpan.Minutes, timeSpan.Seconds);
+			int key = (int)timeSpan.TotalSeconds;
+			string text;
+			return (!TimeUtils.TimeStringCache.TryGetValue(key, out text)) ? TimeUtils.TimeStringCache.GenerateValue(key) : text;
 		}
 
 		public static TimeSpan GetTimeSpan(this TimeUtils.Chronometer timer)
 		{
 			return new TimeSpan(0, 0, 0, 0, timer.GetTime());
 		}
+
+		private const int InitialTimeStringCacheSize = 7200;
+
+		public static readonly TimeStringCache TimeStringCache = new TimeStringCache(7200, true);
 
 		[Serializable]
 		public class Chronometer : IBitStreamSerializable

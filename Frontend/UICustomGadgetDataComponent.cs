@@ -39,6 +39,10 @@ namespace HeavyMetalMachines.Frontend
 
 		public bool Init(CombatGadget gadget)
 		{
+			if (!this._componentGroup)
+			{
+				return false;
+			}
 			bool flag = false;
 			UICustomGadgetDataComponent.Kind kind = this._kind;
 			if (kind != UICustomGadgetDataComponent.Kind.Label)
@@ -49,12 +53,11 @@ namespace HeavyMetalMachines.Frontend
 					{
 						return false;
 					}
-					this._data = new UICustomGadgetDataInt();
-					this._max = new UICustomGadgetDataInt();
-					flag = (this._data.Init(this._paramName, gadget, new Action<int>(this.SetProgress)) && this._max.Init(this._paramMax, gadget, new Action<int>(this.SetMax)));
+					this._data = new UICustomGadgetDataFloat();
+					this._max = new UICustomGadgetDataFloat();
+					flag = (this._data.Init(this._paramName, gadget, new Action<float>(this.SetProgress)) && this._max.Init(this._paramMax, gadget, new Action<float>(this.SetMax)));
 					if (flag)
 					{
-						this._componentGroup.SetActive(true);
 						this._update += this._max.Update;
 						this._update += this._data.Update;
 					}
@@ -66,32 +69,32 @@ namespace HeavyMetalMachines.Frontend
 				{
 					return false;
 				}
-				this._data = new UICustomGadgetDataInt();
-				flag = this._data.Init(this._paramName, gadget, new Action<int>(this.SetLabel));
+				this._data = new UICustomGadgetDataFloat();
+				flag = this._data.Init(this._paramName, gadget, new Action<float>(this.SetLabel));
 				if (flag)
 				{
-					this._componentGroup.SetActive(true);
 					this._update += this._data.Update;
 				}
 			}
+			this._componentGroup.SetActive(flag);
 			return flag;
 		}
 
-		private void SetLabel(int value)
+		private void SetLabel(float value)
 		{
-			this._label.SetTextIntFormat(this._labelFormat, value);
+			this._label.SetTextIntFormat(this._labelFormat, (int)value);
 		}
 
-		private void SetMax(int value)
+		private void SetMax(float value)
 		{
-			this._maxValue = value;
-			this.SetProgress(this._currentValue);
+			this._maxValue = (int)value;
+			this.SetProgress((float)this._currentValue);
 		}
 
-		private void SetProgress(int value)
+		private void SetProgress(float value)
 		{
-			this._currentValue = value;
-			this._progressBar.fillAmount = (float)this._currentValue / (float)this._maxValue;
+			this._currentValue = (int)value;
+			this._progressBar.fillAmount = value / (float)this._maxValue;
 		}
 
 		public void Update()
@@ -109,12 +112,12 @@ namespace HeavyMetalMachines.Frontend
 				{
 					if (kind == UICustomGadgetDataComponent.Kind.ProgressBar)
 					{
-						this.SetProgress(this._currentValue);
+						this.SetProgress((float)this._currentValue);
 					}
 				}
 				else
 				{
-					this.SetLabel(this._currentValue);
+					this.SetLabel((float)this._currentValue);
 				}
 			}
 			if (this._maxValue != this._legacyGadget.MaxChargeCount)
@@ -122,15 +125,20 @@ namespace HeavyMetalMachines.Frontend
 				this._maxValue = this._legacyGadget.MaxChargeCount;
 				if (this._kind == UICustomGadgetDataComponent.Kind.ProgressBar)
 				{
-					this.SetMax(this._maxValue);
+					this.SetMax((float)this._maxValue);
 				}
 			}
 		}
 
 		public bool InitLegacy(GadgetBehaviour gadget)
 		{
+			if (!this._componentGroup)
+			{
+				return false;
+			}
 			if (gadget.Kind != GadgetKind.InstantWithCharges)
 			{
+				this._componentGroup.SetActive(false);
 				return false;
 			}
 			this._legacyGadget = gadget;
@@ -166,9 +174,9 @@ namespace HeavyMetalMachines.Frontend
 		[SerializeField]
 		private bool _isChargesParameter;
 
-		private UICustomGadgetDataInt _data;
+		private UICustomGadgetDataFloat _data;
 
-		private UICustomGadgetDataInt _max;
+		private UICustomGadgetDataFloat _max;
 
 		private int _maxValue;
 

@@ -2,6 +2,7 @@
 using System.Collections;
 using HeavyMetalMachines.Announcer;
 using HeavyMetalMachines.Event;
+using HeavyMetalMachines.Localization;
 using Pocketverse;
 using UnityEngine;
 
@@ -26,7 +27,7 @@ namespace HeavyMetalMachines.Frontend
 			GameHubBehaviour.Hub.Announcer.ListenToEvent -= this.OnHudAnnounceTriggered;
 		}
 
-		private void OnHudAnnounceTriggered(AnnouncerManager.QueuedAnnouncerLog announce)
+		private void OnHudAnnounceTriggered(QueuedAnnouncerLog announce)
 		{
 			if (GameHubBehaviour.Hub.GuiScripts.AfkControllerGui.IsWindowVisible())
 			{
@@ -77,7 +78,10 @@ namespace HeavyMetalMachines.Frontend
 
 		private IEnumerator ShowPlayerDisconnectedAnnounce(AnnouncerEvent announcerEvent, AnnouncerLog announce)
 		{
-			this.KillbyPlayerLabelAnnounce.text = string.Format(announce.LocalizedText, GameHubBehaviour.Hub.Announcer.GetColoredPlayerName(announcerEvent.Killer));
+			this.KillbyPlayerLabelAnnounce.text = Language.Format(announce.LocalizedText, new object[]
+			{
+				GameHubBehaviour.Hub.Announcer.GetColoredPlayerName(announcerEvent.Killer)
+			});
 			this.KillbyPlayerAnnounceKillerIcon.spriteName = "HudStatsThumbTexture";
 			this.KillbyPlayerAnnounceKillerColor.color = GameHubBehaviour.Hub.Announcer.GetColorByPlayerId(announcerEvent.Killer);
 			this.KillbyPlayerAnnounceVictimGroup.SetActive(false);
@@ -112,7 +116,10 @@ namespace HeavyMetalMachines.Frontend
 
 		private IEnumerator ShowWipeAnnounce(AnnouncerEvent announcerEvent, AnnouncerLog announce)
 		{
-			this.TeamLabel.text = string.Format(announce.LocalizedText, GameHubBehaviour.Hub.Announcer.GetColoredVictimTeamName(announce.TopAnnouncerEventKind));
+			this.TeamLabel.text = Language.Format(announce.LocalizedText, new object[]
+			{
+				GameHubBehaviour.Hub.Announcer.GetColoredVictimTeamName(announce.TopAnnouncerEventKind)
+			});
 			this.TeamIcon.spriteName = "2_skull_icon";
 			this.TeamBackground.fillAmount = 0f;
 			this.TeamPanel.alpha = 1f;
@@ -134,7 +141,11 @@ namespace HeavyMetalMachines.Frontend
 
 		private IEnumerator ShowKillByPlayerAnnounce(AnnouncerEvent announcerEvent, AnnouncerLog announce)
 		{
-			this.KillbyPlayerLabelAnnounce.text = string.Format(Language.Get("PLAYERKILLED_BYPLAYER_TITLE", TranslationSheets.Announcer), GameHubBehaviour.Hub.Announcer.GetColoredPlayerName(announcerEvent.Killer), GameHubBehaviour.Hub.Announcer.GetColoredPlayerName(announcerEvent.Victim));
+			this.KillbyPlayerLabelAnnounce.text = Language.GetFormatted("PLAYERKILLED_BYPLAYER_TITLE", TranslationContext.Announcer, new object[]
+			{
+				GameHubBehaviour.Hub.Announcer.GetColoredPlayerName(announcerEvent.Killer),
+				GameHubBehaviour.Hub.Announcer.GetColoredPlayerName(announcerEvent.Victim)
+			});
 			this.KillbyPlayerAnnounceKillerColor.color = GameHubBehaviour.Hub.Announcer.GetColorByPlayerId(announcerEvent.Killer);
 			this.KillbyPlayerAnnounceVictimColor.color = GameHubBehaviour.Hub.Announcer.GetColorByPlayerId(announcerEvent.Victim);
 			this.KillbyPlayerAnnounceKillerIcon.spriteName = "HudStatsThumbTexture";
@@ -161,8 +172,11 @@ namespace HeavyMetalMachines.Frontend
 
 		private IEnumerator ShowFirstBloodAnnounce(AnnouncerEvent announcerEvent, AnnouncerLog announce)
 		{
-			this.KillSpreeLabelAnnounce.text = string.Format(announce.LocalizedText, GameHubBehaviour.Hub.Announcer.GetColoredPlayerName(announcerEvent.Killer));
-			this.KillSpreeTitleAnnounce.text = Language.Get("FIRSTBLOOD_TITLE", TranslationSheets.Announcer);
+			this.KillSpreeLabelAnnounce.text = Language.Format(announce.LocalizedText, new object[]
+			{
+				GameHubBehaviour.Hub.Announcer.GetColoredPlayerName(announcerEvent.Killer)
+			});
+			this.KillSpreeTitleAnnounce.text = Language.Get("FIRSTBLOOD_TITLE", TranslationContext.Announcer);
 			this.KillSpreeAnnounceKillerColor.color = GameHubBehaviour.Hub.Announcer.GetColorByPlayerId(announcerEvent.Killer);
 			this.KillSpreeAnnounceKillerIcon.spriteName = "HudStatsThumbTexture";
 			this.KillSpreeAnnouncePanel.alpha = 1f;
@@ -189,23 +203,26 @@ namespace HeavyMetalMachines.Frontend
 			switch (announcerEvent.AnnouncerEventKind)
 			{
 			case AnnouncerLog.AnnouncerEventKinds.DoubleKill:
-				this.KillSpreeTitleAnnounce.text = Language.Get("KILLINGSPREE_DOUBLEKILL_TITLE", TranslationSheets.Announcer);
+				this.KillSpreeTitleAnnounce.text = Language.Get("KILLINGSPREE_DOUBLEKILL_TITLE", TranslationContext.Announcer);
 				anim = this.KillSpree_doublekill_bullets;
 				break;
 			case AnnouncerLog.AnnouncerEventKinds.TripleKill:
-				this.KillSpreeTitleAnnounce.text = Language.Get("KILLINGSPREE_TRIPLEKILL_TITLE", TranslationSheets.Announcer);
+				this.KillSpreeTitleAnnounce.text = Language.Get("KILLINGSPREE_TRIPLEKILL_TITLE", TranslationContext.Announcer);
 				anim = this.KillSpree_triplekill_bullets;
 				break;
 			case AnnouncerLog.AnnouncerEventKinds.QuadKill:
-				this.KillSpreeTitleAnnounce.text = Language.Get("KILLINGSPREE_QUADKILL_TITLE", TranslationSheets.Announcer);
+				this.KillSpreeTitleAnnounce.text = Language.Get("KILLINGSPREE_QUADKILL_TITLE", TranslationContext.Announcer);
 				anim = this.KillSpree_quadrakill_bullets;
 				break;
 			case AnnouncerLog.AnnouncerEventKinds.UltraKill:
-				this.KillSpreeTitleAnnounce.text = Language.Get("KILLINGSPREE_ULTRAKILL_TITLE", TranslationSheets.Announcer);
+				this.KillSpreeTitleAnnounce.text = Language.Get("KILLINGSPREE_ULTRAKILL_TITLE", TranslationContext.Announcer);
 				anim = this.KillSpree_pentakill_bullets;
 				break;
 			}
-			this.KillSpreeLabelAnnounce.text = string.Format(announce.LocalizedText, GameHubBehaviour.Hub.Announcer.GetColoredPlayerName(announcerEvent.Killer));
+			this.KillSpreeLabelAnnounce.text = Language.Format(announce.LocalizedText, new object[]
+			{
+				GameHubBehaviour.Hub.Announcer.GetColoredPlayerName(announcerEvent.Killer)
+			});
 			this.KillSpreeAnnounceKillerColor.color = GameHubBehaviour.Hub.Announcer.GetColorByPlayerId(announcerEvent.Killer);
 			this.KillSpreeAnnounceKillerIcon.spriteName = "HudStatsThumbTexture";
 			if (anim != null)
@@ -251,7 +268,7 @@ namespace HeavyMetalMachines.Frontend
 				this.KillStreakAnnounceKillerIcon.spriteName = "HudStatsThumbTexture";
 				this.KillStreakLabelAnnounce.text = GameHubBehaviour.Hub.Announcer.GetColoredPlayerName(announcerEvent.Victim);
 				this.KillStreakAnnounceIsoverGroup.SetActive(true);
-				this.KillStreakAnnounceIsover.text = Language.Get("KILLSTREAK_ENDED", TranslationSheets.Announcer);
+				this.KillStreakAnnounceIsover.text = Language.Get("KILLSTREAK_ENDED", TranslationContext.Announcer);
 				switch (announcerEvent.CurrentKillStreak)
 				{
 				case 0:
@@ -259,31 +276,31 @@ namespace HeavyMetalMachines.Frontend
 				case 2:
 					yield break;
 				case 3:
-					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_03_TITLE", TranslationSheets.Announcer);
+					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_03_TITLE", TranslationContext.Announcer);
 					break;
 				case 4:
-					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_04_TITLE", TranslationSheets.Announcer);
+					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_04_TITLE", TranslationContext.Announcer);
 					break;
 				case 5:
-					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_05_TITLE", TranslationSheets.Announcer);
+					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_05_TITLE", TranslationContext.Announcer);
 					break;
 				case 6:
-					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_06_TITLE", TranslationSheets.Announcer);
+					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_06_TITLE", TranslationContext.Announcer);
 					break;
 				case 7:
-					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_07_TITLE", TranslationSheets.Announcer);
+					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_07_TITLE", TranslationContext.Announcer);
 					break;
 				case 8:
-					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_08_TITLE", TranslationSheets.Announcer);
+					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_08_TITLE", TranslationContext.Announcer);
 					break;
 				case 9:
-					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_09_TITLE", TranslationSheets.Announcer);
+					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_09_TITLE", TranslationContext.Announcer);
 					break;
 				case 10:
-					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_10_TITLE", TranslationSheets.Announcer);
+					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_10_TITLE", TranslationContext.Announcer);
 					break;
 				case 15:
-					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_15_TITLE", TranslationSheets.Announcer);
+					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_15_TITLE", TranslationContext.Announcer);
 					break;
 				}
 			}
@@ -291,24 +308,27 @@ namespace HeavyMetalMachines.Frontend
 			{
 				this.KillStreakAnnounceKillerColor.color = GameHubBehaviour.Hub.Announcer.GetColorByPlayerId(announcerEvent.Killer);
 				this.KillStreakAnnounceKillerIcon.spriteName = "HudStatsThumbTexture";
-				this.KillStreakLabelAnnounce.text = string.Format(announce.LocalizedText, GameHubBehaviour.Hub.Announcer.GetColoredPlayerName(announcerEvent.Killer));
+				this.KillStreakLabelAnnounce.text = Language.Format(announce.LocalizedText, new object[]
+				{
+					GameHubBehaviour.Hub.Announcer.GetColoredPlayerName(announcerEvent.Killer)
+				});
 				this.KillStreakAnnounceIsoverGroup.SetActive(false);
 				switch (announcerEvent.AnnouncerEventKind)
 				{
 				case AnnouncerLog.AnnouncerEventKinds.KillStreak03:
-					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_03_TITLE", TranslationSheets.Announcer);
+					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_03_TITLE", TranslationContext.Announcer);
 					break;
 				case AnnouncerLog.AnnouncerEventKinds.KillStreak06:
-					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_06_TITLE", TranslationSheets.Announcer);
+					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_06_TITLE", TranslationContext.Announcer);
 					break;
 				case AnnouncerLog.AnnouncerEventKinds.KillStreak09:
-					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_09_TITLE", TranslationSheets.Announcer);
+					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_09_TITLE", TranslationContext.Announcer);
 					break;
 				case AnnouncerLog.AnnouncerEventKinds.KillStreak12:
-					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_12_TITLE", TranslationSheets.Announcer);
+					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_12_TITLE", TranslationContext.Announcer);
 					break;
 				case AnnouncerLog.AnnouncerEventKinds.KillStreak15:
-					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_15_TITLE", TranslationSheets.Announcer);
+					this.KillStreakTitleAnnounce.text = Language.Get("KILLSTREAK_15_TITLE", TranslationContext.Announcer);
 					break;
 				}
 			}

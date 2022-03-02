@@ -33,7 +33,7 @@ namespace HeavyMetalMachines.Combat
 			case EffectKind.EPRepair:
 				break;
 			default:
-				if (effect != EffectKind.CooldownRepair && effect != EffectKind.ModifyParameter)
+				if (effect != EffectKind.CooldownRepair)
 				{
 					return false;
 				}
@@ -56,8 +56,14 @@ namespace HeavyMetalMachines.Combat
 			case EffectKind.EPDmg:
 				break;
 			default:
-				if (effect != EffectKind.HPLightDamage && effect != EffectKind.HPHeavyDamage && effect != EffectKind.HPGodDamage)
+				if (effect != EffectKind.HPLightDamage && effect != EffectKind.HPHeavyDamage)
 				{
+					switch (effect)
+					{
+					case EffectKind.HPGodDamage:
+					case EffectKind.NonLethalDamageIgnoringTempHP:
+						return true;
+					}
 					return false;
 				}
 				break;
@@ -67,7 +73,17 @@ namespace HeavyMetalMachines.Combat
 
 		public static bool IsHPDamage(this EffectKind effect)
 		{
-			return effect == EffectKind.HPPureDamage || effect == EffectKind.HPPureDamageNL || effect == EffectKind.HPLightDamage || effect == EffectKind.HPHeavyDamage || effect == EffectKind.HPGodDamage;
+			if (effect != EffectKind.HPPureDamage && effect != EffectKind.HPPureDamageNL && effect != EffectKind.HPLightDamage && effect != EffectKind.HPHeavyDamage)
+			{
+				switch (effect)
+				{
+				case EffectKind.HPGodDamage:
+				case EffectKind.NonLethalDamageIgnoringTempHP:
+					return true;
+				}
+				return false;
+			}
+			return true;
 		}
 
 		public static bool IgnoreOnDeath(this EffectKind effect)
@@ -83,11 +99,13 @@ namespace HeavyMetalMachines.Combat
 			case EffectKind.HPHeavyDamage:
 				break;
 			default:
-				if (effect != EffectKind.HPGodDamage)
+				switch (effect)
 				{
-					return false;
+				case EffectKind.HPGodDamage:
+				case EffectKind.NonLethalDamageIgnoringTempHP:
+					return true;
 				}
-				break;
+				return false;
 			}
 			return true;
 		}

@@ -17,15 +17,15 @@ namespace HeavyMetalMachines.Counselor
 			if (this.notification > 0f)
 			{
 				float num;
-				context.GetParameter(context.MainClockId, out num);
+				context.GetParameter(context.MainClockId, ref num);
 				context.SetParameter(this._bindingId, num - this.notification);
 			}
 		}
 
-		public void Notify(Sensor sensor)
+		public void Notify(int id, bool isActive, int count)
 		{
 			float num;
-			this._context.GetParameter(this._context.MainClockId, out num);
+			this._context.GetParameter(this._context.MainClockId, ref num);
 			this.notification = num;
 		}
 

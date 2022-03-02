@@ -1,5 +1,6 @@
 ﻿using System;
 using HeavyMetalMachines.Event;
+using HeavyMetalMachines.Infra.Context;
 using Pocketverse;
 using UnityEngine;
 
@@ -64,11 +65,11 @@ namespace HeavyMetalMachines.Combat.Gadget
 			{
 				return;
 			}
-			if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState != BombScoreBoard.State.BombDelivery)
+			if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState != BombScoreboardState.BombDelivery)
 			{
 				return;
 			}
-			if (this.Combat.Attributes.CurrentStatus.HasFlag(StatusKind.Dead) || this.Combat.SpawnController.State != SpawnController.StateType.Spawned)
+			if (this.Combat.Attributes.CurrentStatus.HasFlag(StatusKind.Dead) || this.Combat.SpawnController.State != SpawnStateKind.Spawned)
 			{
 				if (this._currentModifiersEffect != -1)
 				{
@@ -168,7 +169,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 
 		public void OnDamageTakenCallback(DamageTakenCallback evt)
 		{
-			if (evt.ListenerEffectId == this._currentListenerEffect && evt.Amount > 0f)
+			if (evt.ListenerEffectId == this._currentListenerEffect && evt.Amount > 0f && !this.Combat.Attributes.CurrentStatus.HasFlag(StatusKind.Invulnerable))
 			{
 				this.DestroyEffectAndResetCooldown();
 			}
@@ -214,7 +215,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			this._currentModifiersEffect = -1;
 		}
 
-		protected override void InnerOnDestroyEffect(DestroyEffect evt)
+		protected override void InnerOnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (evt.RemoveData.TargetEventId == this._currentModifiersEffect)
 			{

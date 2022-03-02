@@ -9,51 +9,38 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Body
 		public override void Initialize(IGadgetBody body, IGadgetContext gadgetContext, IEventContext eventContext)
 		{
 			base.Initialize(body, gadgetContext, eventContext);
-			this._bounceCount = this._bounceCountParameter.GetValue(gadgetContext);
-			this._bounceRadius = this._bounceRadiusParameter.GetValue(gadgetContext);
-			this._toRad = 0.0174532924f;
-			this._maxAngle = 180 * this._bounceCount;
-			GadgetBodySinMovement.SinDirection bounceDirection = this.BounceDirection;
-			if (bounceDirection != GadgetBodySinMovement.SinDirection.Right)
-			{
-				if (bounceDirection == GadgetBodySinMovement.SinDirection.Left)
-				{
-					this._finalDirection = -(body.Rotation * Vector3.right);
-				}
-			}
-			else
-			{
-				this._finalDirection = body.Rotation * Vector3.right;
-			}
+			IParameterTomate<float> parameterTomate = this._amplitudeParameter.ParameterTomate as IParameterTomate<float>;
+			this._amplitude = parameterTomate.GetValue(gadgetContext);
+			this._amplitude *= ((this.BounceDirection != GadgetBodySinMovement.SinDirection.Left) ? 1f : -1f);
+			IParameterTomate<float> parameterTomate2 = this._periodCountParameter.ParameterTomate as IParameterTomate<float>;
+			float value = parameterTomate2.GetValue(gadgetContext);
+			this._maxAngle = 6.2831855f * value;
+			this._right = body.Rotation * Vector3.right;
 		}
 
 		public override Vector3 GetPosition(float elapsedTime)
 		{
 			Vector3 position = base.GetPosition(elapsedTime);
-			float num = Mathf.Lerp(0f, (float)this._maxAngle, elapsedTime / this._time);
-			float num2 = Mathf.Sin(this._toRad * num);
-			Vector3 b = this._finalDirection * (num2 * this._bounceRadius);
-			return position + b;
+			float num = Mathf.Lerp(0f, this._maxAngle, elapsedTime / this._time);
+			float num2 = Mathf.Sin(num);
+			Vector3 vector = this._right * (num2 * this._amplitude);
+			return position + vector;
 		}
 
 		[SerializeField]
-		private IntParameter _bounceCountParameter;
+		private BaseParameter _periodCountParameter;
 
 		[SerializeField]
-		private FloatParameter _bounceRadiusParameter;
+		private BaseParameter _amplitudeParameter;
 
 		[SerializeField]
 		private GadgetBodySinMovement.SinDirection BounceDirection;
 
-		private Vector3 _finalDirection = Vector3.zero;
+		private float _amplitude;
 
-		private int _bounceCount;
+		private float _maxAngle;
 
-		private float _bounceRadius;
-
-		private int _maxAngle;
-
-		private float _toRad;
+		private Vector3 _right;
 
 		public enum SinDirection
 		{

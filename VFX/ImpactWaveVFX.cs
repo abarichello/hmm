@@ -1,4 +1,6 @@
 ﻿using System;
+using HeavyMetalMachines.GameCamera;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
 using UnityEngine;
 
 namespace HeavyMetalMachines.VFX
@@ -37,7 +39,7 @@ namespace HeavyMetalMachines.VFX
 				new Vector2(1f, 1f),
 				new Vector2(0f, 1f)
 			};
-			int[] triangles = new int[]
+			int[] array = new int[]
 			{
 				0,
 				1,
@@ -49,7 +51,7 @@ namespace HeavyMetalMachines.VFX
 			ImpactWaveVFX.planeMesh = new Mesh();
 			ImpactWaveVFX.planeMesh.vertices = vertices;
 			ImpactWaveVFX.planeMesh.uv = uv;
-			ImpactWaveVFX.planeMesh.SetTriangles(triangles, 0);
+			ImpactWaveVFX.planeMesh.SetTriangles(array, 0);
 		}
 
 		private void LateUpdate()
@@ -105,6 +107,7 @@ namespace HeavyMetalMachines.VFX
 			{
 				this.position = base.transform.position;
 			}
+			Camera camera = Camera.main;
 			ImpactWaveVFX.EImpactWaveAlignment eimpactWaveAlignment = this.alignment;
 			if (eimpactWaveAlignment != ImpactWaveVFX.EImpactWaveAlignment.CameraAligned)
 			{
@@ -122,12 +125,20 @@ namespace HeavyMetalMachines.VFX
 			}
 			else
 			{
-				Transform cameraTransform = CarCamera.Singleton.CameraTransform;
-				this.matrix.SetTRS(this.position, Quaternion.LookRotation(cameraTransform.position - this.position, cameraTransform.up), new Vector3(this.currentSize, this.currentSize, this.currentSize));
+				Transform transform = camera.transform;
+				if (this._gameCameraEngine != null)
+				{
+					transform = this._gameCameraEngine.CameraTransform;
+				}
+				this.matrix.SetTRS(this.position, Quaternion.LookRotation(transform.position - this.position, transform.up), new Vector3(this.currentSize, this.currentSize, this.currentSize));
 			}
 			this.propertyBlock.SetColor(this._colorPropertyId, new Color(1f, 1f, 1f, num));
 			this.propertyBlock.SetFloat(this._perturbIntensityPropertyId, num * this.intensity);
-			Graphics.DrawMesh(ImpactWaveVFX.planeMesh, this.matrix, this.material, base.gameObject.layer, CarCamera.Singleton.Camera, 0, this.propertyBlock);
+			if (this._gameCameraEngine != null)
+			{
+				camera = this._gameCameraEngine.UnityCamera;
+			}
+			Graphics.DrawMesh(ImpactWaveVFX.planeMesh, this.matrix, this.material, base.gameObject.layer, camera, 0, this.propertyBlock);
 		}
 
 		protected override void OnActivate()
@@ -152,6 +163,9 @@ namespace HeavyMetalMachines.VFX
 				this.CanCollectToCache = true;
 			}
 		}
+
+		[InjectOnClient]
+		private IGameCameraEngine _gameCameraEngine;
 
 		private static Mesh planeMesh;
 

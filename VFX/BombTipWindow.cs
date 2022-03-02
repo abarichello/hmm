@@ -1,11 +1,19 @@
 ﻿using System;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids;
-using HeavyMetalMachines.Car;
-using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Arena.Infra;
 using HeavyMetalMachines.Event;
+using HeavyMetalMachines.Infra.Context;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Input;
+using HeavyMetalMachines.Input.ControllerInput;
+using HeavyMetalMachines.Localization;
 using HeavyMetalMachines.Match;
-using HeavyMetalMachines.Options;
+using HeavyMetalMachines.Presenting;
+using HeavyMetalMachines.Presenting.Unity;
+using Hoplon.Input;
+using Hoplon.Input.Business;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
 
 namespace HeavyMetalMachines.VFX
@@ -32,34 +40,63 @@ namespace HeavyMetalMachines.VFX
 		{
 			if (GameHubBehaviour.Hub.Net.IsServer())
 			{
-				UnityEngine.Object.Destroy(base.gameObject);
+				Object.Destroy(base.gameObject);
 				return;
 			}
+			this._isDisabledByConfig = this._gameArenaConfigProvider.GameArenaConfig.GetCurrentArena().DisableUINearBombFeedback;
 			this._farDistanceFeedback = new TimedUpdater(this.DelayCheckerMillis, true, false);
-			GameHubBehaviour.Hub.Options.Controls.OnKeyChangedCallback += this.OptionsOnKeyChangedCallback;
 			GameHubBehaviour.Hub.BombManager.ListenToMatchUpdate += this.BombManager_ListenToMatchUpdate;
-			GameHubBehaviour.Hub.GuiScripts.Esc.OnControlModeChangedCallback += this.OnControlModeChangedCallback;
 			GameHubBehaviour.Hub.Events.Players.ListenToObjectUnspawn += this.PlayersOnListenToObjectUnspawn;
 			GameHubBehaviour.Hub.Events.Players.ListenToObjectSpawn += this.PlayersOnListenToObjectSpawn;
+			this._inputBindNotifierDisposable = ObservableExtensions.Subscribe<int>(Observable.Do<int>(this._inputBindNotifier.ObserveBind(), delegate(int actionId)
+			{
+				this.OptionsOnKeyChangedCallback(actionId);
+			}));
+			this._inputBindResetDefaultNotifierDisposable = ObservableExtensions.Subscribe<Unit>(Observable.Do<Unit>(this._inputBindNotifier.ObserveResetDefault(), delegate(Unit _)
+			{
+				this.UpdateKeyData();
+			}));
+			this._inputActiveDeviceChangeNotifierDisposable = ObservableExtensions.Subscribe<InputDevice>(Observable.Do<InputDevice>(this._inputActiveDeviceChangeNotifier.ObserveActiveDeviceChange(), delegate(InputDevice activeDevice)
+			{
+				this.OnActiveDeviceChange(activeDevice);
+			}));
+			this.UpdateKeyData();
 		}
 
 		private void OnDestroy()
 		{
-			GameHubBehaviour.Hub.Options.Controls.OnKeyChangedCallback -= this.OptionsOnKeyChangedCallback;
 			GameHubBehaviour.Hub.BombManager.ListenToMatchUpdate -= this.BombManager_ListenToMatchUpdate;
-			GameHubBehaviour.Hub.GuiScripts.Esc.OnControlModeChangedCallback -= this.OnControlModeChangedCallback;
 			GameHubBehaviour.Hub.Events.Players.ListenToObjectUnspawn -= this.PlayersOnListenToObjectUnspawn;
 			GameHubBehaviour.Hub.Events.Players.ListenToObjectSpawn -= this.PlayersOnListenToObjectSpawn;
+			if (this._inputBindNotifierDisposable != null)
+			{
+				this._inputBindNotifierDisposable.Dispose();
+				this._inputBindNotifierDisposable = null;
+			}
+			if (this._inputBindResetDefaultNotifierDisposable != null)
+			{
+				this._inputBindResetDefaultNotifierDisposable.Dispose();
+				this._inputBindResetDefaultNotifierDisposable = null;
+			}
+			if (this._inputActiveDeviceChangeNotifierDisposable != null)
+			{
+				this._inputActiveDeviceChangeNotifierDisposable.Dispose();
+				this._inputActiveDeviceChangeNotifierDisposable = null;
+			}
 		}
 
 		private void Update()
 		{
+			if (this._isDisabledByConfig)
+			{
+				return;
+			}
 			PlayerData currentPlayerData = GameHubBehaviour.Hub.Players.CurrentPlayerData;
 			if (currentPlayerData == null || currentPlayerData.CharacterInstance == null || this._farDistanceFeedback.ShouldHalt())
 			{
 				return;
 			}
-			if (GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreBoard.State.BombDelivery || GameHubBehaviour.Hub.BombManager.ActiveBomb.TeamOwner != TeamKind.Zero)
+			if (GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreboardState.BombDelivery || GameHubBehaviour.Hub.BombManager.ActiveBomb.TeamOwner != TeamKind.Zero)
 			{
 				if (this.CurrentAnimationKind == BombTipWindow.AnimationKind.GrabBomb)
 				{
@@ -148,15 +185,15 @@ namespace HeavyMetalMachines.VFX
 			this._nextFeedback = BombTipWindow.AnimationKind.PassBomb;
 		}
 
-		private void OptionsOnKeyChangedCallback(ControlAction controlaction)
+		private void OptionsOnKeyChangedCallback(ControllerInputActions controlaction)
 		{
-			if (controlaction == ControlAction.GadgetDropBomb)
+			if (controlaction == 9)
 			{
 				this.UpdateKeyData();
 			}
 		}
 
-		private void OnControlModeChangedCallback(CarInput.DrivingStyleKind drivingStyleKind)
+		private void OnActiveDeviceChange(InputDevice activeDevice)
 		{
 			if (this.CurrentAnimationKind != BombTipWindow.AnimationKind.None)
 			{
@@ -166,7 +203,7 @@ namespace HeavyMetalMachines.VFX
 
 		public void Show(BombTipWindow.AnimationKind kind)
 		{
-			if (!GameHubBehaviour.Hub.Match.LevelIsTutorial() && !GameHubBehaviour.Hub.GuiScripts.AfkControllerGui.IsWindowVisible() && GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreBoard.State.BombDelivery)
+			if (!GameHubBehaviour.Hub.Match.LevelIsTutorial() && !GameHubBehaviour.Hub.GuiScripts.AfkControllerGui.IsWindowVisible() && GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreboardState.BombDelivery)
 			{
 				this.CurrentAnimationKind = kind;
 				this.UpdateToolTipLabel(kind);
@@ -215,36 +252,31 @@ namespace HeavyMetalMachines.VFX
 			{
 				if (kind == BombTipWindow.AnimationKind.PassBomb)
 				{
-					this.HintDescription.text = Language.Get(this.HintDraftPassDescription, TranslationSheets.GUI);
+					this.HintDescription.text = Language.Get(this.HintDraftPassDescription, TranslationContext.GUI);
 				}
 			}
 			else
 			{
-				this.HintDescription.text = Language.Get(this.HintDraftGrabDescription, TranslationSheets.GUI);
+				this.HintDescription.text = Language.Get(this.HintDraftGrabDescription, TranslationContext.GUI);
 			}
 			this.UpdateKeyData();
 		}
 
 		private void UpdateKeyData()
 		{
-			bool flag = ControlOptions.IsUsingControllerJoystick(GameHubBehaviour.Hub);
-			if (flag)
+			ISprite sprite;
+			string text;
+			if (this._inputTranslation.TryToGetInputActionActiveDeviceAssetOrFallbackToTranslation(9, ref sprite, ref text))
 			{
 				this.JoystickGroup.SetActive(true);
 				this.KeyBoardGroup.SetActive(false);
-				if (!ControlOptions.IsActionScanning(ControlAction.GadgetDropBomb, ControlOptions.ControlActionInputType.Secondary))
-				{
-					this.JoystickButtonIcon.sprite2D = GameHubBehaviour.Hub.GuiScripts.JoystickShortcutIcons.GetJoystickShortcutIcon(ControlOptions.GetText(ControlAction.GadgetDropBomb, ControlOptions.ControlActionInputType.Secondary));
-				}
+				this.JoystickButtonIcon.sprite2D = (sprite as UnitySprite).GetSprite();
 			}
 			else
 			{
 				this.JoystickGroup.SetActive(false);
 				this.KeyBoardGroup.SetActive(true);
-				if (!ControlOptions.IsActionScanning(ControlAction.GadgetDropBomb, ControlOptions.ControlActionInputType.Primary))
-				{
-					this.HintKey.text = ControlOptions.GetTextlocalized(ControlAction.GadgetDropBomb, ControlOptions.ControlActionInputType.Primary);
-				}
+				this.HintKey.text = text;
 			}
 		}
 
@@ -274,9 +306,29 @@ namespace HeavyMetalMachines.VFX
 
 		private BombTipWindow.AnimationKind _currentAnimationKind;
 
+		[InjectOnClient]
+		private IInputTranslation _inputTranslation;
+
+		[InjectOnClient]
+		private IInputBindNotifier _inputBindNotifier;
+
+		[InjectOnClient]
+		private IInputActiveDeviceChangeNotifier _inputActiveDeviceChangeNotifier;
+
+		[InjectOnClient]
+		private IGameArenaConfigProvider _gameArenaConfigProvider;
+
 		private BombTipWindow.AnimationKind _nextFeedback;
 
 		public bool IsAnimationInStarted;
+
+		private bool _isDisabledByConfig;
+
+		private IDisposable _inputBindNotifierDisposable;
+
+		private IDisposable _inputBindResetDefaultNotifierDisposable;
+
+		private IDisposable _inputActiveDeviceChangeNotifierDisposable;
 
 		public enum AnimationKind
 		{

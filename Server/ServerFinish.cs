@@ -10,6 +10,7 @@ namespace HeavyMetalMachines.Server
 		{
 			this.State = GameHubBehaviour.Hub.Match.State;
 			GameHubBehaviour.Hub.GameTime.MatchTimer.Stop();
+			ServerFinish.Log.DebugFormat("Entered server finish state", new object[0]);
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(ServerFinish));

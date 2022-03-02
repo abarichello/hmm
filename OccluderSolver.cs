@@ -25,12 +25,6 @@ namespace HeavyMetalMachines
 			}
 		}
 
-		public override void OnBeforeSerialize()
-		{
-			base.OnBeforeSerialize();
-			this.IsOccluding = false;
-		}
-
 		private void Update()
 		{
 			if (this._isOccluding && !OccluderSolver.ForceRemoveOcclusion)

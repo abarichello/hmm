@@ -2,6 +2,8 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using HeavyMetalMachines.AI;
+using HeavyMetalMachines.AI.Steering;
 using HeavyMetalMachines.Car;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Combat.Gadget;
@@ -12,11 +14,13 @@ namespace HeavyMetalMachines.BotAI
 {
 	public class BotAIController : GameHubBehaviour, IObjectSpawnListener, IPlayerController, ISerializationCallbackReceiver
 	{
+		public IAIAgent AIAgent { get; set; }
+
 		public bool MovingCar
 		{
 			get
 			{
-				return this.Vertical != 0f;
+				return this.AIAgent.SteeringContext.Steering.MovingCar;
 			}
 		}
 
@@ -24,7 +28,15 @@ namespace HeavyMetalMachines.BotAI
 		{
 			get
 			{
-				return this.Vertical > 0f;
+				return this.AIAgent.SteeringContext.Steering.AcceleratingForward;
+			}
+		}
+
+		public Vector3 MousePosition
+		{
+			get
+			{
+				return this.AIAgent.SteeringContext.Steering.MousePosition;
 			}
 		}
 
@@ -50,17 +62,18 @@ namespace HeavyMetalMachines.BotAI
 				{
 					this._directivesGoalManager = (BotAIGoalManager)this._directives;
 				}
-				else
-				{
-					this._directivesCreepBotController = (CreepBotController)this._directives;
-				}
 			}
 		}
 
 		public override void OnAfterDeserialize()
 		{
 			base.OnAfterDeserialize();
-			this.Directives = ((!(this._directivesGoalManager != null)) ? this._directivesCreepBotController : this._directivesGoalManager);
+			this.Directives = ((!(this._directivesGoalManager != null)) ? null : this._directivesGoalManager);
+		}
+
+		public ISteeringContext GetContext()
+		{
+			return this.AIAgent.SteeringContext;
 		}
 
 		private void Awake()
@@ -92,18 +105,14 @@ namespace HeavyMetalMachines.BotAI
 			this._colisionDistance = 10f;
 			CarComponentHub componentHub = base.Id.GetComponentHub<CarComponentHub>();
 			this.AllNodesPath = BotAIPath.Terrain;
-			this.BotPathFind = componentHub.botAIPathFind;
+			this.BotPathFind = componentHub.AIAgent.PathFind;
 			this.BotPathFind.TargetNode = null;
 			this.BotPathFind.OnAIPathFound += this.OnPathFound;
 			if (!this.Combat)
 			{
 				this.Combat = componentHub.combatObject;
 			}
-			if (!this.CarInput)
-			{
-				this.CarInput = componentHub.carInput;
-				this.CarInput.ForceDrivingStyle(CarInput.DrivingStyleKind.Bot);
-			}
+			componentHub.carInput.ForceDrivingStyle(CarInput.DrivingStyleKind.Bot);
 		}
 
 		private void OnDisable()
@@ -114,20 +123,25 @@ namespace HeavyMetalMachines.BotAI
 			}
 		}
 
+		public void SetEnabled(bool value)
+		{
+			base.enabled = value;
+			this.AIAgent.BotContext.IsBotControlled = value;
+		}
+
 		private void Update()
 		{
+			if (this._currentTransf != null)
+			{
+				this.GoToTarget();
+			}
+			this.ActivateUpdateInput();
 		}
 
 		private IEnumerator StuckWorkAround()
 		{
 			this._doingWorkAround = true;
-			float oldHorizontalValue = this.Horizontal;
-			this.Horizontal = (float)UnityEngine.Random.Range(-1, 2);
-			this.Vertical = -1f;
 			yield return UnityUtils.WaitForOneSecond;
-			this._repath = true;
-			this.Vertical = 1f;
-			this.Horizontal = oldHorizontalValue;
 			this._doingWorkAround = false;
 			yield break;
 		}
@@ -159,7 +173,7 @@ namespace HeavyMetalMachines.BotAI
 		private void MoveToNextPath()
 		{
 			this.CheckDistance();
-			this.SetDirectionCanBeStraight(this._nextPointPosition - base.transform.position);
+			this.AIAgent.BotContext.DesiredDestination = new Vector3?(this._nextPointPosition);
 		}
 
 		public void MoveToDirectionCanGoStraight(Vector3 finalPosition, bool isTargetPosition)
@@ -168,29 +182,17 @@ namespace HeavyMetalMachines.BotAI
 			{
 				return;
 			}
-			this.Vertical = this.rate;
-			Vector3 directionCanBeStraight = finalPosition - this.Combat.Transform.position;
+			Vector3 vector = finalPosition - this.Combat.Transform.position;
 			if (isTargetPosition && this._currentCombatObject)
 			{
-				float sqrMagnitude = directionCanBeStraight.sqrMagnitude;
+				float sqrMagnitude = vector.sqrMagnitude;
 				if (sqrMagnitude <= this._colisionDistance * this._colisionDistance)
 				{
-					this.Vertical = 0f;
-					this.Horizontal = 0f;
-					this.Drift = false;
-					this.Turbo = false;
+					this.AIAgent.BotContext.DesiredDestination = null;
 					return;
 				}
 			}
-			this.Turbo = false;
-			this.SetDirectionCanBeStraight(directionCanBeStraight);
-		}
-
-		private void SetDirectionCanBeStraight(Vector3 direction)
-		{
-			this.Turbo = false;
-			Vector3 vector = this.Combat.Transform.InverseTransformDirection(direction);
-			this.Horizontal = ((Mathf.Abs(vector.x) <= 1f) ? vector.x : vector.normalized.x);
+			this.AIAgent.BotContext.DesiredDestination = new Vector3?(finalPosition);
 		}
 
 		public CombatObject currentCombatObject
@@ -209,27 +211,6 @@ namespace HeavyMetalMachines.BotAI
 		private float GetRangeSqr()
 		{
 			return (this.rangeDesiredSqrDistance < 0f) ? BotAIController.rangeSqrDistanceDefault : this.rangeDesiredSqrDistance;
-		}
-
-		private void GoToFixedPath()
-		{
-			if (!this.Spawned)
-			{
-				return;
-			}
-			if (this._timedUpdater.ShouldHalt())
-			{
-				return;
-			}
-			if (this._currentFixedPath == null)
-			{
-				this.FindNextFixedPath();
-			}
-			if (this._currentFixedPath == null)
-			{
-				return;
-			}
-			this.GoToNode(this._currentFixedPath, this._currentFixedPath.transform, this.creepBotController.PatrolController.Path);
 		}
 
 		private void GoToTarget()
@@ -282,29 +263,12 @@ namespace HeavyMetalMachines.BotAI
 				{
 					this.MoveToDirectionCanGoStraight(targetTransform.position, false);
 				}
-				if (BotAIUtils.GetDistanceSqr(base.transform, targetTransform) < this.GetRangeSqr())
+				if (BotAIUtils.GetDistanceSqr(base.transform, targetTransform) < this.GetRangeSqr() && this.OnArrival != null)
 				{
-					if (this.OnArrival != null)
-					{
-						this.OnArrival();
-						this.OnArrival = null;
-					}
-					if (this.currentCombatObject == null && this.Directives.IsPathFixed())
-					{
-						this.FindNextFixedPath();
-					}
+					this.OnArrival();
+					this.OnArrival = null;
 				}
 			}
-		}
-
-		private void FindNextFixedPath()
-		{
-			if (this._currentFixedPath == null)
-			{
-				this._currentFixedPathIndex = -1;
-			}
-			this._currentFixedPathIndex = (this._currentFixedPathIndex + 1) % this.creepBotController.PatrolController.Path.Nodes.Count;
-			this._currentFixedPath = this.creepBotController.PatrolController.Path.Nodes[this._currentFixedPathIndex];
 		}
 
 		private void GoToWaypoint()
@@ -338,19 +302,34 @@ namespace HeavyMetalMachines.BotAI
 		private void CheckDistance()
 		{
 			bool flag = GameHubBehaviour.Hub.BombManager.ActiveBomb.IsSpawned && GameHubBehaviour.Hub.BombManager.IsCarryingBomb(base.Id.ObjId);
-			Vector3 origin = (!flag) ? Vector3.zero : GameHubBehaviour.Hub.BombManager.BombMovement.transform.position;
+			Vector3 vector = (!flag) ? Vector3.zero : GameHubBehaviour.Hub.BombManager.BombMovement.transform.position;
 			bool flag2 = false;
-			Vector3 direction = this._nextPointPosition;
-			for (int i = this.NextPointIndex + 2; i >= this.NextPointIndex - 2; i--)
+			Vector3 vector2 = this._nextPointPosition;
+			int num = this.NextPointIndex;
+			bool isCarryingBomb = this.AIAgent.BotContext.IsCarryingBomb;
+			for (int i = this.NextPointIndex; i <= this.NextPointIndex + 2; i++)
 			{
-				if (i >= 0 && i < this._pathFound.Count)
+				if (i >= this._pathFound.Count)
 				{
-					direction = this._pathFound[i].transform.position - base.transform.position;
-					if (!Physics.Raycast(base.transform.position, direction, direction.magnitude, LayerManager.GetBombAndTeamSceneryMask(false, this.Combat.Team)))
+					break;
+				}
+				BotAINode.NodeRequiredForPathKind requirementKind = this._pathFound[i].RequirementKind;
+				num = i;
+				if (requirementKind == BotAINode.NodeRequiredForPathKind.Always || (requirementKind == BotAINode.NodeRequiredForPathKind.WithBomb && isCarryingBomb) || (requirementKind == BotAINode.NodeRequiredForPathKind.WithoutBomb && !isCarryingBomb))
+				{
+					break;
+				}
+			}
+			for (int j = num; j >= this.NextPointIndex - 2; j--)
+			{
+				if (j >= 0 && j < this._pathFound.Count)
+				{
+					vector2 = this._pathFound[j].transform.position - base.transform.position;
+					if (!Physics.Raycast(base.transform.position, vector2, vector2.magnitude, LayerManager.GetBombAndTeamSceneryMask(false, this.Combat.Team)))
 					{
-						if (!flag || !Physics.Raycast(origin, direction, direction.magnitude, LayerManager.GetBombAndTeamSceneryMask(true, this.Combat.Team)))
+						if (!flag || !Physics.Raycast(vector, vector2, vector2.magnitude, LayerManager.GetBombAndTeamSceneryMask(true, this.Combat.Team)))
 						{
-							this.NextPointIndex = i;
+							this.NextPointIndex = j;
 							this._nextPointNode = this._pathFound[this.NextPointIndex];
 							this._nextPointPosition = this._nextPointNode.transform.position;
 							this.MoveToDirectionCanGoStraight(this._nextPointPosition, false);
@@ -367,13 +346,24 @@ namespace HeavyMetalMachines.BotAI
 			}
 			else
 			{
-				float sqrMagnitude = direction.sqrMagnitude;
-				float num = (!this._nextPointNode) ? this._colisionDistance : this._nextPointNode.Range;
-				if (num > 0f && sqrMagnitude >= num * num)
+				float sqrMagnitude = vector2.sqrMagnitude;
+				bool flag3;
+				if (this._nextPointNode && this._nextPointNode.HasRangeCollider)
 				{
-					return;
+					Ray ray;
+					ray..ctor(base.transform.position + Vector3.up * 1000f, Vector3.down);
+					RaycastHit raycastHit;
+					flag3 = this._nextPointNode.RangeCollider.Raycast(ray, ref raycastHit, 1000f);
 				}
-				this.GoToWaypoint();
+				else
+				{
+					float num2 = (!this._nextPointNode) ? this._colisionDistance : this._nextPointNode.Range;
+					flag3 = (num2 <= 0f || sqrMagnitude < num2 * num2);
+				}
+				if (flag3)
+				{
+					this.GoToWaypoint();
+				}
 			}
 		}
 
@@ -385,8 +375,13 @@ namespace HeavyMetalMachines.BotAI
 			this._pathMoving = false;
 			if (stopAcceleration)
 			{
-				this.CarInput.BotInput(0f, 0f, false);
+				this.AIAgent.BotContext.DesiredDestination = null;
 			}
+		}
+
+		public void StartBot()
+		{
+			this._repath = true;
 		}
 
 		protected bool IsJammed()
@@ -401,25 +396,11 @@ namespace HeavyMetalMachines.BotAI
 
 		public void ActivateUpdateInput()
 		{
-			StatusKind currentStatus = this.Combat.Attributes.CurrentStatus;
-			bool flag = this.IsJammed();
-			bool flag2 = currentStatus.HasFlag(StatusKind.Immobilized);
-			if (flag2)
-			{
-				this.CarInput.BotInput(0f, 0f, false);
-			}
-			else if (this.rate < 0f)
-			{
-				this.CarInput.BotInput(-this.Horizontal, this.Vertical, this.UseDrift && this.Drift);
-			}
-			else
-			{
-				this.CarInput.BotInput(this.Horizontal, this.Vertical, this.UseDrift && this.Drift);
-			}
-			if (flag)
+			if (this.IsJammed())
 			{
 				this.CancelCurrentAction();
 			}
+			this.AIAgent.BotContext.IsCarryingBomb = this.Combat.IsCarryingBomb;
 		}
 
 		public void ActionExecuted(GadgetBehaviour gadget)
@@ -470,15 +451,9 @@ namespace HeavyMetalMachines.BotAI
 			this.currentCombatObject = combatObject;
 		}
 
-		public void SetCreepController(CreepBotController botController)
-		{
-			this.Directives = botController;
-			this.creepBotController = botController;
-		}
-
 		private void OnCollisionStay(Collision col)
 		{
-			if (GameHubBehaviour.Hub.Net.IsClient() || col.collider.gameObject.layer != 9 || this.Horizontal != 0f)
+			if (GameHubBehaviour.Hub.Net.IsClient() || col.collider.gameObject.layer != 9)
 			{
 				return;
 			}
@@ -504,8 +479,6 @@ namespace HeavyMetalMachines.BotAI
 
 		public bool Spawned;
 
-		public CarInput CarInput;
-
 		public CombatObject Combat;
 
 		public List<BotAINode> _pathFound = new List<BotAINode>(10);
@@ -522,25 +495,11 @@ namespace HeavyMetalMachines.BotAI
 
 		private float _colisionDistance;
 
-		public Color GizmoSphereColliderColor = new Color(0f, 1f, 0f, 1f);
-
 		public Vector3 GizmoOffset;
 
 		private Vector3 _finalPointNormalized;
 
 		private TimedUpdater _timedUpdater;
-
-		public float Horizontal;
-
-		public float Vertical;
-
-		public bool Drift;
-
-		public bool UseDrift;
-
-		public bool Turbo;
-
-		public float rate = 1f;
 
 		public int NextPointIndex;
 
@@ -553,11 +512,7 @@ namespace HeavyMetalMachines.BotAI
 
 		private BotAIGoalManager _directivesGoalManager;
 
-		private CreepBotController _directivesCreepBotController;
-
 		public BotAIGoalManager goalManager;
-
-		public CreepBotController creepBotController;
 
 		private TimedUpdater _repathUpdater;
 

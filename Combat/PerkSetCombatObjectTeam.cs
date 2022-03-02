@@ -8,7 +8,7 @@ namespace HeavyMetalMachines.Combat
 		{
 			CombatObject component = base.GetComponent<CombatObject>();
 			CombatObject component2 = this.Effect.Owner.GetComponent<CombatObject>();
-			component.CreepTeam = component2.Team;
+			component.OwnerTeam = component2.Team;
 		}
 	}
 }

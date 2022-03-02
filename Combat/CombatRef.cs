@@ -55,6 +55,16 @@ namespace HeavyMetalMachines.Combat
 			return component.Combat;
 		}
 
+		public void AddCollider(Collider collider)
+		{
+			CombatRef.Colliders.Add(collider, this);
+		}
+
+		public void RemoveCollider(Collider collider)
+		{
+			CombatRef.Colliders.Remove(collider);
+		}
+
 		private static readonly Dictionary<Collider, CombatRef> Colliders = new Dictionary<Collider, CombatRef>();
 
 		public CombatObject Combat;

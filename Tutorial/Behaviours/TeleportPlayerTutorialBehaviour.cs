@@ -61,7 +61,7 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 
 		private void UnlockMovement()
 		{
-			base.playerController.Combat.Movement.UnlockMovement();
+			base.playerController.Combat.Movement.UnpauseSimulation();
 		}
 
 		private void MovePlayer()
@@ -94,7 +94,7 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 			}
 			playerCombat.Movement.ForcePosition(this._teleportTarget.transform.position, true);
 			playerCombat.Movement.transform.SetPositionAndRotation(this._teleportTarget.position, this._teleportTarget.rotation);
-			playerCombat.Movement.LockMovement();
+			playerCombat.Movement.PauseSimulation();
 			yield return new WaitForSeconds(this._forcePositionDelayedTime);
 			if (this._forceTeleportBomb && !GameHubBehaviour.Hub.BombManager.IsCarryingBomb(base.playerController.Combat.Id.ObjId))
 			{
@@ -171,12 +171,8 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 			this._delayed = future;
 		}
 
-		public object Invoke(int classId, short methodId, object[] args)
+		public object Invoke(int classId, short methodId, object[] args, BitStream bitstream = null)
 		{
-			if (classId != 1014)
-			{
-				throw new Exception("Hierarchy in RemoteClass is not allowed!!! " + classId);
-			}
 			this._delayed = null;
 			if (methodId == 2)
 			{
@@ -191,8 +187,8 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 			return null;
 		}
 
-		[SerializeField]
 		[Tooltip("Will teleport player following target's rotation")]
+		[SerializeField]
 		private Transform _teleportTarget;
 
 		[SerializeField]
@@ -210,7 +206,7 @@ namespace HeavyMetalMachines.Tutorial.Behaviours
 		[SerializeField]
 		private float _forcePositionDelayedTime = 0.4f;
 
-		public const int StaticClassId = 1014;
+		public const int StaticClassId = 1015;
 
 		private Identifiable _identifiable;
 

@@ -5,14 +5,14 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkDestroyOnGadgetUpgraded : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkDestroyOnGadgetUpgraded : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		public override void PerkInitialized()
 		{
 			this.Effect.Gadget.ListenToGadgetSetLevel += this.ServerDestroy;
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			this.Effect.Gadget.ListenToGadgetSetLevel -= this.ServerDestroy;
 		}

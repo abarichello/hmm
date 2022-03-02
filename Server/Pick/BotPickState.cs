@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.Server.Apis;
 using HeavyMetalMachines.Server.Pick.Apis;
 using UnityEngine;
 
@@ -6,7 +7,7 @@ namespace HeavyMetalMachines.Server.Pick
 {
 	public class BotPickState : IPickModeState
 	{
-		public BotPickState(BotPickController botPick)
+		public BotPickState(IBotPickController botPick)
 		{
 			this._botPick = botPick;
 		}
@@ -36,6 +37,6 @@ namespace HeavyMetalMachines.Server.Pick
 			return !this._botPick.IsBotPicking;
 		}
 
-		private readonly BotPickController _botPick;
+		private readonly IBotPickController _botPick;
 	}
 }

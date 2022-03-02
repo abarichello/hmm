@@ -16,22 +16,7 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 			}
 		}
 
-		protected override bool CheckSanity(IGadgetContext gadgetContext, IEventContext eventContext)
-		{
-			IHMMGadgetContext ihmmgadgetContext = (IHMMGadgetContext)gadgetContext;
-			if (ihmmgadgetContext.IsClient)
-			{
-				return true;
-			}
-			if (this._currentCooldownTime == null)
-			{
-				base.LogSanitycheckError("'Current Cooldown Time' parameter cannot be null.");
-				return false;
-			}
-			return true;
-		}
-
-		protected override IBlock InnerExecute(IGadgetContext context, IEventContext eventContext)
+		public override IBlock Execute(IGadgetContext context, IEventContext eventContext)
 		{
 			IHMMGadgetContext ihmmgadgetContext = (IHMMGadgetContext)context;
 			IHMMEventContext ihmmeventContext = (IHMMEventContext)eventContext;
@@ -44,8 +29,9 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 			else
 			{
 				int creationTime = eventContext.CreationTime;
-				int value = this._currentCooldownTime.GetValue(context);
-				flag = (value > creationTime);
+				IParameterTomate<float> parameterTomate = this._currentCooldownTime.ParameterTomate as IParameterTomate<float>;
+				int num = (int)parameterTomate.GetValue(context);
+				flag = (num > creationTime);
 				CheckCooldownBlock._resultParameter.SetValue(context, flag);
 				ihmmeventContext.SaveParameter(CheckCooldownBlock._resultParameter);
 			}
@@ -56,16 +42,12 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 			return this._nextBlock;
 		}
 
-		public override bool UsesParameterWithId(int parameterId)
-		{
-			return base.CheckIsParameterWithId(this._currentCooldownTime, parameterId);
-		}
-
+		[Header("Read")]
 		[SerializeField]
 		private BaseBlock _inCooldownNextBlock;
 
 		[SerializeField]
-		private IntParameter _currentCooldownTime;
+		private BaseParameter _currentCooldownTime;
 
 		private static BoolParameter _resultParameter;
 	}

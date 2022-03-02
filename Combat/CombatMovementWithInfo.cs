@@ -3,6 +3,7 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
+	[Obsolete]
 	public class CombatMovementWithInfo : CombatMovement
 	{
 		public override MovementInfo Info

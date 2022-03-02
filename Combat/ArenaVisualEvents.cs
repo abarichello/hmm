@@ -33,7 +33,7 @@ namespace HeavyMetalMachines.Combat
 			}
 			foreach (HoplonParticleSystem hoplonParticleSystem in array)
 			{
-				HeavyMetalMachines.Utils.Debug.Assert(hoplonParticleSystem != null, "Unassigned particle system!", HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+				Debug.Assert(hoplonParticleSystem != null, "Unassigned particle system!", Debug.TargetTeam.All);
 				hoplonParticleSystem.Play();
 			}
 		}

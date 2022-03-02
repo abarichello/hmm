@@ -23,7 +23,7 @@ namespace HeavyMetalMachines
 			}
 			if (this.visualGadget)
 			{
-				this.visualGadgetInstance = UnityEngine.Object.Instantiate<SceneryVisualGadget>(this.visualGadget);
+				this.visualGadgetInstance = Object.Instantiate<SceneryVisualGadget>(this.visualGadget);
 				this.visualGadgetInstance.transform.parent = base.transform;
 				this.visualGadgetInstance.transform.localPosition = this.visualGadget.transform.localPosition;
 				this.visualGadgetInstance.transform.localRotation = this.visualGadget.transform.localRotation;

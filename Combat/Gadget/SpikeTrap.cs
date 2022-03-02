@@ -45,7 +45,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			if (this.DropValueIncrease == 0f)
 			{
 				this._numHittedAfterUpgrade = 0;
-				this.Combat.GadgetStates.SetGadgetState(this._gadgetState, base.Slot, this._gadgetState.GadgetState, this._gadgetState.CoolDown, this._gadgetState.Value, this._gadgetState.Heat, this.CalcDropSteps(), null);
+				this.Combat.GadgetStates.SetGadgetState(this._gadgetState, base.Slot, this._gadgetState.GadgetState, this._gadgetState.Cooldown, this._gadgetState.Value, this._gadgetState.Heat, this.CalcDropSteps(), null);
 			}
 		}
 
@@ -60,18 +60,18 @@ namespace HeavyMetalMachines.Combat.Gadget
 			}
 			this._lastDropPosition = vector;
 			int result = -1;
-			Vector3 a = this.Combat.transform.right * this.TrapInfo.SpaceBetweenTraps;
-			Vector3 a2 = Vector3.zero;
+			Vector3 vector2 = this.Combat.transform.right * this.TrapInfo.SpaceBetweenTraps;
+			Vector3 vector3 = Vector3.zero;
 			if (this.TrapInfo.DropNumber % 2 == 1)
 			{
 				result = this.DropTrap(vector);
-				a2 = this.Combat.transform.right * this.TrapInfo.SpaceBetweenTraps / 2f;
+				vector3 = this.Combat.transform.right * this.TrapInfo.SpaceBetweenTraps / 2f;
 			}
 			for (int i = 1; i < this.TrapInfo.DropNumber; i += 2)
 			{
-				Vector3 b = a2 + (float)i * a;
-				this.DropTrap(vector + b);
-				result = this.DropTrap(vector - b);
+				Vector3 vector4 = vector3 + (float)i * vector2;
+				this.DropTrap(vector + vector4);
+				result = this.DropTrap(vector - vector4);
 			}
 			return result;
 		}
@@ -117,7 +117,17 @@ namespace HeavyMetalMachines.Combat.Gadget
 			effectEvent.TargetId = target.Id.ObjId;
 			effectEvent.LifeTime = this.ExtraLifeTime;
 			base.SetTargetAndDirection(target.Movement.LastVelocity.normalized, effectEvent);
-			return GameHubBehaviour.Hub.Events.TriggerEvent(effectEvent);
+			int num = GameHubBehaviour.Hub.Events.TriggerEvent(effectEvent);
+			SpikeTrap.Log.DebugFormat("AAA FireExtraGadget:{0} speed:{1} range:{2} lifetime:{3} combatPos{4} dataOrigin:{5}", new object[]
+			{
+				num,
+				effectEvent.MoveSpeed,
+				effectEvent.Range,
+				effectEvent.LifeTime,
+				target.transform.position,
+				effectEvent.Origin
+			});
+			return num;
 		}
 
 		public override void OnTriggerEnterCallback(TriggerEnterCallback evt)
@@ -135,7 +145,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 				if (this.DropValueIncrease != 0f)
 				{
 					this._numHittedAfterUpgrade++;
-					this.Combat.GadgetStates.SetGadgetState(this._gadgetState, base.Slot, this._gadgetState.GadgetState, this._gadgetState.CoolDown, this._gadgetState.Value, this._gadgetState.Heat, this.CalcDropSteps(), null);
+					this.Combat.GadgetStates.SetGadgetState(this._gadgetState, base.Slot, this._gadgetState.GadgetState, this._gadgetState.Cooldown, this._gadgetState.Value, this._gadgetState.Heat, this.CalcDropSteps(), null);
 				}
 			}
 		}
@@ -144,7 +154,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 		{
 			this._numHittedAfterUpgrade = 0;
 			this._numLargeProjectile = 0;
-			this.Combat.GadgetStates.SetGadgetState(this._gadgetState, base.Slot, this._gadgetState.GadgetState, this._gadgetState.CoolDown, this._gadgetState.Value, this._gadgetState.Heat, this.CalcDropSteps(), null);
+			this.Combat.GadgetStates.SetGadgetState(this._gadgetState, base.Slot, this._gadgetState.GadgetState, this._gadgetState.Cooldown, this._gadgetState.Value, this._gadgetState.Heat, this.CalcDropSteps(), null);
 		}
 
 		public int GetNumLargerProjectile(int chargeCount)

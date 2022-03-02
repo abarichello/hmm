@@ -1,20 +1,30 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Text;
 using Assets.Scripts.HMM.GameStates.Game.ComponentContainer;
 using Assets.Standard_Assets.Scripts.HMM.GameStates.Game.newChat.Component.Api;
 using Assets.Standard_Assets.Scripts.HMM.GameStates.Game.newChat.Component.Impl;
 using Assets.Standard_Assets.Scripts.HMM.GameStates.Game.newChat.Impl.Adapter;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids;
-using Assets.Standard_Assets.Scripts.HMM.PlotKids.Infra;
-using Assets.Standard_Assets.Scripts.HMM.PlotKids.Social;
-using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Chat.Business;
+using HeavyMetalMachines.Chat.Filters;
 using HeavyMetalMachines.Frontend;
+using HeavyMetalMachines.Infra.Context;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Localization;
 using HeavyMetalMachines.Match;
-using HeavyMetalMachines.Utils;
+using HeavyMetalMachines.ParentalControl.Restrictions;
+using HeavyMetalMachines.Players.Business;
+using HeavyMetalMachines.Players.Presenting;
+using HeavyMetalMachines.Publishing;
+using HeavyMetalMachines.Publishing.Presenting;
+using HeavyMetalMachines.Social.Friends.Business.BlockedPlayers;
+using Hoplon.Localization.TranslationTable;
 using Pocketverse;
 using Pocketverse.MuralContext;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.HMMChat
 {
@@ -39,6 +49,12 @@ namespace HeavyMetalMachines.HMMChat
 
 		public void ClientSendMessage(bool isGroup, string text)
 		{
+			if (GameHubBehaviour.Hub.Match.Kind != 4 && SpectatorController.IsSpectating)
+			{
+				string msg = Language.Get("SPECTATOR_CHAT_FORBIDDEN", TranslationContext.HUDChat);
+				this.SetupPlayerMessage(false, msg, byte.MaxValue, ChatService.ChatMessageKind.LogMessage, true);
+				return;
+			}
 			this.DispatchReliable(new byte[0]).ReceiveMessage(isGroup, text);
 		}
 
@@ -47,10 +63,19 @@ namespace HeavyMetalMachines.HMMChat
 			this.ClientSendMessage(isGroup, message);
 		}
 
+		public void SendDraftMessage(bool toTeam, string draft, ContextTag context, string[] messageParameters)
+		{
+			this.DispatchReliable(new byte[0]).ReceiveDraftMessage(toTeam, draft, (string)context, messageParameters);
+		}
+
 		[RemoteMethod]
 		private void ReceiveMessage(bool group, string msg)
 		{
 			PlayerData playerByAddress = GameHubBehaviour.Hub.Players.GetPlayerByAddress(this.Sender);
+			if (!this.IsValidChatSender(playerByAddress))
+			{
+				return;
+			}
 			ChatService.ChatMsg item = new ChatService.ChatMsg(msg, group, playerByAddress.PlayerAddress, ChatService.ChatMessageKind.PlayerMessage);
 			this.ChatMsgList.Add(item);
 			if (group)
@@ -69,6 +94,40 @@ namespace HeavyMetalMachines.HMMChat
 				(!group) ? "All" : playerByAddress.Team.ToString(),
 				msg
 			});
+		}
+
+		[RemoteMethod]
+		private void ReceiveDraftMessage(bool toTeam, string draft, string context, string[] messageParameters)
+		{
+			PlayerData playerByAddress = GameHubBehaviour.Hub.Players.GetPlayerByAddress(this.Sender);
+			if (!this.IsValidChatSender(playerByAddress))
+			{
+				return;
+			}
+			ChatService.ChatMsg item = new ChatService.ChatMsg(draft, messageParameters, toTeam, playerByAddress.PlayerAddress, ChatService.ChatMessageKind.PlayerMessage);
+			this.ChatMsgList.Add(item);
+			if (toTeam)
+			{
+				TeamKind team = playerByAddress.Team;
+				int group = (int)team;
+				this.DispatchReliable(GameHubBehaviour.Hub.AddressGroups.GetGroup(group)).ClientReceiveDraftMessage(true, draft, context, messageParameters, this.Sender);
+			}
+			else
+			{
+				this.DispatchReliable(GameHubBehaviour.Hub.AddressGroups.GetGroup(0)).ClientReceiveDraftMessage(false, draft, context, messageParameters, this.Sender);
+			}
+			ChatService.Log.InfoFormat("Player={0} Group={1} Draft={2} MessageParameters={3}", new object[]
+			{
+				playerByAddress.PlayerId,
+				(!toTeam) ? "All" : playerByAddress.Team.ToString(),
+				draft,
+				string.Join(";", messageParameters)
+			});
+		}
+
+		private bool IsValidChatSender(PlayerData player)
+		{
+			return !player.IsNarrator || GameHubBehaviour.Hub.Match.Kind == 4;
 		}
 
 		public void ClientSystemMessage(string msg)
@@ -95,12 +154,19 @@ namespace HeavyMetalMachines.HMMChat
 		[RemoteMethod]
 		private void ClientReceiveMessage(bool group, string msg, byte playeraddress)
 		{
-			this.SetupPlayerMessage(group, msg, playeraddress, ChatService.ChatMessageKind.PlayerMessage);
+			this.SetupPlayerMessage(group, msg, playeraddress, ChatService.ChatMessageKind.PlayerMessage, false);
 		}
 
-		public void SetupPlayerMessage(bool group, string msg, byte playeraddress, ChatService.ChatMessageKind messageKind)
+		[RemoteMethod]
+		private void ClientReceiveDraftMessage(bool toTeam, string draft, string context, string[] messageParameters, byte playeraddress)
 		{
-			if (messageKind != ChatService.ChatMessageKind.PlayerMessage && GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreBoard.State.Replay)
+			string formatted = Language.MainTranslatedLanguage.GetFormatted(draft, (ContextTag)context, messageParameters);
+			this.SetupPlayerMessage(toTeam, formatted, playeraddress, ChatService.ChatMessageKind.PlayerMessage, true);
+		}
+
+		public void SetupPlayerMessage(bool group, string msg, byte playeraddress, ChatService.ChatMessageKind messageKind, bool isDraftMessage)
+		{
+			if (messageKind != ChatService.ChatMessageKind.PlayerMessage && GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreboardState.Replay)
 			{
 				return;
 			}
@@ -109,19 +175,39 @@ namespace HeavyMetalMachines.HMMChat
 				return;
 			}
 			PlayerData playerByAddress = GameHubBehaviour.Hub.Players.GetPlayerByAddress(playeraddress);
-			if (playerByAddress != null && ManagerController.Get<ChatManager>().IsUserIgnored(playerByAddress.UserId))
+			if (playerByAddress != null)
 			{
-				return;
+				if (this._blockedInGroupChat.IsBlocked(playerByAddress.ConvertToPlayer()))
+				{
+					return;
+				}
+				IIsPlayerBlocked isPlayerBlocked = this._diContainer.Resolve<IIsPlayerBlocked>();
+				if (isPlayerBlocked.IsBlocked(playerByAddress.PlayerId))
+				{
+					return;
+				}
+				IIsPlayerRestrictedByTextChat isPlayerRestrictedByTextChat = this._diContainer.Resolve<IIsPlayerRestrictedByTextChat>();
+				if (isPlayerRestrictedByTextChat.IsPlayerRestricted(playerByAddress.PlayerId))
+				{
+					return;
+				}
+				ITextChatRestriction textChatRestriction = this._diContainer.Resolve<ITextChatRestriction>();
+				if (!isDraftMessage && textChatRestriction.IsEnabledByPlayer(playerByAddress.PlayerId))
+				{
+					return;
+				}
 			}
 			byte playerAddress = (!(playerByAddress == null)) ? playerByAddress.PlayerAddress : 0;
-			ChatService.ChatMsg chatMsg = new ChatService.ChatMsg(msg, group, playerAddress, messageKind);
+			string msg2;
+			this._chatMessageBadWordFilter.Filter(msg, ref msg2);
+			ChatService.ChatMsg chatMsg = new ChatService.ChatMsg(msg2, group, playerAddress, messageKind);
 			this.ChatMsgList.Add(chatMsg);
 			this.OnNewClientMessage(chatMsg);
 		}
 
 		public void ClientReceiveLogMessage(string msg)
 		{
-			if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreBoard.State.Replay)
+			if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreboardState.Replay)
 			{
 				return;
 			}
@@ -163,60 +249,88 @@ namespace HeavyMetalMachines.HMMChat
 		private void CreateDefaultChatMessage(ChatService.ChatMsg chatMsg)
 		{
 			PlayerData playerByAddress = GameHubBehaviour.Hub.Players.GetPlayerByAddress(chatMsg.PlayerAddress);
-			string text = string.Format("[{0}] {1}: {2}", Language.Get((!chatMsg.IsGroup) ? "CHAT_SCOPE_ALL" : "CHAT_SCOPE_TEAM", TranslationSheets.Chat), this.GetColoredPlayerName(chatMsg.PlayerAddress), chatMsg.Text);
-			if (playerByAddress != null && !playerByAddress.IsBot && !GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish))
+			StringBuilder stringBuilder = new StringBuilder(string.Empty);
+			this.AppendScopeTag(stringBuilder, chatMsg.IsGroup);
+			this.AppendColorBegin(stringBuilder, playerByAddress);
+			this.AppendSpectatorTag(stringBuilder, playerByAddress);
+			this.AppendPlayerName(stringBuilder, playerByAddress);
+			this.AppendPublisherPlayerName(stringBuilder, playerByAddress);
+			this.AppendColorEnd(stringBuilder, playerByAddress);
+			stringBuilder.AppendFormat(": {0}", chatMsg.Text);
+			this.AddAndNotifyMessageReceived(chatMsg, stringBuilder.ToString());
+		}
+
+		private void AppendScopeTag(StringBuilder stringBuilder, bool isGroup)
+		{
+			string arg = Language.Get((!isGroup) ? "CHAT_SCOPE_ALL" : "CHAT_SCOPE_TEAM", TranslationContext.Chat);
+			stringBuilder.AppendFormat("[{0}] ", arg);
+		}
+
+		private void AppendSpectatorTag(StringBuilder stringBuilder, PlayerData playerData)
+		{
+			if (playerData.IsNarrator)
 			{
-				HMMHub hub = GameHubBehaviour.Hub;
-				TeamUtils.GetUserTagAsync(hub, playerByAddress.UserId, delegate(string teamTag)
-				{
-					string text = string.Format("[{0}] {1} {2}: {3}", new object[]
-					{
-						Language.Get((!chatMsg.IsGroup) ? "CHAT_SCOPE_ALL" : "CHAT_SCOPE_TEAM", TranslationSheets.Chat),
-						teamTag,
-						this.GetColoredPlayerName(chatMsg.PlayerAddress),
-						chatMsg.Text
-					});
-					this.AddAndNotifyMessageReceived(chatMsg, text);
-				}, delegate(Exception exception)
-				{
-					ChatService.Log.WarnFormat("Error on GetUserTagAsync. Exception:{0}", new object[]
-					{
-						exception
-					});
-					this.AddAndNotifyMessageReceived(chatMsg, text);
-				});
-			}
-			else
-			{
-				this.AddAndNotifyMessageReceived(chatMsg, text);
+				stringBuilder.AppendFormat("[{0}] ", Language.Get("CHAT_TAG_SPECTATOR", TranslationContext.Chat));
 			}
 		}
 
 		private string CreatePlayerNotificationChatMessage(ChatService.ChatMsg chatMsg)
 		{
-			return this.GetColoredPlayerName(chatMsg.PlayerAddress) + " " + chatMsg.Text;
+			PlayerData playerByAddress = GameHubBehaviour.Hub.Players.GetPlayerByAddress(chatMsg.PlayerAddress);
+			StringBuilder stringBuilder = new StringBuilder(string.Empty);
+			this.AppendColorBegin(stringBuilder, playerByAddress);
+			this.AppendPlayerName(stringBuilder, playerByAddress);
+			this.AppendPublisherPlayerName(stringBuilder, playerByAddress);
+			this.AppendColorEnd(stringBuilder, playerByAddress);
+			stringBuilder.AppendFormat(" {0}", chatMsg.Text);
+			return stringBuilder.ToString();
 		}
 
-		private string GetColoredPlayerName(byte playerAddress)
+		private void AppendColorBegin(StringBuilder stringBuilder, PlayerData playerData)
 		{
-			PlayerData playerByAddress = GameHubBehaviour.Hub.Players.GetPlayerByAddress(playerAddress);
-			if (playerByAddress == null)
+			if (playerData == null)
 			{
-				return " ";
+				return;
 			}
-			Color chatColor = GUIColorsInfo.GetChatColor(playerByAddress.PlayerId, playerByAddress.Team);
+			Color chatColor = GUIColorsInfo.GetChatColor(playerData.PlayerId, playerData.Team, playerData.IsNarrator);
 			string arg = HudUtils.RGBToHex(chatColor);
-			string arg2 = string.Empty;
-			if (this.ShowCharacterName && playerByAddress.Character)
+			stringBuilder.AppendFormat("[{0}]", arg);
+		}
+
+		private void AppendColorEnd(StringBuilder stringBuilder, PlayerData playerData)
+		{
+			if (playerData == null)
 			{
-				arg2 = string.Format(" ({0})", playerByAddress.Character.LocalizedName);
+				return;
 			}
-			string arg3 = NGUIText.EscapeSymbols(playerByAddress.Name);
-			if (!playerByAddress.IsNarrator)
+			stringBuilder.Append("[-]");
+		}
+
+		private void AppendPlayerName(StringBuilder stringBuilder, PlayerData playerData)
+		{
+			if (playerData == null)
 			{
-				return string.Format("[{0}]{1}{2}[-]", arg, arg3, arg2);
+				return;
 			}
-			return string.Format("[{0}]{1} ({2})[-]", arg, arg3, Language.Get("CHAT_TAG_SPECTATOR", "Chat"));
+			string text = NGUIText.EscapeSymbols(playerData.Name);
+			string formattedNickNameWithPlayerTag = this._diContainer.Resolve<IGetDisplayableNickName>().GetFormattedNickNameWithPlayerTag(playerData.PlayerId, text, new long?(playerData.PlayerTag));
+			stringBuilder.Append(formattedNickNameWithPlayerTag);
+		}
+
+		private void AppendPublisherPlayerName(StringBuilder stringBuilder, PlayerData playerData)
+		{
+			if (playerData == null)
+			{
+				return;
+			}
+			Publisher publisherById = Publishers.GetPublisherById(playerData.PublisherId);
+			PublisherPresentingData publisherPresentingData = this._getPublisherPresentingData.Get(publisherById);
+			if (!publisherPresentingData.ShouldShowPublisherUserName)
+			{
+				return;
+			}
+			string arg = NGUIText.EscapeSymbols(playerData.PublisherUserName);
+			stringBuilder.AppendFormat(" ({0})", arg);
 		}
 
 		public void OnCleanup(CleanupMessage msg)
@@ -285,35 +399,49 @@ namespace HeavyMetalMachines.HMMChat
 			this._delayed = future;
 		}
 
-		public object Invoke(int classId, short methodId, object[] args)
+		public object Invoke(int classId, short methodId, object[] args, BitStream bitstream = null)
 		{
-			if (classId != 1024)
-			{
-				throw new Exception("Hierarchy in RemoteClass is not allowed!!! " + classId);
-			}
 			this._delayed = null;
-			if (methodId == 4)
+			switch (methodId)
 			{
+			case 5:
 				this.ReceiveMessage((bool)args[0], (string)args[1]);
 				return null;
+			case 6:
+				this.ReceiveDraftMessage((bool)args[0], (string)args[1], (string)args[2], (string[])args[3]);
+				return null;
+			case 10:
+				this.ClientReceiveMessage((bool)args[0], (string)args[1], (byte)args[2]);
+				return null;
+			case 11:
+				this.ClientReceiveDraftMessage((bool)args[0], (string)args[1], (string)args[2], (string[])args[3], (byte)args[4]);
+				return null;
 			}
-			if (methodId != 7)
-			{
-				throw new ScriptMethodNotFoundException(classId, (int)methodId);
-			}
-			this.ClientReceiveMessage((bool)args[0], (string)args[1], (byte)args[2]);
-			return null;
+			throw new ScriptMethodNotFoundException(classId, (int)methodId);
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(ChatService));
 
-		public bool ShowCharacterName;
+		[Inject]
+		private IMatchTeams _teams;
+
+		[Inject]
+		private DiContainer _diContainer;
+
+		[InjectOnClient]
+		private IChatMessageBadWordFilter _chatMessageBadWordFilter;
+
+		[InjectOnClient]
+		private IGetPublisherPresentingData _getPublisherPresentingData;
+
+		[InjectOnClient]
+		private IIsPlayerBlockedInGroupChat _blockedInGroupChat;
 
 		public List<ChatService.ChatMsg> ChatMsgList;
 
 		private IChatComponent _chatComponent;
 
-		public const int StaticClassId = 1024;
+		public const int StaticClassId = 1025;
 
 		private Identifiable _identifiable;
 
@@ -336,6 +464,15 @@ namespace HeavyMetalMachines.HMMChat
 				this.MessageKind = messageKind;
 			}
 
+			public ChatMsg(string draft, string[] messageParameters, bool toTeam, byte playerAddress, ChatService.ChatMessageKind messageKind)
+			{
+				this.Draft = draft;
+				this.MessageParameters = messageParameters;
+				this.IsGroup = toTeam;
+				this.PlayerAddress = playerAddress;
+				this.MessageKind = messageKind;
+			}
+
 			public string Text;
 
 			public bool IsGroup;
@@ -343,6 +480,10 @@ namespace HeavyMetalMachines.HMMChat
 			public byte PlayerAddress;
 
 			public ChatService.ChatMessageKind MessageKind;
+
+			public string Draft;
+
+			public string[] MessageParameters;
 		}
 
 		public enum ChatMessageKind

@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkDestroyOnDamageEvent : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkDestroyOnDamageEvent : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		public override void PerkInitialized()
 		{
@@ -15,7 +15,7 @@ namespace HeavyMetalMachines.Combat
 			this.RegisterListener(this._combat);
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			if (!this._combat)
 			{

@@ -13,19 +13,19 @@ namespace HeavyMetalMachines.Frontend
 			Camera camera;
 			if (this.NguiCameraAdapter.HasCamera(out camera))
 			{
-				component.renderMode = RenderMode.ScreenSpaceCamera;
+				component.renderMode = 1;
 				component.worldCamera = camera;
 				component.planeDistance = camera.farClipPlane - 1f;
 			}
 			else
 			{
-				component.renderMode = RenderMode.ScreenSpaceOverlay;
+				component.renderMode = 0;
 			}
 			if (Application.isPlaying)
 			{
 				CanvasScaler component2 = base.GetComponent<CanvasScaler>();
 				GraphicRaycaster component3 = base.GetComponent<GraphicRaycaster>();
-				UnityEngine.Object.Destroy(this);
+				Object.Destroy(this);
 			}
 		}
 

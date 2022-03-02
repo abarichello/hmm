@@ -1,13 +1,93 @@
 ﻿using System;
 using System.Collections.Generic;
-using HeavyMetalMachines.VFX.PlotKids.VoiceChat;
+using System.Linq;
+using HeavyMetalMachines.Localization;
+using HeavyMetalMachines.ParentalControl.Restrictions;
+using HeavyMetalMachines.Presenting.NGui;
+using HeavyMetalMachines.VoiceChat.Business;
+using Hoplon.Audio.Model;
+using Hoplon.Input.UiNavigation.AxisSelector;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
 	public class EscMenuAudioGui : EscMenuScreenGui
 	{
+		private IUiNavigationAxisSelector UiNavigationAxisSelector
+		{
+			get
+			{
+				return this._uiNavigationAxisSelector;
+			}
+		}
+
+		public override void Show()
+		{
+			this.Dispose();
+			this.CheckParentalControlRestriction();
+			this.CheckToShowVoiceChatDevices();
+			base.Show();
+			this._scrollView.ResetPosition();
+			this.ConfigureAudioDevices();
+		}
+
+		public override void Hide()
+		{
+			base.Hide();
+			this.UiNavigationAxisSelector.ClearSelection();
+			this.Dispose();
+		}
+
+		private void CheckToShowVoiceChatDevices()
+		{
+			bool active = this.ShouldGetVoiceChatDevice();
+			this._inputDevicesGameObject.SetActive(active);
+			this._inputDevicesLoadingGameObject.SetActive(active);
+		}
+
+		private bool ShouldGetVoiceChatDevice()
+		{
+			return this._shouldGetVoiceChatDevices.Should();
+		}
+
+		private void CheckParentalControlRestriction()
+		{
+			IVoiceChatRestriction voiceChatRestriction = this._diContainer.Resolve<IVoiceChatRestriction>();
+			if (!voiceChatRestriction.IsGloballyEnabled())
+			{
+				this._voiceChatParentalControlFeedback.SetActive(false);
+				return;
+			}
+			this.DisableVoiceChatSlider(this.AudioVoiceOverSlider);
+			this.DisableVoiceChatSlider(this.AudioVoiceChatSlider);
+			this.DisableVoiceChatDropBox(this.ActivationModePopup);
+			this.DisableVoiceChatDropBox(this.ActivationVoiceTeamPopup);
+			this._voiceChatParentalControlFeedback.SetActive(true);
+		}
+
+		private void DisableVoiceChatSlider(UISlider slider)
+		{
+			foreach (Collider collider in slider.GetComponentsInChildren<Collider>())
+			{
+				if (collider)
+				{
+					collider.enabled = false;
+				}
+			}
+		}
+
+		private void DisableVoiceChatDropBox(UIPopupList popupList)
+		{
+			Collider component = popupList.GetComponent<Collider>();
+			if (component)
+			{
+				component.enabled = false;
+			}
+		}
+
 		public override void ReloadCurrent()
 		{
 			this.AudioAnnouncerSlider.Set(GameHubBehaviour.Hub.Options.Audio.AnnouncerVolume / 2f, false);
@@ -24,27 +104,154 @@ namespace HeavyMetalMachines.Frontend
 			this.AudioMasterLabel.text = Mathf.RoundToInt(GameHubBehaviour.Hub.Options.Audio.MasterVolume * 100f).ToString();
 			this.AudioVoiceChatSlider.Set(GameHubBehaviour.Hub.Options.Audio.VoiceChatVolume / 2f, false);
 			this.AudioVoiceChatLabel.text = Mathf.RoundToInt(GameHubBehaviour.Hub.Options.Audio.VoiceChatVolume * 100f).ToString();
-			this.AudioDriverPopup.items = new List<string>(GameHubBehaviour.Hub.Options.Audio.DriverNames);
-			this.AudioDriverPopup.Set(this.AudioDriverPopup.items[GameHubBehaviour.Hub.Options.Audio.DriverIndex], false);
 			this.ActivationModePopup.items = new List<string>
 			{
-				Language.Get("VoiceChatInputType_Pressed", TranslationSheets.Chat),
-				Language.Get("VoiceChatInputType_Toggle", TranslationSheets.Chat),
-				Language.Get("VoiceChatInputType_AlwaysActive", TranslationSheets.Chat)
+				Language.Get("VoiceChatInputType_Pressed", TranslationContext.Chat),
+				Language.Get("VoiceChatInputType_Toggle", TranslationContext.Chat),
+				Language.Get("VoiceChatInputType_AlwaysActive", TranslationContext.Chat)
 			};
-			this.ActivationModePopup.value = this.ActivationModePopup.items[(int)SingletonMonoBehaviour<VoiceChatController>.Instance.VoiceChatInputType];
+			this.ActivationModePopup.value = this.ActivationModePopup.items[this._voiceChatPreferences.InputType];
 			this.ActivationVoiceTeamPopup.items = new List<string>
 			{
-				Language.Get("VoiceChatTeamStatus_Disable", TranslationSheets.Chat),
-				Language.Get("VoiceChatTeamStatus_Enable", TranslationSheets.Chat)
+				Language.Get("VoiceChatTeamStatus_Disable", TranslationContext.Chat),
+				Language.Get("VoiceChatTeamStatus_Enable", TranslationContext.Chat)
 			};
-			this.ActivationVoiceTeamPopup.value = this.ActivationVoiceTeamPopup.items[(int)SingletonMonoBehaviour<VoiceChatController>.Instance.VoiceChatTeamStatus];
+			this.ActivationVoiceTeamPopup.value = this.ActivationVoiceTeamPopup.items[this._voiceChatPreferences.TeamStatus];
 			this.AnnouncerPopup.items.Clear();
 			for (int i = 0; i < GameHubBehaviour.Hub.AudioSettings.AnnouncerVoiceOvers.Length; i++)
 			{
-				this.AnnouncerPopup.items.Add(Language.Get(GameHubBehaviour.Hub.AudioSettings.AnnouncerVoiceOvers[i].draftName, TranslationSheets.Options));
+				this.AnnouncerPopup.items.Add(Language.Get(GameHubBehaviour.Hub.AudioSettings.AnnouncerVoiceOvers[i].draftName, TranslationContext.Options));
 			}
-			this.AnnouncerPopup.value = Language.Get(GameHubBehaviour.Hub.AudioSettings.AnnouncerVoiceOvers[GameHubBehaviour.Hub.Options.Audio.AnnouncerIndex].draftName, TranslationSheets.Options);
+			this.AnnouncerPopup.value = Language.Get(GameHubBehaviour.Hub.AudioSettings.AnnouncerVoiceOvers[GameHubBehaviour.Hub.Options.Audio.AnnouncerIndex].draftName, TranslationContext.Options);
+		}
+
+		private void Dispose()
+		{
+			if (this._disposable != null)
+			{
+				this._disposable.Dispose();
+			}
+		}
+
+		private void ConfigureAudioDevices()
+		{
+			if (!this.ShouldGetVoiceChatDevice())
+			{
+				return;
+			}
+			this._disposable = ObservableExtensions.Subscribe<Unit>(this.LoadThenShowAudioDevices());
+		}
+
+		private IObservable<Unit> LoadThenShowAudioDevices()
+		{
+			return Observable.AsUnitObservable<Unit>(Observable.Defer<Unit>(delegate()
+			{
+				this.ClearDevicesPopupAndShowLoading();
+				return Observable.SelectMany<Unit, Unit>(this._voiceChatDevices.CheckAndDoVoiceLogin(), Observable.Merge<Unit>(this.ConfigureInputDevices(), new IObservable<Unit>[]
+				{
+					this.ConfigureOutputDevices()
+				}));
+			}));
+		}
+
+		private IObservable<Unit> ConfigureInputDevices()
+		{
+			return Observable.SelectMany<string, Unit>(Observable.SelectMany<DeviceModel, string>(Observable.Do<DeviceModel>(Observable.Do<DeviceModel>(Observable.SelectMany<DeviceModel[], DeviceModel>(Observable.Do<DeviceModel[]>(Observable.Do<DeviceModel[]>(this._voiceChatDevices.GetInputDevices(), delegate(DeviceModel[] _)
+			{
+				this.ShowInputLoadingAndHideDevicePopup();
+			}), new Action<DeviceModel[]>(this.AddInputPopupOptions)), this._voiceChatDevices.GetCurrentInputDevice()), delegate(DeviceModel currentDevice)
+			{
+				this._inputDevicesPopup.SelectedLabel = currentDevice.DisplayName;
+			}), delegate(DeviceModel _)
+			{
+				this.HideInputLoadingAndShowDevicePopup();
+			}), (DeviceModel _) => this._inputDevicesPopup.OnSelectionChanged()), (string device) => this.SaveInputDevice(device));
+		}
+
+		private IObservable<Unit> ConfigureOutputDevices()
+		{
+			return Observable.SelectMany<string, Unit>(Observable.SelectMany<DeviceModel, string>(Observable.Do<DeviceModel>(Observable.Do<DeviceModel>(Observable.SelectMany<DeviceModel[], DeviceModel>(Observable.Do<DeviceModel[]>(Observable.Do<DeviceModel[]>(this._voiceChatDevices.GetOutputDevices(), delegate(DeviceModel[] _)
+			{
+				this.ShowOutputLoadingAndHideDevicePopup();
+			}), new Action<DeviceModel[]>(this.AddOutputPopupOptions)), this._voiceChatDevices.GetCurrentOutputDevice()), delegate(DeviceModel currentDevice)
+			{
+				this._outputDevicesPopup.SelectedLabel = currentDevice.DisplayName;
+			}), delegate(DeviceModel _)
+			{
+				this.HideOutputLoadingAndShowDevicePopup();
+			}), (DeviceModel _) => this._outputDevicesPopup.OnSelectionChanged()), (string device) => this.SaveOutputDevice(device));
+		}
+
+		private IObservable<Unit> SaveInputDevice(string deviceId)
+		{
+			return Observable.Defer<Unit>(delegate()
+			{
+				DeviceModel inputDevice = this._voiceInputDevices.FirstOrDefault((DeviceModel d) => d.DeviceId == deviceId);
+				return this._voiceChatDevices.SetInputDevice(inputDevice);
+			});
+		}
+
+		private IObservable<Unit> SaveOutputDevice(string deviceId)
+		{
+			return Observable.Defer<Unit>(delegate()
+			{
+				DeviceModel outputDevice = this._voiceOutputDevices.FirstOrDefault((DeviceModel d) => d.DeviceId == deviceId);
+				return this._voiceChatDevices.SetOutputDevice(outputDevice);
+			});
+		}
+
+		private void HideInputLoadingAndShowDevicePopup()
+		{
+			this._inputDevicesPopup.Interactable = true;
+			this._inputDevicesLoadingGameObject.SetActive(false);
+		}
+
+		private void HideOutputLoadingAndShowDevicePopup()
+		{
+			this._outputDevicesPopup.Interactable = true;
+			this._outputDevicesLoadingGameObject.SetActive(false);
+		}
+
+		private void ShowInputLoadingAndHideDevicePopup()
+		{
+			this._inputDevicesPopup.Hide();
+			this._inputDevicesPopup.ClearOptions();
+			this._inputDevicesPopup.Interactable = false;
+			this._inputDevicesLoadingGameObject.SetActive(true);
+		}
+
+		private void ShowOutputLoadingAndHideDevicePopup()
+		{
+			this._outputDevicesPopup.Hide();
+			this._outputDevicesPopup.ClearOptions();
+			this._outputDevicesPopup.Interactable = false;
+			this._outputDevicesLoadingGameObject.SetActive(true);
+		}
+
+		private void ClearDevicesPopupAndShowLoading()
+		{
+			this.ShowOutputLoadingAndHideDevicePopup();
+			this.ShowInputLoadingAndHideDevicePopup();
+		}
+
+		private void AddInputPopupOptions(DeviceModel[] activeDevices)
+		{
+			this._voiceInputDevices = activeDevices;
+			List<string> labels = (from device in activeDevices
+			select device.DisplayName).ToList<string>();
+			List<string> options = (from device in activeDevices
+			select device.DeviceId).ToList<string>();
+			this._inputDevicesPopup.AddOptions(options, labels);
+		}
+
+		private void AddOutputPopupOptions(DeviceModel[] activeDevices)
+		{
+			this._voiceOutputDevices = activeDevices;
+			List<string> labels = (from device in activeDevices
+			select device.DisplayName).ToList<string>();
+			List<string> options = (from device in activeDevices
+			select device.DeviceId).ToList<string>();
+			this._outputDevicesPopup.AddOptions(options, labels);
 		}
 
 		public override void ResetDefault()
@@ -102,72 +309,121 @@ namespace HeavyMetalMachines.Frontend
 			this.ReloadCurrent();
 		}
 
-		public void OnAudioDriverPopupChanged()
-		{
-			GameHubBehaviour.Hub.Options.Audio.DriverIndex = this.AudioDriverPopup.items.FindIndex((string i) => i == this.AudioDriverPopup.value);
-			GameHubBehaviour.Hub.Options.Audio.Apply();
-			this.ReloadCurrent();
-		}
-
 		public void OnAnnoucerPopupChanged()
 		{
 			GameHubBehaviour.Hub.Options.Audio.AnnouncerIndex = this.AnnouncerPopup.items.FindIndex((string i) => i == this.AnnouncerPopup.value);
 			GameHubBehaviour.Hub.Options.Audio.Apply();
-			this.AnnouncerPopup.value = Language.Get(GameHubBehaviour.Hub.AudioSettings.AnnouncerVoiceOvers[GameHubBehaviour.Hub.Options.Audio.AnnouncerIndex].draftName, TranslationSheets.Options);
+			this.AnnouncerPopup.value = Language.Get(GameHubBehaviour.Hub.AudioSettings.AnnouncerVoiceOvers[GameHubBehaviour.Hub.Options.Audio.AnnouncerIndex].draftName, TranslationContext.Options);
 			this.ReloadCurrent();
 		}
 
 		public void OnAudioActivationModePopupChanged()
 		{
-			SingletonMonoBehaviour<VoiceChatController>.Instance.VoiceChatInputType = (VoiceChatInputType)this.ActivationModePopup.items.FindIndex((string i) => i == this.ActivationModePopup.value);
+			this._voiceChatPreferences.InputType = this.ActivationModePopup.items.FindIndex((string i) => i == this.ActivationModePopup.value);
 			this.ReloadCurrent();
 		}
 
 		public void OnAudioActivationVoiceTeamPopupChanged()
 		{
-			SingletonMonoBehaviour<VoiceChatController>.Instance.VoiceChatTeamStatus = (VoiceChatTeamStatus)this.ActivationVoiceTeamPopup.items.FindIndex((string i) => i == this.ActivationVoiceTeamPopup.value);
+			this._voiceChatPreferences.TeamStatus = this.ActivationVoiceTeamPopup.items.FindIndex((string i) => i == this.ActivationVoiceTeamPopup.value);
 		}
 
-		[Header("VOLUME")]
-		public UISlider AudioMasterSlider;
+		[Header("[VOLUME]")]
+		[SerializeField]
+		private UISlider AudioMasterSlider;
 
-		public UILabel AudioMasterLabel;
+		[SerializeField]
+		private UILabel AudioMasterLabel;
 
-		public UISlider AudioMusicSlider;
+		[SerializeField]
+		private UISlider AudioMusicSlider;
 
-		public UILabel AudioMusicLabel;
+		[SerializeField]
+		private UILabel AudioMusicLabel;
 
-		public UISlider AudioSfxGameplaySlider;
+		[SerializeField]
+		private UISlider AudioSfxGameplaySlider;
 
-		public UILabel AudioSfxGameplayLabel;
+		[SerializeField]
+		private UILabel AudioSfxGameplayLabel;
 
-		public UISlider AudioSfxAmbientSlider;
+		[SerializeField]
+		private UISlider AudioSfxAmbientSlider;
 
-		public UILabel AudioSfxAmbientLabel;
+		[SerializeField]
+		private UILabel AudioSfxAmbientLabel;
 
-		public UISlider AudioAnnouncerSlider;
+		[SerializeField]
+		private UISlider AudioAnnouncerSlider;
 
-		public UILabel AudioAnnouncerLabel;
+		[SerializeField]
+		private UILabel AudioAnnouncerLabel;
 
-		public UISlider AudioVoiceOverSlider;
+		[SerializeField]
+		private UISlider AudioVoiceOverSlider;
 
-		public UILabel AudioVoiceOverLabel;
+		[SerializeField]
+		private UILabel AudioVoiceOverLabel;
 
-		public UISlider AudioVoiceChatSlider;
+		[SerializeField]
+		private UISlider AudioVoiceChatSlider;
 
-		public UILabel AudioVoiceChatLabel;
+		[SerializeField]
+		private UILabel AudioVoiceChatLabel;
 
-		[Header("Voice Chat")]
-		public UIPopupList AnnouncerPopup;
+		[Header("[Announcer]")]
+		[SerializeField]
+		private UIPopupList AnnouncerPopup;
 
-		[Header("ADVANCED")]
-		public UIPopupList AudioDriverPopup;
+		[Header("[Voice Chat]")]
+		[SerializeField]
+		private UIPopupList ActivationModePopup;
 
-		public UIToggle MainMenuThemeCheckBox;
+		[SerializeField]
+		private UIPopupList ActivationVoiceTeamPopup;
 
-		[Header("Voice Chat")]
-		public UIPopupList ActivationModePopup;
+		[SerializeField]
+		private StringNGuiDropdown _inputDevicesPopup;
 
-		public UIPopupList ActivationVoiceTeamPopup;
+		[SerializeField]
+		private StringNGuiDropdown _outputDevicesPopup;
+
+		[SerializeField]
+		private GameObject _voiceChatParentalControlFeedback;
+
+		[SerializeField]
+		private GameObject _inputDevicesGameObject;
+
+		[SerializeField]
+		private GameObject _inputDevicesLoadingGameObject;
+
+		[SerializeField]
+		private GameObject _outputDevicesLoadingGameObject;
+
+		[Header("[Scroll]")]
+		[SerializeField]
+		private UIScrollView _scrollView;
+
+		[Header("[Ui Navigation]")]
+		[SerializeField]
+		private UiNavigationAxisSelector _uiNavigationAxisSelector;
+
+		[Inject]
+		private IVoiceChatPreferences _voiceChatPreferences;
+
+		[Inject]
+		private IShouldGetVoiceChatDevices _shouldGetVoiceChatDevices;
+
+		[Inject]
+		private DiContainer _diContainer;
+
+		[Inject]
+		private IVoiceChatDevicesFacade _voiceChatDevices;
+
+		private DeviceModel[] _voiceInputDevices;
+
+		private DeviceModel[] _voiceOutputDevices;
+
+		private IDisposable _disposable;
 	}
 }

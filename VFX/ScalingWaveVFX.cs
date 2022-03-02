@@ -24,8 +24,9 @@ namespace HeavyMetalMachines.VFX
 			while (i < num2)
 			{
 				float num7 = (float)(i & 1);
-				Vector3 a = new Vector3(Mathf.Sin(0.0174532924f * num6), 0f, Mathf.Cos(0.0174532924f * num6));
-				array[i] = a * (ScalingWaveVFX.MeshThickness * num7) + Vector3.back;
+				Vector3 vector;
+				vector..ctor(Mathf.Sin(0.017453292f * num6), 0f, Mathf.Cos(0.017453292f * num6));
+				array[i] = vector * (ScalingWaveVFX.MeshThickness * num7) + Vector3.back;
 				array2[i] = ((!(i < 2 | i > num2 - 2)) ? Color.white : Color.black);
 				array3[i].x = num5 / (num4 - 1f);
 				array3[i].y = num7;

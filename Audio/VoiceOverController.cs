@@ -3,6 +3,7 @@ using FMod;
 using HeavyMetalMachines.Announcer;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Combat.Gadget;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.Match;
 using HeavyMetalMachines.Utils;
 using Pocketverse;
@@ -12,39 +13,30 @@ namespace HeavyMetalMachines.Audio
 {
 	public class VoiceOverController : AudioQueue
 	{
-		private VoiceOver VoiceOver
-		{
-			get
-			{
-				return this._carHub.Player.Character.voiceOver;
-			}
-		}
-
-		private int ObjId
-		{
-			get
-			{
-				return this._carHub.combatObject.Id.ObjId;
-			}
-		}
-
 		public override void Initialize(CarComponentHub carHub)
 		{
 			base.Initialize(carHub);
 			this._carHub = carHub;
+			this._objId = this._carHub.combatObject.Id.ObjId;
+			this.CacheVoiceOver();
 			this.ActivateListeners();
 			base.SetVolumeByIdentifiable(this._carHub.combatObject.Id);
 			this.SetDamageSFXToDefault();
 			PlayerData currentPlayerData = GameHubBehaviour.Hub.Players.CurrentPlayerData;
 			if (this._carHub.combatObject.Id.IsOwner)
 			{
-				this.VoiceOver.PreloadPlayer();
+				this._voiceOver.PreloadPlayer();
 			}
 			if (this._carHub.combatObject.Team == currentPlayerData.Team)
 			{
-				this.VoiceOver.PreloadTeamMember();
+				this._voiceOver.PreloadTeamMember();
 			}
-			this.VoiceOver.Preload();
+			this._voiceOver.Preload();
+		}
+
+		private void CacheVoiceOver()
+		{
+			this._voiceOver = this._carHub.Player.GetCharacterVoiceOver();
 		}
 
 		private void ActivateListeners()
@@ -83,15 +75,15 @@ namespace HeavyMetalMachines.Audio
 			this.DeactivateListeners();
 		}
 
-		private void ListenToPhaseChange(BombScoreBoard.State state)
+		private void ListenToPhaseChange(BombScoreboardState state)
 		{
-			if (state == BombScoreBoard.State.PreReplay)
+			if (state == BombScoreboardState.PreReplay)
 			{
 				this.damageReceived = 0f;
 				this.damageReceivedLastCount = -1f;
 				return;
 			}
-			if (state == BombScoreBoard.State.Replay)
+			if (state == BombScoreboardState.Replay)
 			{
 				this.damageReceived = 0f;
 				this.damageReceivedLastCount = -1f;
@@ -103,7 +95,7 @@ namespace HeavyMetalMachines.Audio
 		{
 			if (GameHubBehaviour.Hub.BombManager.IsCarryingBomb(this._carHub.combatObject) && trackTeamKind != this._carHub.combatObject.Team)
 			{
-				this.InternalPlayAudio(this.VoiceOver.Bomb_Almost_Delivered, VoiceOverEventGroup.BombAlmostDelivered, this.ObjId, -1);
+				this.InternalPlayAudio(this._voiceOver.Bomb_Almost_Delivered, VoiceOverEventGroup.BombAlmostDelivered, this._objId, -1);
 			}
 		}
 
@@ -117,7 +109,7 @@ namespace HeavyMetalMachines.Audio
 			{
 				return;
 			}
-			this.InternalPlayAudio(this.VoiceOver.Bomb_Pick, VoiceOverEventGroup.BombPickUp, this.ObjId, -1);
+			this.InternalPlayAudio(this._voiceOver.Bomb_Pick, VoiceOverEventGroup.BombPickUp, this._objId, -1);
 		}
 
 		private void OnBombDrop(BombInstance bombInstance, SpawnReason reason, int causer)
@@ -130,12 +122,12 @@ namespace HeavyMetalMachines.Audio
 			{
 				if (reason == SpawnReason.InputDrop)
 				{
-					this.InternalPlayAudio(this.VoiceOver.Bomb_Drop_Purposeful, VoiceOverEventGroup.BombPurposefulDrop, this.ObjId, -1);
+					this.InternalPlayAudio(this._voiceOver.Bomb_Drop_Purposeful, VoiceOverEventGroup.BombPurposefulDrop, this._objId, -1);
 					return;
 				}
 				if (reason == SpawnReason.Death)
 				{
-					this.InternalPlayAudio(this.VoiceOver.Bomb_Drop_Death, VoiceOverEventGroup.BombDeathDrop, this.ObjId, -1);
+					this.InternalPlayAudio(this._voiceOver.Bomb_Drop_Death, VoiceOverEventGroup.BombDeathDrop, this._objId, -1);
 					return;
 				}
 				if (reason != SpawnReason.BrokenLink)
@@ -143,7 +135,7 @@ namespace HeavyMetalMachines.Audio
 					return;
 				}
 			}
-			this.InternalPlayAudio(this.VoiceOver.Bomb_Drop_Yellow, VoiceOverEventGroup.BombYellowDrop, this.ObjId, -1);
+			this.InternalPlayAudio(this._voiceOver.Bomb_Drop_Yellow, VoiceOverEventGroup.BombYellowDrop, this._objId, -1);
 		}
 
 		private void OnInGamePauseStateChange(PauseController.PauseState oldState, PauseController.PauseState newState, PlayerData playerData)
@@ -157,16 +149,16 @@ namespace HeavyMetalMachines.Audio
 			switch (slot)
 			{
 			case GadgetSlot.CustomGadget0:
-				this.PlayGadgetAudio(this.VoiceOver.Gadgets_Available_G00, VoiceOverEventGroup.GadgetAvailable);
+				this.PlayGadgetAudio(this._voiceOver.Gadgets_Available_G00, VoiceOverEventGroup.GadgetAvailable);
 				break;
 			case GadgetSlot.CustomGadget1:
-				this.PlayGadgetAudio(this.VoiceOver.Gadgets_Available_G01, VoiceOverEventGroup.GadgetAvailable);
+				this.PlayGadgetAudio(this._voiceOver.Gadgets_Available_G01, VoiceOverEventGroup.GadgetAvailable);
 				break;
 			case GadgetSlot.CustomGadget2:
-				this.PlayGadgetAudio(this.VoiceOver.Gadgets_Available_Ult, VoiceOverEventGroup.GadgetAvailableUltimate);
+				this.PlayGadgetAudio(this._voiceOver.Gadgets_Available_Ult, VoiceOverEventGroup.GadgetAvailableUltimate);
 				break;
 			case GadgetSlot.BoostGadget:
-				this.PlayGadgetAudio(this.VoiceOver.Gadgets_Available_Nitro, VoiceOverEventGroup.GadgetAvailable);
+				this.PlayGadgetAudio(this._voiceOver.Gadgets_Available_Nitro, VoiceOverEventGroup.GadgetAvailable);
 				break;
 			}
 		}
@@ -179,17 +171,17 @@ namespace HeavyMetalMachines.Audio
 				{
 					if (slot == GadgetSlot.CustomGadget2)
 					{
-						this.PlayGadgetAudio(this.VoiceOver.Gadgets_Miss_Ult, VoiceOverEventGroup.GadgetHitOrMissUltimate);
+						this.PlayGadgetAudio(this._voiceOver.Gadgets_Miss_Ult, VoiceOverEventGroup.GadgetHitOrMissUltimate);
 					}
 				}
 				else
 				{
-					this.PlayGadgetAudio(this.VoiceOver.Gadgets_Miss_G01, VoiceOverEventGroup.GadgetHitOrMiss);
+					this.PlayGadgetAudio(this._voiceOver.Gadgets_Miss_G01, VoiceOverEventGroup.GadgetHitOrMiss);
 				}
 			}
 			else
 			{
-				this.PlayGadgetAudio(this.VoiceOver.Gadgets_Miss_G00, VoiceOverEventGroup.GadgetHitOrMiss);
+				this.PlayGadgetAudio(this._voiceOver.Gadgets_Miss_G00, VoiceOverEventGroup.GadgetHitOrMiss);
 			}
 		}
 
@@ -198,20 +190,20 @@ namespace HeavyMetalMachines.Audio
 			switch (slot)
 			{
 			case GadgetSlot.CustomGadget0:
-				this.PlayGadgetAudio(this.VoiceOver.Gadgets_Use_G00, VoiceOverEventGroup.GadgetUse);
+				this.PlayGadgetAudio(this._voiceOver.Gadgets_Use_G00, VoiceOverEventGroup.GadgetUse);
 				return;
 			case GadgetSlot.CustomGadget1:
-				this.PlayGadgetAudio(this.VoiceOver.Gadgets_Use_G01, VoiceOverEventGroup.GadgetUse);
+				this.PlayGadgetAudio(this._voiceOver.Gadgets_Use_G01, VoiceOverEventGroup.GadgetUse);
 				return;
 			case GadgetSlot.CustomGadget2:
-				this.PlayGadgetAudio(this.VoiceOver.Gadgets_Use_Ult, VoiceOverEventGroup.GadgetUseUltimate);
+				this.PlayGadgetAudio(this._voiceOver.Gadgets_Use_Ult, VoiceOverEventGroup.GadgetUseUltimate);
 				return;
 			default:
 				if (slot != GadgetSlot.BombGadget)
 				{
 					return;
 				}
-				this.PlayGadgetAudio(this.VoiceOver.QuickChat_GiveMe_Bomb, VoiceOverEventGroup.BombGadgetUse);
+				this.PlayGadgetAudio(this._voiceOver.QuickChat_GiveMe_Bomb, VoiceOverEventGroup.BombGadgetUse);
 				return;
 			}
 		}
@@ -220,24 +212,24 @@ namespace HeavyMetalMachines.Audio
 		{
 			if (slot == GadgetSlot.CustomGadget0)
 			{
-				this.PlayGadgetAudio(this.VoiceOver.Gadgets_CD_G00, VoiceOverEventGroup.GadgetCooldown);
+				this.PlayGadgetAudio(this._voiceOver.Gadgets_CD_G00, VoiceOverEventGroup.GadgetCooldown);
 				return;
 			}
 			if (slot == GadgetSlot.CustomGadget1)
 			{
-				this.PlayGadgetAudio(this.VoiceOver.Gadgets_CD_G01, VoiceOverEventGroup.GadgetCooldown);
+				this.PlayGadgetAudio(this._voiceOver.Gadgets_CD_G01, VoiceOverEventGroup.GadgetCooldown);
 				return;
 			}
 			if (slot != GadgetSlot.CustomGadget2)
 			{
 				return;
 			}
-			this.PlayGadgetAudio(this.VoiceOver.Gadgets_CD_Ult, VoiceOverEventGroup.GadgetCooldown);
+			this.PlayGadgetAudio(this._voiceOver.Gadgets_CD_Ult, VoiceOverEventGroup.GadgetCooldown);
 		}
 
 		public void PlayDisarmedVoiceOver()
 		{
-			this.PlayGadgetAudio(this.VoiceOver.Disarmed, VoiceOverEventGroup.Disarmed);
+			this.PlayGadgetAudio(this._voiceOver.Disarmed, VoiceOverEventGroup.Disarmed);
 		}
 
 		private void PlayGadgetAudio(VoiceOverLine asset, VoiceOverEventGroup group)
@@ -248,10 +240,10 @@ namespace HeavyMetalMachines.Audio
 			}
 			if (!GameHubBehaviour.Hub.Global.LockAllPlayers)
 			{
-				BombScoreBoard.State currentBombGameState = GameHubBehaviour.Hub.BombManager.CurrentBombGameState;
-				if (currentBombGameState == BombScoreBoard.State.BombDelivery || currentBombGameState == BombScoreBoard.State.PreReplay)
+				BombScoreboardState currentBombGameState = GameHubBehaviour.Hub.BombManager.CurrentBombGameState;
+				if (currentBombGameState == BombScoreboardState.BombDelivery || currentBombGameState == BombScoreboardState.PreReplay)
 				{
-					this.InternalPlayAudio(asset, group, this.ObjId, -1);
+					this.InternalPlayAudio(asset, group, this._objId, -1);
 				}
 			}
 		}
@@ -282,12 +274,12 @@ namespace HeavyMetalMachines.Audio
 				if (this.lowHealthCanTrigger)
 				{
 					this.lowHealthCanTrigger = false;
-					if (this.VoiceOver.Bomb_Near_Death.VoiceLine != null && GameHubBehaviour.Hub.BombManager.IsCarryingBomb(combatObject))
+					if (this._voiceOver.Bomb_Near_Death.VoiceLine != null && GameHubBehaviour.Hub.BombManager.IsCarryingBomb(combatObject))
 					{
-						this.InternalPlayAudio(this.VoiceOver.Bomb_Near_Death, VoiceOverEventGroup.NearDeath, otherId, this.ObjId);
+						this.InternalPlayAudio(this._voiceOver.Bomb_Near_Death, VoiceOverEventGroup.NearDeath, otherId, this._objId);
 						return;
 					}
-					this.InternalPlayAudio(this.VoiceOver.Almost_Dying, VoiceOverEventGroup.NearDeath, otherId, this.ObjId);
+					this.InternalPlayAudio(this._voiceOver.Almost_Dying, VoiceOverEventGroup.NearDeath, otherId, this._objId);
 					return;
 				}
 			}
@@ -305,7 +297,7 @@ namespace HeavyMetalMachines.Audio
 			{
 				this.damageReceived = 0f;
 				this.damageReceivedLastCount = -1f;
-				asset = this.VoiceOver.Damage_Massive;
+				asset = this._voiceOver.Damage_Massive;
 				voGroup = VoiceOverEventGroup.MassiveDamage;
 			}
 			else
@@ -315,79 +307,133 @@ namespace HeavyMetalMachines.Audio
 					return;
 				}
 				this.damageReceivedLastCount = Time.timeSinceLevelLoad + GameHubBehaviour.Hub.AudioSettings.MassiveDamageCheckInterval;
-				asset = this.VoiceOver.Damage_Regular;
+				asset = this._voiceOver.Damage_Regular;
 				voGroup = VoiceOverEventGroup.Damage;
 			}
-			if (this.InternalPlayAudio(asset, voGroup, otherId, this.ObjId) && otherId != -1)
+			if (this.InternalPlayAudio(asset, voGroup, otherId, this._objId) && otherId != -1)
 			{
 				FMODAudioManager.PlayOneShotAt(this.currentDamageSFXAsset, base.transform.position, 0);
 			}
 		}
 
-		public void ChangeDamageSFX(FMODAsset damageSFX)
+		public void ChangeDamageSFX(AudioEventAsset damageSFX)
 		{
 			this.currentDamageSFXAsset = damageSFX;
 		}
 
 		public void SetDamageSFXToDefault()
 		{
-			this.currentDamageSFXAsset = ((!this._carHub.combatObject.Id.IsOwner) ? this._carHub.Player.Character.carAudio.Hitted_Others : this._carHub.Player.Character.carAudio.Hitted_Player);
+			CarAudioData characterCarAudioData = this._carHub.Player.GetCharacterCarAudioData();
+			this.currentDamageSFXAsset = ((!this._carHub.combatObject.Id.IsOwner) ? characterCarAudioData.Hitted_Others : characterCarAudioData.Hitted_Player);
 		}
 
 		private void ListenToObjectSpawn(CombatObject obj, SpawnEvent msg)
 		{
-			if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreBoard.State.BombDelivery)
+			if (GameHubBehaviour.Hub.BombManager.ScoreBoard.CurrentState == BombScoreboardState.BombDelivery)
 			{
-				this.InternalPlayAudio(this.VoiceOver.Respawn, VoiceOverEventGroup.Respawn, this.ObjId, -1);
+				this.InternalPlayAudio(this._voiceOver.Respawn, VoiceOverEventGroup.Respawn, this._objId, -1);
 			}
 		}
 
 		private void ListenToObjectUnspawn(CombatObject combatObject, UnspawnEvent msg)
 		{
-			this.InternalPlayAudio((!this._carHub.combatObject.Id.IsOwner) ? this.VoiceOver.Dying_Others : this.VoiceOver.Dying_Client, VoiceOverEventGroup.Death, msg.Causer, this.ObjId);
+			this.InternalPlayAudio((!this._carHub.combatObject.Id.IsOwner) ? this._voiceOver.Dying_Others : this._voiceOver.Dying_Client, VoiceOverEventGroup.Death, msg.Causer, this._objId);
 		}
 
 		public void Play(VoiceOverEventGroup voiceOverEventGroup)
 		{
 			switch (voiceOverEventGroup)
 			{
-			case VoiceOverEventGroup.BombDelivered:
-				this.InternalPlayAudio(this.VoiceOver.Bomb_Delivered, voiceOverEventGroup, this.ObjId, -1);
+			case VoiceOverEventGroup.QuickChatAttackInterceptors:
+				this.InternalPlayAudio(this._voiceOver.QuickChat_Attack_Interceptors, voiceOverEventGroup, this._objId, -1);
+				return;
+			case VoiceOverEventGroup.QuickChatAttackSupporters:
+				this.InternalPlayAudio(this._voiceOver.QuickChat_Attack_Supporters, voiceOverEventGroup, this._objId, -1);
+				return;
+			case VoiceOverEventGroup.QuickChatAttackTransporters:
+				this.InternalPlayAudio(this._voiceOver.QuickChat_Attack_Transporters, voiceOverEventGroup, this._objId, -1);
+				return;
+			case VoiceOverEventGroup.QuickChatGroupUp:
+				this.InternalPlayAudio(this._voiceOver.QuickChat_Group_Up, voiceOverEventGroup, this._objId, -1);
+				return;
+			case VoiceOverEventGroup.QuickChatNeedRepair:
+				this.InternalPlayAudio(this._voiceOver.QuickChat_Need_Repair, voiceOverEventGroup, this._objId, -1);
+				return;
+			case VoiceOverEventGroup.QuickChatNeedRepairIntense:
+				this.InternalPlayAudio(this._voiceOver.QuickChat_Need_Repair_Intense, voiceOverEventGroup, this._objId, -1);
+				return;
+			case VoiceOverEventGroup.QuickChatOk:
+				this.InternalPlayAudio(this._voiceOver.QuickChat_Ok, voiceOverEventGroup, this._objId, -1);
+				return;
+			case VoiceOverEventGroup.QuickChatSpecialAlmostReady:
+				this.InternalPlayAudio(this._voiceOver.QuickChat_Special_Almost_Ready, voiceOverEventGroup, this._objId, -1);
+				return;
+			case VoiceOverEventGroup.QuickChatSpecialNotReady:
+				this.InternalPlayAudio(this._voiceOver.QuickChat_Special_Not_Ready, voiceOverEventGroup, this._objId, -1);
+				return;
+			case VoiceOverEventGroup.QuickChatSpecialReady:
+				this.InternalPlayAudio(this._voiceOver.QuickChat_Special_Ready, voiceOverEventGroup, this._objId, -1);
+				return;
+			case VoiceOverEventGroup.QuickChatGiveMeBomb:
+				this.InternalPlayAudio(this._voiceOver.QuickChat_GiveMe_Bomb, voiceOverEventGroup, this._objId, -1);
+				return;
+			case VoiceOverEventGroup.QuickChatDroppingBomb:
+				this.InternalPlayAudio(this._voiceOver.QuickChat_Dropping_Bomb, voiceOverEventGroup, this._objId, -1);
+				return;
+			case VoiceOverEventGroup.QuickChatProtectBomb:
+				this.InternalPlayAudio(this._voiceOver.QuickChat_Protect_Bomb, voiceOverEventGroup, this._objId, -1);
+				return;
+			case VoiceOverEventGroup.QuickChatGetBomb:
+				this.InternalPlayAudio(this._voiceOver.QuickChat_Get_Bomb, voiceOverEventGroup, this._objId, -1);
+				return;
+			case VoiceOverEventGroup.QuickChatOnMyWay:
+				this.InternalPlayAudio(this._voiceOver.QuickChat_OnMyWay, voiceOverEventGroup, this._objId, -1);
+				return;
+			case VoiceOverEventGroup.QuickChatImOut:
+				this.InternalPlayAudio(this._voiceOver.QuickChat_ImOut, voiceOverEventGroup, this._objId, -1);
 				return;
 			default:
 				switch (voiceOverEventGroup)
 				{
-				case VoiceOverEventGroup.MatchWin:
-					if (!this._carHub.combatObject.Id.IsOwner)
-					{
-						this.InternalPlayAudio(this.VoiceOver.Match_Win, voiceOverEventGroup, this.ObjId, -1);
-					}
+				case VoiceOverEventGroup.BombDelivered:
+					this.InternalPlayAudio(this._voiceOver.Bomb_Delivered, voiceOverEventGroup, this._objId, -1);
 					return;
-				case VoiceOverEventGroup.MatchLose:
-					this.InternalPlayAudio(this.VoiceOver.Match_Lose, voiceOverEventGroup, this.ObjId, -1);
-					return;
-				case VoiceOverEventGroup.ActivateNitro:
-					this.InternalPlayAudio(this.VoiceOver.Movement_Nitro, voiceOverEventGroup, this.ObjId, -1);
-					break;
 				default:
-					if (voiceOverEventGroup == VoiceOverEventGroup.Respawn)
+					switch (voiceOverEventGroup)
 					{
-						this.InternalPlayAudio(this.VoiceOver.Respawn, voiceOverEventGroup, this.ObjId, -1);
+					case VoiceOverEventGroup.MatchWin:
+						if (!this._carHub.combatObject.Id.IsOwner)
+						{
+							this.InternalPlayAudio(this._voiceOver.Match_Win, voiceOverEventGroup, this._objId, -1);
+						}
 						return;
+					case VoiceOverEventGroup.MatchLose:
+						this.InternalPlayAudio(this._voiceOver.Match_Lose, voiceOverEventGroup, this._objId, -1);
+						return;
+					case VoiceOverEventGroup.ActivateNitro:
+						this.InternalPlayAudio(this._voiceOver.Movement_Nitro, voiceOverEventGroup, this._objId, -1);
+						break;
+					default:
+						if (voiceOverEventGroup == VoiceOverEventGroup.Respawn)
+						{
+							this.InternalPlayAudio(this._voiceOver.Respawn, voiceOverEventGroup, this._objId, -1);
+							return;
+						}
+						Debug.Assert(false, string.Format("Not implemented VoiceOverEventGroup by play: {0}", voiceOverEventGroup), Debug.TargetTeam.All);
+						break;
 					}
-					HeavyMetalMachines.Utils.Debug.Assert(false, string.Format("Not implemented VoiceOverEventGroup by play: {0}", voiceOverEventGroup), HeavyMetalMachines.Utils.Debug.TargetTeam.All);
-					break;
+					return;
+				case VoiceOverEventGroup.OpenShop:
+					this.InternalPlayAudio(this._voiceOver.Upgrade_Open_Shop, voiceOverEventGroup, this._objId, -1);
+					return;
+				case VoiceOverEventGroup.BuyUpgrades:
+					this.InternalPlayAudio(this._voiceOver.Upgrade_Buy, voiceOverEventGroup, this._objId, -1);
+					return;
+				case VoiceOverEventGroup.BuyUltimateUpgrade:
+					this.InternalPlayAudio(this._voiceOver.Upgrade_Ult_Buy, voiceOverEventGroup, this._objId, -1);
+					return;
 				}
-				return;
-			case VoiceOverEventGroup.OpenShop:
-				this.InternalPlayAudio(this.VoiceOver.Upgrade_Open_Shop, voiceOverEventGroup, this.ObjId, -1);
-				return;
-			case VoiceOverEventGroup.BuyUpgrades:
-				this.InternalPlayAudio(this.VoiceOver.Upgrade_Buy, voiceOverEventGroup, this.ObjId, -1);
-				return;
-			case VoiceOverEventGroup.BuyUltimateUpgrade:
-				this.InternalPlayAudio(this.VoiceOver.Upgrade_Ult_Buy, voiceOverEventGroup, this.ObjId, -1);
-				return;
+				break;
 			}
 		}
 
@@ -396,34 +442,34 @@ namespace HeavyMetalMachines.Audio
 			switch (pingKind)
 			{
 			case PlayerPing.PlayerPingKind.ProtectTheBomb:
-				this.InternalPlayAudio(this.VoiceOver.QuickChat_Protect_Bomb, VoiceOverEventGroup.ChatProtectBomb, this.ObjId, -1);
+				this.InternalPlayAudio(this._voiceOver.QuickChat_Protect_Bomb, VoiceOverEventGroup.ChatProtectBomb, this._objId, -1);
 				break;
 			case PlayerPing.PlayerPingKind.GoodGame:
-				this.InternalPlayAudio(this.VoiceOver.Talk_GoodGame, VoiceOverEventGroup.ChatGG, this.ObjId, -1);
+				this.InternalPlayAudio(this._voiceOver.Talk_GoodGame, VoiceOverEventGroup.ChatGG, this._objId, -1);
 				break;
 			case PlayerPing.PlayerPingKind.OnMyWay:
-				this.InternalPlayAudio(this.VoiceOver.QuickChat_OnMyWay, VoiceOverEventGroup.ChatOMW, this.ObjId, -1);
+				this.InternalPlayAudio(this._voiceOver.QuickChat_OnMyWay, VoiceOverEventGroup.ChatOMW, this._objId, -1);
 				break;
 			case PlayerPing.PlayerPingKind.Thanks:
-				this.InternalPlayAudio(this.VoiceOver.Talk_Thanks, VoiceOverEventGroup.ChatThanks, this.ObjId, -1);
+				this.InternalPlayAudio(this._voiceOver.Talk_Thanks, VoiceOverEventGroup.ChatThanks, this._objId, -1);
 				break;
 			case PlayerPing.PlayerPingKind.CountMeOut:
-				this.InternalPlayAudio(this.VoiceOver.QuickChat_ImOut, VoiceOverEventGroup.ChatCountMeOut, this.ObjId, -1);
+				this.InternalPlayAudio(this._voiceOver.QuickChat_ImOut, VoiceOverEventGroup.ChatCountMeOut, this._objId, -1);
 				break;
 			case PlayerPing.PlayerPingKind.GoodLuckHaveFun:
-				this.InternalPlayAudio(this.VoiceOver.Talk_GoodLuck, VoiceOverEventGroup.ChatGL, this.ObjId, -1);
+				this.InternalPlayAudio(this._voiceOver.Talk_GoodLuck, VoiceOverEventGroup.ChatGL, this._objId, -1);
 				break;
 			case PlayerPing.PlayerPingKind.LetMeGetThebomb:
-				this.InternalPlayAudio(this.VoiceOver.QuickChat_GiveMe_Bomb, VoiceOverEventGroup.ChatLetMeGetThebomb, this.ObjId, -1);
+				this.InternalPlayAudio(this._voiceOver.QuickChat_GiveMe_Bomb, VoiceOverEventGroup.ChatLetMeGetThebomb, this._objId, -1);
 				break;
 			case PlayerPing.PlayerPingKind.Sorry:
-				this.InternalPlayAudio(this.VoiceOver.Talk_Sorry, VoiceOverEventGroup.ChatSorry, this.ObjId, -1);
+				this.InternalPlayAudio(this._voiceOver.Talk_Sorry, VoiceOverEventGroup.ChatSorry, this._objId, -1);
 				break;
 			case PlayerPing.PlayerPingKind.GetTheBomb:
-				this.InternalPlayAudio(this.VoiceOver.QuickChat_Get_Bomb, VoiceOverEventGroup.ChatGetBomb, this.ObjId, -1);
+				this.InternalPlayAudio(this._voiceOver.QuickChat_Get_Bomb, VoiceOverEventGroup.ChatGetBomb, this._objId, -1);
 				break;
 			case PlayerPing.PlayerPingKind.IWillDropTheBomb:
-				this.InternalPlayAudio(this.VoiceOver.QuickChat_Dropping_Bomb, VoiceOverEventGroup.ChatDropBomb, this.ObjId, -1);
+				this.InternalPlayAudio(this._voiceOver.QuickChat_Dropping_Bomb, VoiceOverEventGroup.ChatDropBomb, this._objId, -1);
 				break;
 			}
 		}
@@ -445,11 +491,11 @@ namespace HeavyMetalMachines.Audio
 			}
 			if (GameHubBehaviour.Hub.Players.CurrentPlayerData.Team == teamKind)
 			{
-				this.InternalPlayAudio(this.VoiceOver.Match_Win, VoiceOverEventGroup.MatchWin, this.ObjId, -1);
+				this.InternalPlayAudio(this._voiceOver.Match_Win, VoiceOverEventGroup.MatchWin, this._objId, -1);
 			}
 			else
 			{
-				this.InternalPlayAudio(this.VoiceOver.Match_Lose, VoiceOverEventGroup.MatchLose, this.ObjId, -1);
+				this.InternalPlayAudio(this._voiceOver.Match_Lose, VoiceOverEventGroup.MatchLose, this._objId, -1);
 			}
 		}
 
@@ -478,31 +524,31 @@ namespace HeavyMetalMachines.Audio
 
 		private FMODAudioManager.SourceTypes GetVoiceOverEventType(VoiceOverEventGroup group)
 		{
-			if (group > (VoiceOverEventGroup)this._audioSettings.VoiceOverEventsConfig.Length)
+			if (group >= (VoiceOverEventGroup)this._audioSettings.VoiceOverEventsConfig.Length)
 			{
 				return (FMODAudioManager.SourceTypes)0;
 			}
 			return this._audioSettings.VoiceOverEventsConfig[(int)group];
 		}
 
-		public void PlayKillAudio(AnnouncerManager.QueuedAnnouncerLog queuedAnnouncerLog)
+		public void PlayKillAudio(QueuedAnnouncerLog queuedAnnouncerLog)
 		{
-			if (this.VoiceOver.Kill_Ultimate.VoiceLine != null && this._carHub.combatObject.GadgetStates.G2StateObject.EffectState == EffectState.Running)
+			if (this._voiceOver.Kill_Ultimate.VoiceLine != null && this._carHub.combatObject.GadgetStates.G2StateObject.EffectState == EffectState.Running)
 			{
-				this.InternalPlayAudio(this.VoiceOver.Kill_Ultimate, VoiceOverEventGroup.KillEnemyPlayer, this.ObjId, queuedAnnouncerLog.AnnouncerEvent.Victim);
+				this.InternalPlayAudio(this._voiceOver.Kill_Ultimate, VoiceOverEventGroup.KillEnemyPlayer, this._objId, queuedAnnouncerLog.AnnouncerEvent.Victim);
 				return;
 			}
-			this.InternalPlayAudio(this.VoiceOver.Kill_Enemy, VoiceOverEventGroup.KillEnemyPlayer, this.ObjId, queuedAnnouncerLog.AnnouncerEvent.Victim);
+			this.InternalPlayAudio(this._voiceOver.Kill_Enemy, VoiceOverEventGroup.KillEnemyPlayer, this._objId, queuedAnnouncerLog.AnnouncerEvent.Victim);
 		}
 
-		public void PlayKillAssistAudio(AnnouncerManager.QueuedAnnouncerLog queuedAnnouncerLog)
+		public void PlayKillAssistAudio(QueuedAnnouncerLog queuedAnnouncerLog)
 		{
-			this.InternalPlayAudio(this.VoiceOver.Kill_Enemy, VoiceOverEventGroup.KillEnemyPlayer, this.ObjId, queuedAnnouncerLog.AnnouncerEvent.Victim);
+			this.InternalPlayAudio(this._voiceOver.Kill_Enemy, VoiceOverEventGroup.KillEnemyPlayer, this._objId, queuedAnnouncerLog.AnnouncerEvent.Victim);
 		}
 
-		public void PlayRevengeAudio(AnnouncerManager.QueuedAnnouncerLog queuedAnnouncerLog)
+		public void PlayRevengeAudio(QueuedAnnouncerLog queuedAnnouncerLog)
 		{
-			this.InternalPlayAudio(this.VoiceOver.Kill_Revenge, VoiceOverEventGroup.KillNemesisRevenge, this.ObjId, queuedAnnouncerLog.AnnouncerEvent.Victim);
+			this.InternalPlayAudio(this._voiceOver.Kill_Revenge, VoiceOverEventGroup.KillNemesisRevenge, this._objId, queuedAnnouncerLog.AnnouncerEvent.Victim);
 		}
 
 		private bool InternalPlayAudio(VoiceOverLine asset, VoiceOverEventGroup voGroup, int causerID, int targetId = -1)
@@ -524,15 +570,26 @@ namespace HeavyMetalMachines.Audio
 				return false;
 			}
 			FMODAudioManager.SourceTypes voiceOverEventType = this.GetVoiceOverEventType(voGroup);
-			if (FMODAudioManager.CheckForbiddenSources(GameHubBehaviour.Hub, voiceOverEventType, this.ObjId, causerID, targetId))
+			if (FMODAudioManager.CheckForbiddenSources(GameHubBehaviour.Hub.Players, voiceOverEventType, this._objId, causerID, targetId))
 			{
 				if (GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.FMODDebug))
 				{
+					VoiceOverController.Log.DebugFormat("[AUDIO] [CAR] {0} tried to call {1}, but he is forbidden by config {2}", new object[]
+					{
+						base.name,
+						asset.VoiceLine.name,
+						voiceOverEventType
+					});
 				}
 				return false;
 			}
 			if (GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.FMODDebug))
 			{
+				VoiceOverController.Log.DebugFormat("[AUDIO] [CAR] {0} calling {1}", new object[]
+				{
+					base.name,
+					asset.VoiceLine.name
+				});
 			}
 			base.Enqueue(asset.VoiceLine, this._carHub.RenderTransform);
 			return true;
@@ -556,6 +613,10 @@ namespace HeavyMetalMachines.Audio
 
 		private GadgetState LastBombGadgetState = GadgetState.None;
 
-		private FMODAsset currentDamageSFXAsset;
+		private AudioEventAsset currentDamageSFXAsset;
+
+		private VoiceOver _voiceOver;
+
+		private int _objId;
 	}
 }

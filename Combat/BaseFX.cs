@@ -112,7 +112,7 @@ namespace HeavyMetalMachines.Combat
 
 		public override Transform GetDummy(CDummy.DummyKind kind)
 		{
-			return this.Gadget.Combat.Dummy.GetDummy(kind, null);
+			return this.Gadget.Combat.Dummy.GetDummy(kind, null, null);
 		}
 
 		public override GadgetBehaviour GetGadget()
@@ -221,11 +221,11 @@ namespace HeavyMetalMachines.Combat
 			this._positionReset = true;
 		}
 
-		public DestroyEffect DestroyEffect(EffectRemoveEvent removeData)
+		public DestroyEffectMessage DestroyEffect(EffectRemoveEvent removeData)
 		{
 			if (this.isSleeping)
 			{
-				return default(DestroyEffect);
+				return default(DestroyEffectMessage);
 			}
 			if (this.vfxInstance)
 			{
@@ -235,7 +235,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				this.sfxInstance.Destroy(removeData);
 			}
-			DestroyEffect destroyEffect = new DestroyEffect(this.Data, removeData);
+			DestroyEffectMessage destroyEffectMessage = new DestroyEffectMessage(this.Data, removeData);
 			if (GameHubBehaviour.Hub.Net.IsClient() && Vector3.zero != removeData.Origin)
 			{
 				base.transform.position = removeData.Origin;
@@ -247,19 +247,20 @@ namespace HeavyMetalMachines.Combat
 			}
 			for (int i = 0; i < base.DestroyEffectListenerScripts.Length; i++)
 			{
-				if (base.DestroyEffectListenerScripts[i] is DestroyEffect.IDestroyEffectListener)
+				if (base.DestroyEffectListenerScripts[i] is DestroyEffectMessage.IDestroyEffectListener)
 				{
-					((DestroyEffect.IDestroyEffectListener)base.DestroyEffectListenerScripts[i]).OnDestroyEffect(destroyEffect);
+					((DestroyEffectMessage.IDestroyEffectListener)base.DestroyEffectListenerScripts[i]).OnDestroyEffect(destroyEffectMessage);
 				}
 			}
 			if (this.Gadget)
 			{
-				((DestroyEffect.IDestroyEffectListener)this.Gadget).OnDestroyEffect(destroyEffect);
+				((DestroyEffectMessage.IDestroyEffectListener)this.Gadget).OnDestroyEffect(destroyEffectMessage);
 			}
-			this.BluCreated = (this.RedCreated = false);
 			this._transform = base.transform;
 			this.isSleeping = true;
 			this.Data.Release();
+			EventData.FreeContent(this.Event.Content);
+			EventManager.FreeEventData(this.Event);
 			this.Data = null;
 			this.Gadget = null;
 			this._target = null;
@@ -281,7 +282,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				base.gameObject.SetActive(false);
 			}
-			return destroyEffect;
+			return destroyEffectMessage;
 		}
 
 		public void ActivateEffect(string strCondition)
@@ -338,7 +339,7 @@ namespace HeavyMetalMachines.Combat
 
 		public static bool CheckHit(CombatObject owner, CombatObject other, IHitMask info)
 		{
-			if (other == null)
+			if (other == null || other.NoHit)
 			{
 				return false;
 			}
@@ -349,7 +350,7 @@ namespace HeavyMetalMachines.Combat
 			bool flag = other == owner && info.Self;
 			bool flag2 = other.Team == owner.Team;
 			bool flag3 = (flag2 && info.Friends && other != owner) || (!flag2 && info.Enemies);
-			bool flag4 = (info.Bomb && other.IsBomb) || (info.Creeps && other.IsCreep) || (info.Turrets && other.IsTurret) || (info.Wards && other.IsWard) || (info.Buildings && other.IsBuilding) || (info.Players && other.IsPlayer) || (info.Boss && other.IsBoss);
+			bool flag4 = (info.Bomb && other.IsBomb) || (info.Turrets && other.IsTurret) || (info.Wards && other.IsWard) || (info.Buildings && other.IsBuilding) || (info.Players && other.IsPlayer) || (info.Boss && other.IsBoss);
 			bool flag5 = !other.Attributes.CurrentStatus.HasFlag(StatusKind.Banished) || info.Banished;
 			return flag4 && ((!other.IsPlayer && !other.IsWard) || flag || flag3) && flag5;
 		}
@@ -406,7 +407,13 @@ namespace HeavyMetalMachines.Combat
 
 		public static BaseFX GetFX(Collider col)
 		{
-			return BaseFX._collidersToFX[col];
+			if (GameHubBehaviour.Hub.Net.IsClient())
+			{
+				return null;
+			}
+			BaseFX result;
+			BaseFX._collidersToFX.TryGetValue(col, out result);
+			return result;
 		}
 
 		public void Cleanup()
@@ -439,8 +446,21 @@ namespace HeavyMetalMachines.Combat
 			{
 				return;
 			}
+			this._body = base.GetComponent<Rigidbody>();
+			Collider[] componentsInChildren = base.gameObject.GetComponentsInChildren<Collider>(true);
 			if (GameHubBehaviour.Hub.Net.IsClient())
 			{
+				if (this._body)
+				{
+					Object.Destroy(this._body);
+				}
+				for (int i = 0; i < componentsInChildren.Length; i++)
+				{
+					if (componentsInChildren[i])
+					{
+						Object.Destroy(componentsInChildren[i]);
+					}
+				}
 				if (this.VFX)
 				{
 					GameHubBehaviour.Hub.Resources.PrefabPreCache(this.VFX, 1);
@@ -450,33 +470,34 @@ namespace HeavyMetalMachines.Combat
 					GameHubBehaviour.Hub.Resources.PrefabPreCache(this.SFX, 1);
 				}
 			}
+			else
+			{
+				if (BaseFX._collidersToFX == null)
+				{
+					BaseFX._collidersToFX = new Dictionary<Collider, BaseFX>();
+				}
+				for (int j = 0; j < componentsInChildren.Length; j++)
+				{
+					BaseFX._collidersToFX.Add(componentsInChildren[j], this);
+				}
+			}
 			this.m_boAwoken = true;
 			this._transform = base.transform;
-			this._body = base.GetComponent<Rigidbody>();
-			if (BaseFX._collidersToFX == null)
+			BasePerk[] componentsInChildren2 = base.GetComponentsInChildren<BasePerk>(true);
+			for (int k = 0; k < componentsInChildren2.Length; k++)
 			{
-				BaseFX._collidersToFX = new Dictionary<Collider, BaseFX>();
-			}
-			Collider[] componentsInChildren = base.gameObject.GetComponentsInChildren<Collider>(true);
-			for (int i = 0; i < componentsInChildren.Length; i++)
-			{
-				BaseFX._collidersToFX.Add(componentsInChildren[i], this);
-			}
-			BasePerk[] componentsInChildren2 = base.gameObject.GetComponentsInChildren<BasePerk>();
-			for (int j = 0; j < componentsInChildren2.Length; j++)
-			{
-				if (componentsInChildren2[j] is IPerkWithCollision)
+				if (componentsInChildren2[k] is IPerkWithCollision)
 				{
-					this._myPerksWithCollision.Add((IPerkWithCollision)componentsInChildren2[j]);
+					this._myPerksWithCollision.Add((IPerkWithCollision)componentsInChildren2[k]);
 				}
-				if (componentsInChildren2[j] is IPerkWithDestruction)
+				if (componentsInChildren2[k] is IPerkWithDestruction)
 				{
-					this._destructionPerks.Add((IPerkWithDestruction)componentsInChildren2[j]);
+					this._destructionPerks.Add((IPerkWithDestruction)componentsInChildren2[k]);
 				}
-				if (componentsInChildren2[j] is IPerkMovement)
+				if (componentsInChildren2[k] is IPerkMovement)
 				{
 					HeavyMetalMachines.Utils.Debug.Assert(this._movementPerk == null, string.Format("Effect={0} with more movement perks, not capable yet.", base.name), HeavyMetalMachines.Utils.Debug.TargetTeam.All);
-					this._movementPerk = (IPerkMovement)componentsInChildren2[j];
+					this._movementPerk = (IPerkMovement)componentsInChildren2[k];
 				}
 			}
 			this._skipChecks = (this._myPerksWithCollision.Count == 0 && this._movementPerk == null && this._destructionPerks.Count == 0);
@@ -539,6 +560,10 @@ namespace HeavyMetalMachines.Combat
 			Vector3 vector2 = vector;
 			if (GameHubBehaviour.Hub.Net.IsClient())
 			{
+				if (this._body)
+				{
+					this._body.Sleep();
+				}
 				this._transform.position = vector2;
 			}
 			else if (Time.deltaTime > 0f && this._canSetVelocity && this._body != null)
@@ -703,6 +728,7 @@ namespace HeavyMetalMachines.Combat
 				for (int i = 0; i < this._myPerksWithCollision.Count; i++)
 				{
 					IPerkWithCollision perkWithCollision = this._myPerksWithCollision[i];
+					BaseFX.LogWarningIfNull(perkWithCollision);
 					perkWithCollision.OnEnter(col, Vector3.zero, Vector3.zero, true, isBarrier);
 				}
 				return;
@@ -723,6 +749,14 @@ namespace HeavyMetalMachines.Combat
 					IPerkWithCollision perkWithCollision2 = this._myPerksWithCollision[j];
 					perkWithCollision2.OnEnter(col, Vector3.zero, Vector3.zero, true, isBarrier);
 				}
+			}
+		}
+
+		private static void LogWarningIfNull(IPerkWithCollision perkWithCollision)
+		{
+			if (perkWithCollision == null)
+			{
+				BaseFX.Log.WarnFormat("A perk was destroyed in an invalid time. This can cause unexpected behaviour. Check previous warnings from BasePerk class for details.", new object[0]);
 			}
 		}
 
@@ -791,7 +825,7 @@ namespace HeavyMetalMachines.Combat
 				if (this.VFX)
 				{
 					this.vfxInstance = (MasterVFX)GameHubBehaviour.Hub.Resources.PrefabCacheInstantiate(this.VFX, base.transform.position, base.transform.rotation);
-					this.vfxInstance.transform.parent = GameHubBehaviour.Hub.Drawer.Effects;
+					GameHubBehaviour.Hub.Drawer.AddEffect(this.vfxInstance.transform);
 					this.vfxInstance.Origin = content.Origin;
 					this.vfxInstance.baseMasterVFX = this.VFX;
 					this.vfxInstance = this.vfxInstance.Activate(this);
@@ -799,7 +833,7 @@ namespace HeavyMetalMachines.Combat
 				if (this.SFX)
 				{
 					this.sfxInstance = (MasterVFX)GameHubBehaviour.Hub.Resources.PrefabCacheInstantiate(this.SFX, base.transform.position, base.transform.rotation);
-					this.sfxInstance.transform.parent = GameHubBehaviour.Hub.Drawer.Effects;
+					GameHubBehaviour.Hub.Drawer.AddEffect(this.sfxInstance.transform);
 					this.sfxInstance.Origin = content.Origin;
 					this.sfxInstance.baseMasterVFX = this.SFX;
 					this.sfxInstance = this.sfxInstance.Activate(this);
@@ -843,10 +877,6 @@ namespace HeavyMetalMachines.Combat
 
 		public EventData Event;
 
-		public bool RedCreated;
-
-		public bool BluCreated;
-
 		[SerializeField]
 		private bool _canSetVelocity = true;
 
@@ -870,9 +900,9 @@ namespace HeavyMetalMachines.Combat
 
 		private bool _destroyTriggered;
 
-		private List<IPerkWithCollision> _myPerksWithCollision = new List<IPerkWithCollision>(5);
+		private readonly List<IPerkWithCollision> _myPerksWithCollision = new List<IPerkWithCollision>(5);
 
-		private List<IPerkWithDestruction> _destructionPerks = new List<IPerkWithDestruction>(3);
+		private readonly List<IPerkWithDestruction> _destructionPerks = new List<IPerkWithDestruction>(3);
 
 		private IPerkMovement _movementPerk;
 

@@ -8,27 +8,7 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 	[CreateAssetMenu(menuName = "GadgetScript/Block/CombatObject/NearestCombat")]
 	public class NearestCombatBlock : BaseBlock
 	{
-		protected override bool CheckSanity(IGadgetContext gadgetContext, IEventContext eventContext)
-		{
-			if (this._currentNearestCombatParameter == null)
-			{
-				base.LogSanitycheckError("'Current Nearest Combat Parameter' cannot be null.");
-				return false;
-			}
-			if (this._targetCombatParameter == null)
-			{
-				base.LogSanitycheckError("'Target Combat Parameter' cannot be null.");
-				return false;
-			}
-			if (this._positionToTestParameter == null)
-			{
-				base.LogSanitycheckError("'Position To Test Parameter' cannot be null.");
-				return false;
-			}
-			return true;
-		}
-
-		protected override IBlock InnerExecute(IGadgetContext gadgetContext, IEventContext eventContext)
+		public override IBlock Execute(IGadgetContext gadgetContext, IEventContext eventContext)
 		{
 			IHMMGadgetContext ihmmgadgetContext = (IHMMGadgetContext)gadgetContext;
 			IHMMEventContext ihmmeventContext = (IHMMEventContext)eventContext;
@@ -36,7 +16,7 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 			{
 				ICombatObject value = this._currentNearestCombatParameter.GetValue(gadgetContext);
 				ICombatObject combatObject = value;
-				Vector3 value2 = this._positionToTestParameter.GetValue(gadgetContext);
+				Vector3 value2 = this._positionToTestParameter.GetValue<Vector3>(gadgetContext);
 				if (combatObject == null)
 				{
 					combatObject = this._targetCombatParameter.GetValue(gadgetContext);
@@ -59,11 +39,6 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 			return this._nextBlock;
 		}
 
-		public override bool UsesParameterWithId(int parameterId)
-		{
-			return base.CheckIsParameterWithId(this._currentNearestCombatParameter, parameterId) || base.CheckIsParameterWithId(this._targetCombatParameter, parameterId) || base.CheckIsParameterWithId(this._positionToTestParameter, parameterId);
-		}
-
 		[Header("Write")]
 		[SerializeField]
 		private CombatObjectParameter _currentNearestCombatParameter;
@@ -73,7 +48,7 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 		private CombatObjectParameter _targetCombatParameter;
 
 		[SerializeField]
-		private Vector3Parameter _positionToTestParameter;
+		private BaseParameter _positionToTestParameter;
 
 		[Header("Network")]
 		[SerializeField]

@@ -5,21 +5,44 @@ using Assets.ClientApiObjects;
 using Assets.ClientApiObjects.Components;
 using Assets.ClientApiObjects.Specializations;
 using ClientAPI;
-using HeavyMetalMachines.Character;
+using HeavyMetalMachines.CharacterHelp.Presenting;
+using HeavyMetalMachines.Characters;
 using HeavyMetalMachines.Combat.Gadget;
+using HeavyMetalMachines.DataTransferObjects.Inventory;
+using HeavyMetalMachines.DataTransferObjects.Player;
+using HeavyMetalMachines.DataTransferObjects.Progression;
+using HeavyMetalMachines.DataTransferObjects.Result;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Localization;
+using HeavyMetalMachines.Presenting.Unity;
+using HeavyMetalMachines.Store;
+using HeavyMetalMachines.Store.Business;
+using HeavyMetalMachines.Store.Business.GetStoreItem;
 using HeavyMetalMachines.Swordfish;
 using HeavyMetalMachines.Swordfish.Player;
-using HeavyMetalMachines.Utils;
 using HeavyMetalMachines.VFX;
+using Hoplon.Input.UiNavigation;
+using Hoplon.Serialization;
+using Hoplon.Unity.Loading;
 using ModelViewer;
 using Pocketverse;
 using SharedUtils.Loading;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
 	public class ShopDetails : GameHubBehaviour
 	{
+		private IUiNavigationGroupHolder UiNavigationGroupHolder
+		{
+			get
+			{
+				return this._uiNavigationGroupHolder;
+			}
+		}
+
 		private void OnEnable()
 		{
 			this._driverConceptCache = this.DriverConcept.sprite2D;
@@ -27,8 +50,9 @@ namespace HeavyMetalMachines.Frontend
 			this._modelViewerTexture.gameObject.SetActive(false);
 			UnityAnimation fadeOutAnimation = new UnityAnimation(this._mainAnimation, "3dModelOut");
 			UnityAnimation fadeInAnimation = new UnityAnimation(this._mainAnimation, "3dModelin");
-			DynamicAssetLoader assetLoader = new DynamicAssetLoader(SingletonMonoBehaviour<LoadingManager>.Instance.PrefabManager);
+			DynamicAssetLoader assetLoader = new DynamicAssetLoader(Loading.PrefabManager);
 			this._animatedAssetPresenter = new AnimatedAssetPresenter(fadeInAnimation, fadeOutAnimation, assetLoader, this.ModelViewer);
+			GameHubBehaviour.Hub.GuiScripts.SharedPreGameWindow.ItemBuyWindow.StoreItemDeactivated += this.OnStoreItemDeactivated;
 		}
 
 		private void OnDisable()
@@ -39,6 +63,7 @@ namespace HeavyMetalMachines.Frontend
 			this.CharacterNameTexture.sprite2D = this._characterNameTextureCache;
 			this._animatedAssetPresenter.Dispose();
 			this._animatedAssetPresenter = null;
+			GameHubBehaviour.Hub.GuiScripts.SharedPreGameWindow.ItemBuyWindow.StoreItemDeactivated -= this.OnStoreItemDeactivated;
 		}
 
 		private void Update()
@@ -46,28 +71,81 @@ namespace HeavyMetalMachines.Frontend
 			this._animatedAssetPresenter.Update();
 		}
 
-		public void Show()
+		private void LateUpdate()
+		{
+			if (this.CurrentState != ShopDetails.State.Skin)
+			{
+				return;
+			}
+			if (this._shouldCycleToCurrentSkin)
+			{
+				this._targetSkinCardsChosenSkinIndex = this.currentSkinCardsCenteredIndex;
+				this._shouldCycleToCurrentSkin = false;
+				this.Cicle(0);
+			}
+		}
+
+		private void Show()
 		{
 			this.rootGameObject.SetActive(true);
 			this.DetailsBackButton.CacheDefaultColor();
 			this.currentNavigationContext = ShopDetails.NavigationContext.buying;
 			this.BackButton.SetActive(true);
+			this._characterHelpPresenter.EnableShortcut();
+			this.UiNavigationGroupHolder.AddGroup();
 		}
 
 		public void Hide()
 		{
+			this.CurrentState = ShopDetails.State.None;
 			this.InternalHide(false);
+		}
+
+		public void SwitchToDriverDetails()
+		{
+			if (this.CurrentState == ShopDetails.State.Driver)
+			{
+				return;
+			}
+			this.currentNavigationContext = ShopDetails.NavigationContext.buying;
+			this.CurrentState = ShopDetails.State.Driver;
+			this.ConfigureForDriver(this._currentCharItemType);
+			this.skinDetailsGameObject.SetActive(false);
+			this.driverDetailGameObject.SetActive(true);
+		}
+
+		public void SwitchToSkinDetails()
+		{
+			if (this.CurrentState == ShopDetails.State.Skin)
+			{
+				return;
+			}
+			this.currentNavigationContext = ShopDetails.NavigationContext.buying;
+			this.CurrentState = ShopDetails.State.Skin;
+			this.ConfigureForSkin();
+			if (this.currentSkinCardsCenteredIndex == this.defaultSkinCardsCenteredIndex)
+			{
+				this._targetSkinCardsChosenSkinIndex = 0;
+				this.defaultSkinCardsCenteredIndex = this._targetSkinCardsChosenSkinIndex;
+			}
+			this.currentSkinCardsCenteredIndex = this._targetSkinCardsChosenSkinIndex;
+			ItemTypeScriptableObject storeItemType = this._activeSkinCards[this.currentSkinCardsCenteredIndex].StoreItemType;
+			this.ChangeSkin(storeItemType);
+			this.skinDetailsGameObject.SetActive(true);
+			this.driverDetailGameObject.SetActive(false);
+		}
+
+		public bool IsVisible()
+		{
+			return this.rootGameObject.activeInHierarchy;
 		}
 
 		private void InternalHide(bool goToShopCash)
 		{
 			this.DriverToggle.value = false;
 			this.SkinToggle.value = false;
-			if (UICamera.currentScheme == UICamera.ControlScheme.Controller && !goToShopCash && this.currentNavigationContext == ShopDetails.NavigationContext.buying)
-			{
-				this.currentNavigationContext = ShopDetails.NavigationContext.Toggling;
-				return;
-			}
+			this.DisableTooltipColliders();
+			this.HideTooltip();
 			this._targetSkinCardsChosenSkinIndex = 0;
 			this.currentSkinCardsCenteredIndex = 0;
 			this.defaultSkinCardsCenteredIndex = 0;
@@ -83,19 +161,34 @@ namespace HeavyMetalMachines.Frontend
 			{
 				this.Shop.AnimateReturn();
 			}
+			this._characterHelpPresenter.DisableShortcut();
+			this.UiNavigationGroupHolder.RemoveGroup();
 		}
 
-		private void ConfigureForDriver(ItemTypeScriptableObject charHierarchy)
+		private void OnStoreItemDeactivated()
 		{
-			this._currentCharacterHierarchy = charHierarchy;
-			this.PopulateCharacterOrderedCustomization(charHierarchy.Id);
-			this.CurrentSkinItemType = charHierarchy;
-			GameHubBehaviour.Hub.GuiScripts.DriverHelper.Setup(this._currentCharacterHierarchy, GameHubBehaviour.Hub.State.Current);
+			if (!this.IsVisible())
+			{
+				return;
+			}
+			if (this.CurrentState == ShopDetails.State.Skin)
+			{
+				return;
+			}
+			this.Hide();
+		}
+
+		private void ConfigureForDriver(IItemType charItemType)
+		{
+			this._currentCharItemType = charItemType;
+			this.PopulateCharacterOrderedCustomization(charItemType.Id);
+			this.CurrentSkinItemType = charItemType;
+			this._characterHelpPresenter.Set(this._currentCharItemType.Id);
 			this.skinDetailsGameObject.SetActive(false);
 			this.driverDetailGameObject.SetActive(true);
-			CharacterItemTypeComponent component = charHierarchy.GetComponent<CharacterItemTypeComponent>();
-			this.CharacterDescription.text = Language.Get(component.DescriptionDraft, TranslationSheets.CharactersBaseInfo);
-			Guid id = charHierarchy.Id;
+			CharacterItemTypeComponent component = charItemType.GetComponent<CharacterItemTypeComponent>();
+			this.CharacterDescription.text = Language.Get(component.DescriptionDraft, TranslationContext.CharactersBaseInfo);
+			Guid id = charItemType.Id;
 			bool flag = GameHubBehaviour.Hub.User.Inventory.HasItemOfType(id);
 			if (flag)
 			{
@@ -109,32 +202,75 @@ namespace HeavyMetalMachines.Frontend
 			}
 			this.CharacterNameLabel.text = string.Empty;
 			this.OpenGuideButton.SetActive(false);
-			this.characterInfo = null;
-			GameHubBehaviour.Hub.InventoryColletion.CharactersByTypeId.TryGetValue(id, out this.characterInfo);
-			if (this.characterInfo)
+			CharacterItemTypeComponent component2 = charItemType.GetComponent<CharacterItemTypeComponent>();
+			if (component2)
 			{
-				this.CharacterNameLabel.text = this.characterInfo.LocalizedName;
-				this.UpdateRole(this.characterInfo.Role, this.SuportRole, this.CarrierRole, this.TacklerRole);
-				this.Setdifficulty(this.characterInfo);
-				this.Skill01.SpriteName = this.characterInfo.Asset + "_Gadget01";
-				this.Skill02.SpriteName = this.characterInfo.Asset + "_Gadget02";
-				this.Skill03.SpriteName = this.characterInfo.Asset + "_Gadget03";
-				this.SkillNitro.SpriteName = this.characterInfo.Asset + "_GadgetNitro";
-				this.SkillPassive.transform.parent.gameObject.SetActive(this.characterInfo.HasPassive);
-				if (this.characterInfo.HasPassive)
+				this.CharacterNameLabel.text = component2.GetCharacterLocalizedName();
+				this.UpdateRole(component2.Role, this.SuportRole, this.CarrierRole, this.TacklerRole);
+				this.Setdifficulty(component2);
+				this.Skill01.SpriteName = component2.AssetPrefix + "_Gadget01";
+				this.Skill02.SpriteName = component2.AssetPrefix + "_Gadget02";
+				this.Skill03.SpriteName = component2.AssetPrefix + "_Gadget03";
+				this.SkillNitro.SpriteName = component2.AssetPrefix + "_GadgetNitro";
+				this.SkillPassive.transform.parent.gameObject.SetActive(component2.HasPassive);
+				if (component2.HasPassive)
 				{
-					this.SkillPassive.SpriteName = this.characterInfo.Asset + "_GadgetPassive";
+					this.SkillPassive.SpriteName = component2.AssetPrefix + "_GadgetPassive";
 				}
 				this.SkillsGrid.repositionNow = true;
 				this.ConfigureCarPreview(this.CurrentSkinItemType);
-				this.OpenGuideButton.SetActive(!string.IsNullOrEmpty(this.characterInfo.URLName));
+				this.OpenGuideButton.SetActive(false);
 			}
-			int num;
-			int num2;
-			GameHubBehaviour.Hub.Store.GetItemPrice(id, out num, out num2, false);
-			this.DriverSoftPrice.text = string.Format("{0}", num);
-			this.DriverHardPrice.text = string.Format("{0}", num2);
-			if (charHierarchy.IsHardPurchasable && (long)num2 > GameHubBehaviour.Hub.Store.HardCurrency)
+			IGetStoreItem getStoreItem = this._storeBusinessFactory.CreateGetStoreItem();
+			StoreItem storeItem = getStoreItem.Get(id);
+			this.ConfigureDriverPrice(storeItem);
+			if (this._storeItemObservation != null)
+			{
+				this._storeItemObservation.Dispose();
+			}
+			this._storeItemObservation = ObservableExtensions.Subscribe<StoreItem>(this._storeBusinessFactory.CreateObserveStoreItem().CreateObservable(id), delegate(StoreItem storeItemPrices)
+			{
+				this.ConfigureDriverPrice(storeItemPrices);
+			});
+			this._topTabsGroup.SetActive(true);
+			this.EnableTooltipColliders();
+		}
+
+		private void EnableTooltipColliders()
+		{
+			this.Skill01.GetComponent<BoxCollider>().enabled = true;
+			this.Skill02.GetComponent<BoxCollider>().enabled = true;
+			this.Skill03.GetComponent<BoxCollider>().enabled = true;
+			this.SkillNitro.GetComponent<BoxCollider>().enabled = true;
+			this.SkillPassive.GetComponent<BoxCollider>().enabled = true;
+			this.SuportRole.GetComponent<BoxCollider>().enabled = true;
+			this.CarrierRole.GetComponent<BoxCollider>().enabled = true;
+			this.TacklerRole.GetComponent<BoxCollider>().enabled = true;
+			this.SkinSuportRole.GetComponent<BoxCollider>().enabled = true;
+			this.SkinCarrierRole.GetComponent<BoxCollider>().enabled = true;
+			this.SkinTacklerRole.GetComponent<BoxCollider>().enabled = true;
+		}
+
+		private void DisableTooltipColliders()
+		{
+			this.Skill01.GetComponent<BoxCollider>().enabled = false;
+			this.Skill02.GetComponent<BoxCollider>().enabled = false;
+			this.Skill03.GetComponent<BoxCollider>().enabled = false;
+			this.SkillNitro.GetComponent<BoxCollider>().enabled = false;
+			this.SkillPassive.GetComponent<BoxCollider>().enabled = false;
+			this.SuportRole.GetComponent<BoxCollider>().enabled = false;
+			this.CarrierRole.GetComponent<BoxCollider>().enabled = false;
+			this.TacklerRole.GetComponent<BoxCollider>().enabled = false;
+			this.SkinSuportRole.GetComponent<BoxCollider>().enabled = false;
+			this.SkinCarrierRole.GetComponent<BoxCollider>().enabled = false;
+			this.SkinTacklerRole.GetComponent<BoxCollider>().enabled = false;
+		}
+
+		private void ConfigureDriverPrice(StoreItem storeItem)
+		{
+			this.DriverSoftPrice.text = string.Format("{0}", storeItem.SoftPrice);
+			this.DriverHardPrice.text = string.Format("{0}", storeItem.HardPrice);
+			if (storeItem.IsHardPurchasable && storeItem.HardPrice > this._localBalanceStorage.HardCurrency)
 			{
 				this.DriverHardPrice.color = Color.grey;
 				this.DriverHardIconPrice.color = Color.grey;
@@ -144,7 +280,7 @@ namespace HeavyMetalMachines.Frontend
 				this.DriverHardPrice.color = this.Shop.CashColor;
 				this.DriverHardIconPrice.color = Color.white;
 			}
-			if (charHierarchy.IsSoftPurchasable && num > GameHubBehaviour.Hub.Store.SoftCurrency)
+			if (storeItem.IsSoftPurchasable && storeItem.SoftPrice > (long)this._localBalanceStorage.SoftCurrency)
 			{
 				this.DriverSoftPrice.color = Color.grey;
 				this.DriverSoftIconPrice.color = Color.grey;
@@ -154,33 +290,32 @@ namespace HeavyMetalMachines.Frontend
 				this.DriverSoftPrice.color = this.Shop.FameColor;
 				this.DriverSoftIconPrice.color = Color.white;
 			}
-			this._topTabsGroup.SetActive(true);
 		}
 
-		private void UpdateRole(HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind role, GameObject supportRole, GameObject carrierRole, GameObject tacklerRole)
+		private void UpdateRole(DriverRoleKind role, GameObject supportRole, GameObject carrierRole, GameObject tacklerRole)
 		{
 			carrierRole.SetActive(false);
 			supportRole.SetActive(false);
 			tacklerRole.SetActive(false);
 			switch (role)
 			{
-			case HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Support:
-			case HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.SupportCarrierTackler:
+			case 0:
+			case 6:
 				supportRole.SetActive(true);
 				break;
-			case HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Carrier:
-			case HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.CarrierSupport:
-			case HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.CarrierTackler:
+			case 1:
+			case 3:
+			case 5:
 				carrierRole.SetActive(true);
 				break;
-			case HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.Tackler:
-			case HeavyMetalMachines.Character.CharacterInfo.DriverRoleKind.TacklerSupport:
+			case 2:
+			case 4:
 				tacklerRole.SetActive(true);
 				break;
 			}
 		}
 
-		public void ShowDriverDetails(ItemTypeScriptableObject charHierarchy)
+		public void ShowDriverDetails(IItemType charHierarchy)
 		{
 			this.CurrentState = ShopDetails.State.Driver;
 			base.StartCoroutine(this.WaitAndToggle(this.DriverToggle, true));
@@ -190,7 +325,7 @@ namespace HeavyMetalMachines.Frontend
 
 		public void BuyCharacter()
 		{
-			GameHubBehaviour.Hub.GuiScripts.SharedPreGameWindow.ItemBuyWindow.ShowBuyWindow(this._currentCharacterHierarchy, new System.Action(this.OnCompleteCharacterBuy), new System.Action(this.OnBuyWindowClosed), new System.Action(this.OnGoToShopCash), 1, false);
+			GameHubBehaviour.Hub.GuiScripts.SharedPreGameWindow.ItemBuyWindow.ShowBuyWindow(this._currentCharItemType, new Action(this.OnCompleteCharacterBuy), new Action(this.OnBuyWindowClosed), new Action(this.OnGoToShopCash), 1, false);
 		}
 
 		private void OnGoToShopCash()
@@ -201,21 +336,12 @@ namespace HeavyMetalMachines.Frontend
 
 		private void OnCompleteCharacterBuy()
 		{
-			this.ConfigureForDriver(this._currentCharacterHierarchy);
-			UICamera.controllerNavigationObject = this.BackButton;
+			this.ConfigureForDriver(this._currentCharItemType);
 		}
 
 		private void OnBuyWindowClosed()
 		{
-			if (this.CurrentState == ShopDetails.State.Driver)
-			{
-				UICamera.controllerNavigationObject = this.BuyButton;
-			}
-			else
-			{
-				UICamera.controllerNavigationObject = this.BackButton;
-			}
-			Guid id = this._currentCharacterHierarchy.Id;
+			Guid id = this._currentCharItemType.Id;
 			if (GameHubBehaviour.Hub.User.Inventory.HasItemOfType(id))
 			{
 				this.BoughtGroup.SetActive(true);
@@ -228,21 +354,26 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
-		private void ConfigureForSkin(StoreItem storeitem)
+		private void ConfigureForSkin(IItemType storeItem)
 		{
-			this.ConfigureForSkin(storeitem.StoreItemType, storeitem.CharacterItemTypeScriptableObject);
+			ItemTypeScriptableObject itemTypeScriptableObject = GameHubBehaviour.Hub.InventoryColletion.AllItemTypes[storeItem.Id];
+			ShopItemTypeComponent component = itemTypeScriptableObject.GetComponent<ShopItemTypeComponent>();
+			SkinPrefabItemTypeComponent component2 = itemTypeScriptableObject.GetComponent<SkinPrefabItemTypeComponent>();
+			SkinItemTypeBag skinItemTypeBag = (SkinItemTypeBag)((JsonSerializeable<!0>)itemTypeScriptableObject.Bag);
+			ItemTypeScriptableObject characterItemTypeScriptableObject = GameHubBehaviour.Hub.InventoryColletion.AllItemTypes[skinItemTypeBag.CharacterItemTypeId];
+			this.ConfigureForSkin(itemTypeScriptableObject, characterItemTypeScriptableObject);
 		}
 
 		private void ConfigureForSkin(ItemTypeScriptableObject skinItemTypeScriptableObject, ItemTypeScriptableObject characterItemTypeScriptableObject)
 		{
 			this.CurrentSkinItemType = skinItemTypeScriptableObject;
-			this._currentCharacterHierarchy = characterItemTypeScriptableObject;
-			this.PopulateCharacterOrderedCustomization(this._currentCharacterHierarchy.Id);
+			this._currentCharItemType = characterItemTypeScriptableObject;
+			this.PopulateCharacterOrderedCustomization(this._currentCharItemType.Id);
+			this.currentSkinCardsCenteredIndex = 0;
+			this.ConfigureForSkin();
 			this.currentSkinCardsCenteredIndex = this.GetSkinCardIndexByGuid(skinItemTypeScriptableObject.Id);
-			Guid id = characterItemTypeScriptableObject.Id;
-			this.characterInfo = null;
-			GameHubBehaviour.Hub.InventoryColletion.CharactersByTypeId.TryGetValue(id, out this.characterInfo);
-			this.ConfigureForSkin(this.currentSkinCardsCenteredIndex);
+			ItemTypeScriptableObject storeItemType = this._activeSkinCards[this.currentSkinCardsCenteredIndex].StoreItemType;
+			this.ChangeSkin(storeItemType);
 		}
 
 		private void PopulateCharacterOrderedCustomization(Guid characterGuid)
@@ -260,20 +391,19 @@ namespace HeavyMetalMachines.Frontend
 			this._currentCharacterOrderedCustomizations.Sort(new Comparison<ItemTypeScriptableObject>(this.SkinItemTypeSortComparer));
 		}
 
-		private void ConfigureForSkin(int centeredSkinIndex)
+		private void ConfigureForSkin()
 		{
-			GameHubBehaviour.Hub.GuiScripts.DriverHelper.Setup(this._currentCharacterHierarchy, GameHubBehaviour.Hub.State.Current);
+			this._characterHelpPresenter.Set(this._currentCharItemType.Id);
 			this.skinDetailsGameObject.SetActive(true);
 			this.driverDetailGameObject.SetActive(false);
-			Guid id = this._currentCharacterHierarchy.Id;
-			HeavyMetalMachines.Character.CharacterInfo characterInfo;
-			GameHubBehaviour.Hub.InventoryColletion.CharactersByTypeId.TryGetValue(id, out characterInfo);
-			if (characterInfo)
+			CharacterItemTypeComponent component = this._currentCharItemType.GetComponent<CharacterItemTypeComponent>();
+			if (component)
 			{
-				this.CharacterNameLabel.text = characterInfo.LocalizedName;
-				this.UpdateRole(characterInfo.Role, this.SkinSuportRole, this.SkinCarrierRole, this.SkinTacklerRole);
+				this.CharacterNameLabel.text = component.GetCharacterLocalizedName();
+				this.UpdateRole(component.Role, this.SkinSuportRole, this.SkinCarrierRole, this.SkinTacklerRole);
 			}
 			int num = 0;
+			Guid id = this._currentCharItemType.Id;
 			List<Guid> list = GameHubBehaviour.Hub.InventoryColletion.CharacterToSkinGuids[id];
 			for (int i = 0; i < list.Count; i++)
 			{
@@ -283,32 +413,36 @@ namespace HeavyMetalMachines.Frontend
 					num++;
 				}
 			}
-			bool purchasable = GameHubBehaviour.Hub.User.Inventory.HasItemOfType(id);
-			if (this.SkinCards.Length == 0 || this.SkinCards.Length < num || this.SkinCards.Length > num)
-			{
-				if (this.SkinCards != null && this.SkinCards.Length > 0)
-				{
-					for (int j = 0; j < this.SkinCards.Length; j++)
-					{
-						if (this.SkinCards[j] != null && this.SkinCards[j].gameObject != null)
-						{
-							this.SkinCards[j].carTexture.SpriteName = string.Empty;
-							UnityEngine.Object.Destroy(this.SkinCards[j].gameObject);
-						}
-					}
-				}
-				this.SkinCards = new StoreItem[num];
-				this.ConfigureCardsForTier(this.SkinCards, purchasable, true);
-			}
-			else
-			{
-				this.ConfigureCardsForTier(this.SkinCards, purchasable, false);
-			}
+			this.ConfigureSkinsCardsPool(num);
+			this.ConfigureCardsForTier();
 			Array.Sort<StoreItem>(this.SkinCards, new Comparison<StoreItem>(this.SkinCardsSortComparer));
-			this.ConfigureNavigationIndicator(num, centeredSkinIndex);
-			ItemTypeScriptableObject storeItemType = this.SkinCards[this.currentSkinCardsCenteredIndex].StoreItemType;
-			this.ChangeSkin(storeItemType, this.currentSkinCardsCenteredIndex);
+			this._activeSkinCards.Sort(new Comparison<StoreItem>(this.SkinCardsSortComparer));
+			if (this.currentSkinCardsCenteredIndex >= this._activeSkinCards.Count)
+			{
+				this.currentSkinCardsCenteredIndex = 0;
+			}
+			if (this.currentSkinCardsCenteredIndex < this._activeSkinCards.Count)
+			{
+				ItemTypeScriptableObject storeItemType = this._activeSkinCards[this.currentSkinCardsCenteredIndex].StoreItemType;
+				this.ChangeSkin(storeItemType);
+			}
 			this._topTabsGroup.SetActive(true);
+			this.EnableTooltipColliders();
+		}
+
+		private void ConfigureSkinsCardsPool(int amountofavailableskins)
+		{
+			if (this.SkinCards.Length < amountofavailableskins)
+			{
+				Array.Resize<StoreItem>(ref this.SkinCards, amountofavailableskins);
+			}
+			else if (this.SkinCards.Length > amountofavailableskins)
+			{
+				for (int i = amountofavailableskins; i < this.SkinCards.Length; i++)
+				{
+					this.SkinCards[i].gameObject.SetActive(false);
+				}
+			}
 		}
 
 		private int SkinCardsSortComparer(StoreItem x, StoreItem y)
@@ -342,7 +476,10 @@ namespace HeavyMetalMachines.Frontend
 				else
 				{
 					int unlockLevelForSkin = GameHubBehaviour.Hub.SharedConfigs.CharacterProgression.GetUnlockLevelForSkin(UnlockLevel);
-					this.SkinUnlockLevelLabel.text = string.Format(Language.Get("SKINDETAIL_ITEMUNLOCK_LEVEL_LABEL", TranslationSheets.Store), 1 + unlockLevelForSkin);
+					this.SkinUnlockLevelLabel.text = Language.GetFormatted("SKINDETAIL_ITEMUNLOCK_LEVEL_LABEL", TranslationContext.Store, new object[]
+					{
+						1 + unlockLevelForSkin
+					});
 					this.SkinLockedGroup.SetActive(!hasLevelToBuy);
 					this.SkinBoughtGroup.SetActive(false);
 					this.SkinBuyGroup.SetActive(true);
@@ -360,59 +497,61 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
-		private void ConfigureCardsForTier(StoreItem[] skinCards, bool purchasable, bool create)
+		private void ConfigureCardsForTier()
 		{
+			this._activeSkinCards.Clear();
 			int num = 0;
-			List<Guid> list = GameHubBehaviour.Hub.InventoryColletion.CharacterToSkinGuids[this._currentCharacterHierarchy.Id];
+			List<Guid> list = GameHubBehaviour.Hub.InventoryColletion.CharacterToSkinGuids[this._currentCharItemType.Id];
 			for (int i = 0; i < list.Count; i++)
 			{
 				ItemTypeScriptableObject itemTypeScriptableObject = GameHubBehaviour.Hub.InventoryColletion.AllItemTypes[list[i]];
 				if (itemTypeScriptableObject.IsItemEnableInShop())
 				{
-					StoreItem storeItem = (!create) ? skinCards[num] : UnityEngine.Object.Instantiate<StoreItem>(this.SkinCardPrefab);
+					StoreItem storeItem = (!(this.SkinCards[num] == null)) ? this.SkinCards[num] : Object.Instantiate<StoreItem>(this.SkinCardPrefab);
 					storeItem.gameObject.transform.parent = this.skinCardsPivot;
 					storeItem.transform.localPosition = Vector3.one;
 					storeItem.transform.localScale = Vector3.one;
-					storeItem.StoreItemType = itemTypeScriptableObject;
 					storeItem.carTexture.SpriteName = itemTypeScriptableObject.Name;
+					storeItem.IsPurchasableChanged -= this.OnStoreItemIsPurchasableChanged;
+					storeItem.Setup(itemTypeScriptableObject, this._storeBusinessFactory);
+					storeItem.IsPurchasableChanged += this.OnStoreItemIsPurchasableChanged;
+					if (storeItem.IsPurchasable)
+					{
+						this._activeSkinCards.Add(storeItem);
+					}
 					storeItem.gameObject.name = itemTypeScriptableObject.Name;
-					storeItem.characterName.text = Language.Get(string.Format("{0}_name", itemTypeScriptableObject.Name), "Items");
-					storeItem.gameObject.SetActive(true);
-					skinCards[num] = storeItem;
+					SkinPrefabItemTypeComponent component = itemTypeScriptableObject.GetComponent<SkinPrefabItemTypeComponent>();
+					storeItem.characterName.text = Language.Get(component.CardSkinDraft, TranslationContext.Items);
+					storeItem.gameObject.SetActive(storeItem.IsPurchasable);
+					this.SkinCards[num] = storeItem;
 					num++;
 				}
 			}
 		}
 
-		private void ConfigureNavigationIndicator(int amountofavailableskins, int centeredSkinIndex)
+		private void OnStoreItemIsPurchasableChanged(StoreItem storeItem, bool isPurchasable)
 		{
-			if (this.NavigationIndicators != null && this.NavigationIndicators.Length > 0)
+			storeItem.gameObject.SetActive(isPurchasable);
+			if (isPurchasable)
 			{
-				for (int i = 0; i < this.NavigationIndicators.Length; i++)
-				{
-					if (this.NavigationIndicators[i] != null && this.NavigationIndicators[i].gameObject != null)
-					{
-						UnityEngine.Object.Destroy(this.NavigationIndicators[i].gameObject);
-					}
-				}
+				this._activeSkinCards.Add(storeItem);
+				this._activeSkinCards.Sort(new Comparison<StoreItem>(this.SkinCardsSortComparer));
+				this._shouldCycleToCurrentSkin = true;
 			}
-			this.NavigationIndicators = new GameObject[amountofavailableskins];
-			for (int j = 0; j < amountofavailableskins; j++)
+			else
 			{
-				this.NavigationIndicators[j] = this.skinCardsIndicationPivot.gameObject.AddChild(this.NavigationIndicatorPrefab);
-				this.NavigationIndicators[j].SetActive(true);
+				this._activeSkinCards.Remove(storeItem);
+				this._shouldCycleToCurrentSkin = true;
 			}
-			this.NavigationIndicators[centeredSkinIndex].GetComponent<UIToggle>().value = true;
-			this.skinCardsIndicationPivot.GetComponent<UIGrid>().repositionNow = true;
 		}
 
-		public void ShowSkinDetails(StoreItem storeitem)
+		public void ShowSkinDetails(IItemType storeItem)
 		{
 			this.CurrentState = ShopDetails.State.Skin;
 			base.StartCoroutine(this.WaitAndToggle(this.SkinToggle, true));
+			this.ConfigureForSkin(storeItem);
 			this.Show();
-			this.ConfigureForSkin(storeitem);
-			this.MoveToChosenStoreItemSkin(storeitem);
+			this.MoveToChosenStoreItemSkin(storeItem);
 		}
 
 		public bool TryToShowSkinDetails(Guid itemTypeId)
@@ -424,7 +563,7 @@ namespace HeavyMetalMachines.Frontend
 			}
 			ItemTypeScriptableObject itemTypeScriptableObject = GameHubBehaviour.Hub.InventoryColletion.AllItemTypes[itemTypeId];
 			ItemTypeScriptableObject itemTypeScriptableObject2 = GameHubBehaviour.Hub.InventoryColletion.AllItemTypes[skinItemTypeCharacterId];
-			CharacterItemTypeBag characterItemTypeBag = (CharacterItemTypeBag)((JsonSerializeable<T>)itemTypeScriptableObject2.Bag);
+			CharacterItemTypeBag characterItemTypeBag = (CharacterItemTypeBag)((JsonSerializeable<!0>)itemTypeScriptableObject2.Bag);
 			if (itemTypeId == characterItemTypeBag.DefaultSkinGuid)
 			{
 				this.ShowDriverDetails(itemTypeScriptableObject2);
@@ -447,7 +586,7 @@ namespace HeavyMetalMachines.Frontend
 			int targetSkinCardsChosenSkinIndex;
 			if (this.currentSkinCardsCenteredIndex <= 0)
 			{
-				targetSkinCardsChosenSkinIndex = this.SkinCards.Length - 1;
+				targetSkinCardsChosenSkinIndex = this._activeSkinCards.Count - 1;
 			}
 			else
 			{
@@ -460,7 +599,7 @@ namespace HeavyMetalMachines.Frontend
 		public void CicleRight()
 		{
 			int targetSkinCardsChosenSkinIndex;
-			if (this.currentSkinCardsCenteredIndex >= this.SkinCards.Length - 1)
+			if (this.currentSkinCardsCenteredIndex >= this._activeSkinCards.Count - 1)
 			{
 				targetSkinCardsChosenSkinIndex = 0;
 			}
@@ -472,12 +611,7 @@ namespace HeavyMetalMachines.Frontend
 			this.Cicle(1);
 		}
 
-		public void MoveToChosenStoreItemSkin(StoreItem storeItem)
-		{
-			this.MoveToChosenStoreItemSkin(storeItem.StoreItemType);
-		}
-
-		public void MoveToChosenStoreItemSkin(ItemTypeScriptableObject itemTypeScriptableObject)
+		public void MoveToChosenStoreItemSkin(IItemType itemTypeScriptableObject)
 		{
 			this._targetSkinCardsChosenSkinIndex = this.GetSkinCardIndexByGuid(itemTypeScriptableObject.Id);
 			if (this._targetSkinCardsChosenSkinIndex == this.currentSkinCardsCenteredIndex)
@@ -487,10 +621,10 @@ namespace HeavyMetalMachines.Frontend
 			int num = this.currentSkinCardsCenteredIndex - this._targetSkinCardsChosenSkinIndex;
 			if (num < 0)
 			{
-				num = this.SkinCards.Length - Mathf.Abs(num);
+				num = this._activeSkinCards.Count - Mathf.Abs(num);
 			}
 			this._wayToCicle = -1;
-			if (num > this.SkinCards.Length / 2)
+			if (num > this._activeSkinCards.Count / 2)
 			{
 				this._wayToCicle = 1;
 			}
@@ -501,7 +635,7 @@ namespace HeavyMetalMachines.Frontend
 		{
 			if (this._targetSkinCardsChosenSkinIndex == this.currentSkinCardsCenteredIndex)
 			{
-				UIButton[] components = this.SkinCards[this._targetSkinCardsChosenSkinIndex].GetComponents<UIButton>();
+				UIButton[] components = this._activeSkinCards[this._targetSkinCardsChosenSkinIndex].GetComponents<UIButton>();
 				for (int i = 0; i < components.Length; i++)
 				{
 					components[i].SetState(UIButtonColor.State.Normal, true);
@@ -514,59 +648,61 @@ namespace HeavyMetalMachines.Frontend
 		public void Cicle(int how)
 		{
 			int num;
-			if (this.currentSkinCardsCenteredIndex + how > this.SkinCards.Length - 1)
+			if (this.currentSkinCardsCenteredIndex + how > this._activeSkinCards.Count - 1)
 			{
 				num = 0;
 			}
 			else if (this.currentSkinCardsCenteredIndex + how < 0)
 			{
-				num = this.SkinCards.Length - 1;
+				num = this._activeSkinCards.Count - 1;
 			}
 			else
 			{
 				num = this.currentSkinCardsCenteredIndex + how;
 			}
 			this.currentSkinCardsCenteredIndex = num;
-			this.NavigationIndicators[this.currentSkinCardsCenteredIndex].GetComponent<UIToggle>().value = true;
-			ItemTypeScriptableObject storeItemType = this.SkinCards[this.currentSkinCardsCenteredIndex].StoreItemType;
-			this.ChangeSkin(storeItemType, this.currentSkinCardsCenteredIndex);
+			if (this.currentSkinCardsCenteredIndex < this._activeSkinCards.Count)
+			{
+				ItemTypeScriptableObject storeItemType = this._activeSkinCards[this.currentSkinCardsCenteredIndex].StoreItemType;
+				this.ChangeSkin(storeItemType);
+			}
 		}
 
-		private void ChangeSkin(ItemTypeScriptableObject skinitemtype, int indexfocus)
+		private void ChangeSkin(ItemTypeScriptableObject skinItemType)
 		{
-			this.CurrentSkinItemType = skinitemtype;
-			Guid id = this._currentCharacterHierarchy.Id;
+			this.CurrentSkinItemType = skinItemType;
+			Guid id = this._currentCharItemType.Id;
 			bool hasPilotAlready = GameHubBehaviour.Hub.User.Inventory.HasItemOfType(id);
-			this.ConfigureSkinDescriptions(skinitemtype, this._currentCharacterHierarchy.Name);
-			if (this.SkinCards != null && this.SkinCards.Length > 0)
+			this.ConfigureSkinDescriptions(skinItemType);
+			if (this._activeSkinCards.Count > 0)
 			{
-				float num = 1f / (float)this.SkinCards.Length;
-				int depth = this.baseDepth;
-				int a = Mathf.Abs(this._targetSkinCardsChosenSkinIndex - this.currentSkinCardsCenteredIndex) + 1;
-				float time = 1f / (float)Mathf.Max(a, 1);
-				float duration = this.SkinsRotationCurveSpeed.Evaluate(time);
-				for (int i = 0; i < this.SkinCards.Length; i++)
+				float num = 1f / (float)this._activeSkinCards.Count;
+				int num2 = Mathf.Abs(this._targetSkinCardsChosenSkinIndex - this.currentSkinCardsCenteredIndex) + 1;
+				float num3 = 1f / (float)Mathf.Max(num2, 1);
+				float duration = this.SkinsRotationCurveSpeed.Evaluate(num3);
+				for (int i = 0; i < this._activeSkinCards.Count; i++)
 				{
-					NGUITools.MarkParentAsChanged(this.SkinCards[i].gameObject);
-					int num2 = Mathf.Abs(indexfocus - i);
-					TweenPosition component = this.SkinCards[i].GetComponent<TweenPosition>();
+					NGUITools.MarkParentAsChanged(this._activeSkinCards[i].gameObject);
+					TweenPosition component = this._activeSkinCards[i].GetComponent<TweenPosition>();
 					component.SetStartToCurrentValue();
-					float num3 = num * (float)(i - indexfocus) - this.Tunning;
-					float f = num3 * 3.14159274f * 2f;
-					float num4 = Mathf.Sin(f);
-					float num5 = Mathf.Cos(f);
-					component.to = new Vector3(num5 * this.maxX, (num4 + 1f) * this.maxY, 0f);
+					float num4 = num * (float)(i - this.currentSkinCardsCenteredIndex) - this.Tunning;
+					float num5 = num4 * 3.1415927f * 2f;
+					float num6 = Mathf.Sin(num5);
+					float num7 = Mathf.Cos(num5);
+					component.to = new Vector3(num7 * this.maxX, (num6 + 1f) * this.maxY, 0f);
 					component.duration = duration;
-					int num6 = (num5 < 0f) ? 2 : 1;
-					if (num2 != 0)
+					int num8 = (num7 < 0f) ? 2 : 1;
+					int num9 = Mathf.Abs(this.currentSkinCardsCenteredIndex - i);
+					int depth;
+					if (num9 != 0)
 					{
-						depth = this.baseDepth - 10 - Mathf.FloorToInt(num4 * 10f) - num6;
+						depth = this.baseDepth - 10 - Mathf.FloorToInt(num6 * 10f) - num8;
 					}
 					else
 					{
 						depth = this.baseDepth;
 					}
-					this.SkinCards[i].GetComponent<UIPanel>().depth = depth;
+					this._activeSkinCards[i].GetComponent<UIPanel>().depth = depth;
 					if (component.onFinished != null)
 					{
 						component.onFinished.Clear();
@@ -574,80 +710,63 @@ namespace HeavyMetalMachines.Frontend
 					component.ResetToBeginning();
 					component.PlayForward();
 				}
-				this.ConfigureCenteredSkin(skinitemtype, indexfocus, hasPilotAlready);
-				TweenPosition component2 = this.SkinCards[0].GetComponent<TweenPosition>();
+				this.ConfigureCenteredSkin(skinItemType, hasPilotAlready);
+				TweenPosition component2 = this._activeSkinCards[0].GetComponent<TweenPosition>();
 				EventDelegate.Add(component2.onFinished, new EventDelegate.Callback(this.CicleToChoosenSkin), true);
 			}
 			this.ConfigureCarPreview(this.CurrentSkinItemType);
 		}
 
-		private void ConfigureCenteredSkin(ItemTypeScriptableObject skinitemtype, int center, bool hasPilotAlready)
+		private void ConfigureCenteredSkin(ItemTypeScriptableObject skinItemType, bool hasPilotAlready)
 		{
-			CharacterItemTypeBag characterItemTypeBag = (CharacterItemTypeBag)((JsonSerializeable<T>)this._currentCharacterHierarchy.Bag);
-			bool isBasicSkin = skinitemtype.Id == characterItemTypeBag.DefaultSkinGuid;
-			Guid id = skinitemtype.Id;
-			bool itemBought = GameHubBehaviour.Hub.User.Inventory.HasItemOfType(id);
-			CharacterBag characterBag = GameHubBehaviour.Hub.User.GetCharacterBag(this._currentCharacterHierarchy.Id);
-			PlayerBag playerBag = (PlayerBag)GameHubBehaviour.Hub.User.PlayerSF.Bag;
-			SkinItemTypeBag skinItemTypeBag = (SkinItemTypeBag)((JsonSerializeable<T>)skinitemtype.Bag);
+			SkinItemTypeBag skinItemTypeBag = (SkinItemTypeBag)((JsonSerializeable<!0>)skinItemType.Bag);
+			CharacterBag characterBag = GameHubBehaviour.Hub.User.GetCharacterBag(this._currentCharItemType.Id);
 			bool hasLevelToBuy;
 			if (characterBag != null)
 			{
+				PlayerBag playerBag = (PlayerBag)GameHubBehaviour.Hub.User.PlayerSF.Bag;
 				int levelForXP = GameHubBehaviour.Hub.SharedConfigs.CharacterProgression.GetLevelForXP(characterBag.Xp);
 				ProgressionInfo.CanBuyReason canBuyReason;
 				string text;
-				hasLevelToBuy = GameHubBehaviour.Hub.SharedConfigs.CharacterProgression.CanBuySkin(hasPilotAlready, playerBag, skinItemTypeBag, levelForXP, (CharacterItemTypeBag)((JsonSerializeable<T>)this._currentCharacterHierarchy.Bag), out canBuyReason, out text);
+				hasLevelToBuy = GameHubBehaviour.Hub.SharedConfigs.CharacterProgression.CanBuySkin(hasPilotAlready, playerBag, skinItemTypeBag, levelForXP, (CharacterItemTypeBag)((JsonSerializeable<!0>)this._currentCharItemType.Bag), ref canBuyReason, ref text);
 			}
 			else
 			{
 				hasLevelToBuy = (skinItemTypeBag.UnlockLevel == 0);
 			}
+			Guid id = skinItemType.Id;
+			bool itemBought = GameHubBehaviour.Hub.User.Inventory.HasItemOfType(id);
+			CharacterItemTypeBag characterItemTypeBag = (CharacterItemTypeBag)((JsonSerializeable<!0>)this._currentCharItemType.Bag);
+			bool isBasicSkin = skinItemType.Id == characterItemTypeBag.DefaultSkinGuid;
 			this.ConfigureSkinBuyGroup(hasPilotAlready, isBasicSkin, itemBought, hasLevelToBuy, skinItemTypeBag.UnlockLevel);
-			int num = (int)skinitemtype.ItemTypePrices[0].Price;
-			int referenceHardPrice = skinitemtype.ReferenceHardPrice;
-			bool hasSoftFunds = GameHubBehaviour.Hub.Store.SoftCurrency >= num;
-			bool hasHardFunds = GameHubBehaviour.Hub.Store.HardCurrency >= (long)referenceHardPrice;
-			bool isSoftPurchasable = skinitemtype.IsSoftPurchasable;
-			bool isHardPurchasable = skinitemtype.IsHardPurchasable;
-			this.ConfigureSkinCurrencyGroup(num, referenceHardPrice, isSoftPurchasable, isHardPurchasable, hasSoftFunds, hasHardFunds);
+			IGetStoreItem getStoreItem = this._storeBusinessFactory.CreateGetStoreItem();
+			StoreItem storeItem = getStoreItem.Get(id);
+			this.ConfigureSkinPrice(storeItem);
+			if (this._storeItemObservation != null)
+			{
+				this._storeItemObservation.Dispose();
+			}
+			this._storeItemObservation = ObservableExtensions.Subscribe<StoreItem>(this._storeBusinessFactory.CreateObserveStoreItem().CreateObservable(id), new Action<StoreItem>(this.ConfigureSkinPrice));
 		}
 
-		private void ConfigureSkinDescriptions(ItemTypeScriptableObject skinitemtype, string drivername)
+		private void ConfigureSkinPrice(StoreItem storeItem)
+		{
+			bool hasSoftFunds = (long)this._localBalanceStorage.SoftCurrency >= storeItem.SoftPrice;
+			bool hasHardFunds = this._localBalanceStorage.HardCurrency >= storeItem.HardPrice;
+			bool isSoftPurchasable = storeItem.IsSoftPurchasable;
+			bool isHardPurchasable = storeItem.IsHardPurchasable;
+			this.ConfigureSkinCurrencyGroup((int)storeItem.SoftPrice, (int)storeItem.HardPrice, isSoftPurchasable, isHardPurchasable, hasSoftFunds, hasHardFunds);
+		}
+
+		private void ConfigureSkinDescriptions(ItemTypeScriptableObject skinitemtype)
 		{
 			SkinPrefabItemTypeComponent component = skinitemtype.GetComponent<SkinPrefabItemTypeComponent>();
 			ShopDetailsComponent component2 = skinitemtype.GetComponent<ShopDetailsComponent>();
-			CharacterItemTypeComponent component3 = this._currentCharacterHierarchy.GetComponent<CharacterItemTypeComponent>();
-			this.DriverName.text = component3.MainAttributes.LocalizedName;
-			this.SkinName.text = Language.Get(component.CardSkinDraft, TranslationSheets.Items);
-			this.SkinDescription.text = Language.Get(component2.SkinQuoteTextDraf, TranslationSheets.Items);
-			this.SkinQuote.text = Language.Get(component2.SkinQuoterAuthorDraft, TranslationSheets.Items);
-			this.None_RarityGO.SetActive(false);
-			this.Basic_RarityGO.SetActive(false);
-			this.Bronze_RarityGO.SetActive(false);
-			this.Silver_RarityGO.SetActive(false);
-			this.Gold_RarityGO.SetActive(false);
-			this.Diamond_RarityGO.SetActive(false);
-			switch (component.Tier)
-			{
-			case SkinPrefabItemTypeComponent.TierKind.None:
-				this.None_RarityGO.SetActive(true);
-				break;
-			case SkinPrefabItemTypeComponent.TierKind.Default:
-				this.Basic_RarityGO.SetActive(true);
-				break;
-			case SkinPrefabItemTypeComponent.TierKind.Idol:
-				this.Bronze_RarityGO.SetActive(true);
-				break;
-			case SkinPrefabItemTypeComponent.TierKind.Rockstar:
-				this.Silver_RarityGO.SetActive(true);
-				break;
-			case SkinPrefabItemTypeComponent.TierKind.MetalLegend:
-				this.Gold_RarityGO.SetActive(true);
-				break;
-			case SkinPrefabItemTypeComponent.TierKind.HeavyMetal:
-				this.Diamond_RarityGO.SetActive(true);
-				break;
-			}
+			CharacterItemTypeComponent component3 = this._currentCharItemType.GetComponent<CharacterItemTypeComponent>();
+			this.DriverName.text = component3.GetCharacterLocalizedName();
+			this.SkinName.text = Language.Get(component.CardSkinDraft, TranslationContext.Items);
+			this.SkinDescription.text = Language.Get(component2.SkinQuoteTextDraf, TranslationContext.Items);
+			this.SkinQuote.text = Language.Get(component2.SkinQuoterAuthorDraft, TranslationContext.Items);
 		}
 
 		private void ConfigureSkinCurrencyGroup(int softPrice, int hardPrice, bool isSoftPurchasable, bool isHardPurchasable, bool hasSoftFunds, bool hasHardFunds)
@@ -692,26 +811,20 @@ namespace HeavyMetalMachines.Frontend
 
 		private int GetSkinCardIndexByGuid(Guid pGuid)
 		{
-			int num = 0;
-			List<ItemTypeScriptableObject> currentCharacterOrderedCustomizations = this._currentCharacterOrderedCustomizations;
-			for (int i = 0; i < currentCharacterOrderedCustomizations.Count; i++)
+			for (int i = 0; i < this._activeSkinCards.Count; i++)
 			{
-				ItemTypeScriptableObject itemTypeScriptableObject = this._currentCharacterOrderedCustomizations[i];
-				if (itemTypeScriptableObject.Id == pGuid)
+				StoreItem storeItem = this._activeSkinCards[i];
+				if (storeItem.StoreItemType.Id == pGuid)
 				{
-					return num;
-				}
-				if (itemTypeScriptableObject.IsItemEnableInShop())
-				{
-					num++;
+					return i;
 				}
 			}
-			UnityEngine.Debug.LogError(string.Concat(new object[]
+			Debug.LogError(string.Concat(new object[]
 			{
 				"skin, guid == ",
 				pGuid,
 				" not found on CurrentCharacterHierarchy.SkinItems of character",
-				this._currentCharacterHierarchy.Name
+				this._currentCharItemType.Name
 			}), this);
 			return 0;
 		}
@@ -719,10 +832,10 @@ namespace HeavyMetalMachines.Frontend
 		public void BuySkin()
 		{
 			this._targetSkinCardsChosenSkinIndex = this.currentSkinCardsCenteredIndex;
-			CharacterItemTypeBag characterItemTypeBag = (CharacterItemTypeBag)((JsonSerializeable<T>)this._currentCharacterHierarchy.Bag);
+			CharacterItemTypeBag characterItemTypeBag = (CharacterItemTypeBag)((JsonSerializeable<!0>)this._currentCharItemType.Bag);
 			if (this.CurrentSkinItemType.Id != characterItemTypeBag.DefaultSkinGuid)
 			{
-				GameHubBehaviour.Hub.GuiScripts.SharedPreGameWindow.ItemBuyWindow.ShowBuyWindow(this.CurrentSkinItemType, new System.Action(this.OnCompleteSkinBuy), new System.Action(this.OnBuyWindowClosed), new System.Action(this.OnGoToShopCash), 1, false);
+				GameHubBehaviour.Hub.GuiScripts.SharedPreGameWindow.ItemBuyWindow.ShowBuyWindow(this.CurrentSkinItemType, new Action(this.OnCompleteSkinBuy), new Action(this.OnBuyWindowClosed), new Action(this.OnGoToShopCash), 1, false);
 			}
 		}
 
@@ -734,19 +847,19 @@ namespace HeavyMetalMachines.Frontend
 		private void CompleteSkinBuy()
 		{
 			this.currentSkinCardsCenteredIndex = this.GetSkinCardIndexByGuid(this.CurrentSkinItemType.Id);
-			this.ConfigureForSkin(this.currentSkinCardsCenteredIndex);
-			UICamera.controllerNavigationObject = this.BackButton;
+			this.ConfigureForSkin();
 		}
 
-		private void UpdateCharacterUnlock(ItemTypeScriptableObject customizationItem)
+		private void UpdateCharacterUnlock(IItemType customizationItem)
 		{
-			CharacterBag characterBag = GameHubBehaviour.Hub.User.GetCharacterBag(this._currentCharacterHierarchy.Id);
+			CharacterBag characterBag = GameHubBehaviour.Hub.User.GetCharacterBag(this._currentCharItemType.Id);
 			if (characterBag == null)
 			{
+				ShopDetails.Log.DebugFormat(string.Format("(UpdateCharacterUnlock) Character bag not found. ItemTypeId: {0}", customizationItem.Id), new object[0]);
 				this.CompleteSkinBuy();
 				return;
 			}
-			SkinItemTypeBag skinItemTypeBag = (SkinItemTypeBag)((JsonSerializeable<T>)customizationItem.Bag);
+			SkinItemTypeBag skinItemTypeBag = (SkinItemTypeBag)((JsonSerializeable<!0>)customizationItem.Bag);
 			characterBag.SetUnlockSeen(skinItemTypeBag.UnlockLevel);
 			CharacterCustomWS.UpdateCharacterUnlockMask(characterBag, new SwordfishClientApi.ParameterizedCallback<string>(this.OnUpdateCharacterUnlockMaskSuccess), new SwordfishClientApi.ErrorCallback(this.OnUpdateCharacterUnlockMaskError));
 		}
@@ -759,7 +872,7 @@ namespace HeavyMetalMachines.Frontend
 
 		private void OnUpdateCharacterUnlockMaskSuccess(object state, string obj)
 		{
-			NetResult netResult = (NetResult)((JsonSerializeable<T>)obj);
+			NetResult netResult = (NetResult)((JsonSerializeable<!0>)obj);
 			if (!netResult.Success)
 			{
 				ShopDetails.Log.ErrorFormat(string.Format("Error on OnUpdateCharacterUnlockMaskSuccess. PlayerId: {0}, Error: {1}", GameHubBehaviour.Hub.User.PlayerSF.Id, netResult.Msg), new object[0]);
@@ -767,47 +880,7 @@ namespace HeavyMetalMachines.Frontend
 			this.CompleteSkinBuy();
 		}
 
-		public void SwitchToDriverDetails()
-		{
-			if (this.CurrentState == ShopDetails.State.Driver)
-			{
-				return;
-			}
-			this.currentNavigationContext = ShopDetails.NavigationContext.buying;
-			this.CurrentState = ShopDetails.State.Driver;
-			this.ConfigureForDriver(this._currentCharacterHierarchy);
-			this.skinDetailsGameObject.SetActive(false);
-			this.driverDetailGameObject.SetActive(true);
-		}
-
-		public void SwitchToSkinDetails()
-		{
-			if (this.CurrentState == ShopDetails.State.Skin)
-			{
-				return;
-			}
-			this.currentNavigationContext = ShopDetails.NavigationContext.buying;
-			this.CurrentState = ShopDetails.State.Skin;
-			List<Guid> list = GameHubBehaviour.Hub.InventoryColletion.CharacterToSkinGuids[this._currentCharacterHierarchy.Id];
-			if (this.currentSkinCardsCenteredIndex == this.defaultSkinCardsCenteredIndex)
-			{
-				for (int i = 0; i < list.Count; i++)
-				{
-					ItemTypeScriptableObject itemTypeScriptableObject = GameHubBehaviour.Hub.InventoryColletion.AllItemTypes[list[i]];
-					if (itemTypeScriptableObject.IsItemEnableInShop())
-					{
-						this._targetSkinCardsChosenSkinIndex = this.GetSkinCardIndexByGuid(itemTypeScriptableObject.Id);
-					}
-				}
-				this.defaultSkinCardsCenteredIndex = this._targetSkinCardsChosenSkinIndex;
-			}
-			this.currentSkinCardsCenteredIndex = this._targetSkinCardsChosenSkinIndex;
-			this.ConfigureForSkin(this.currentSkinCardsCenteredIndex);
-			this.skinDetailsGameObject.SetActive(true);
-			this.driverDetailGameObject.SetActive(false);
-		}
-
-		private void ConfigureCarPreview(ItemTypeScriptableObject skinItemType)
+		private void ConfigureCarPreview(IItemType skinItemType)
 		{
 			this._modelViewerTexture.gameObject.SetActive(true);
 			this._shopDetailsSkinInfo.Disable();
@@ -815,23 +888,24 @@ namespace HeavyMetalMachines.Frontend
 			switch (component.PreviewKind)
 			{
 			case ItemPreviewKind.None:
-				break;
+				goto IL_C4;
 			case ItemPreviewKind.Sprite:
 			case ItemPreviewKind.Video:
+			case ItemPreviewKind.SmallSprite:
 				throw new NotImplementedException(string.Format("Not Implemented ItemPreviewKind: {0}", component.PreviewKind));
 			case ItemPreviewKind.Model3D:
 			{
 				ItemTypeComponent itemTypeComponent;
 				if (skinItemType.GetComponentByEnum(ItemTypeComponent.Type.SkinPrefab, out itemTypeComponent))
 				{
-					this._shopDetailsSkinInfo.Setup(((SkinPrefabItemTypeComponent)itemTypeComponent).SkinCustomization);
+					this._shopDetailsSkinInfo.Setup((SkinPrefabItemTypeComponent)itemTypeComponent);
 				}
 				base.StartCoroutine(this.ShowAssetCoroutine(component.ArtAssetName));
-				break;
+				goto IL_C4;
 			}
-			default:
-				throw new ArgumentException(string.Format("Unknown ItemPreviewKind: {0}", component.PreviewKind));
 			}
+			throw new ArgumentException(string.Format("Unknown ItemPreviewKind: {0}", component.PreviewKind));
+			IL_C4:
 			ShopDetailsComponent component2 = skinItemType.GetComponent<ShopDetailsComponent>();
 			string skinShopPreviewSpriteName = component2.SkinShopPreviewSpriteName;
 			this.CharacterNameTexture.SpriteName = skinShopPreviewSpriteName;
@@ -850,38 +924,53 @@ namespace HeavyMetalMachines.Frontend
 			yield break;
 		}
 
-		private void Setdifficulty(HeavyMetalMachines.Character.CharacterInfo charInfo)
+		private string GetDifficultyLocalizedText(CharacterDifficulty difficulty)
 		{
-			this.CharacterDificultLevel.value = (float)(20 * charInfo.Dificult) * 0.01f;
-			this.CharacterDificultLevelLabel.text = charInfo.GetDifficultTranslatedText();
-			Color color = Color.red;
-			if (charInfo)
+			switch (difficulty)
 			{
-				HeavyMetalMachines.Character.CharacterInfo.Difficulty difficultyKind = charInfo.GetDifficultyKind();
-				if (GameHubBehaviour.Hub && GameHubBehaviour.Hub.GuiScripts)
-				{
-					switch (difficultyKind)
-					{
-					case HeavyMetalMachines.Character.CharacterInfo.Difficulty.DifficultyLevel1:
-						color = GUIColorsInfo.Instance.DifficultyLevel1;
-						break;
-					case HeavyMetalMachines.Character.CharacterInfo.Difficulty.DifficultyLevel2:
-						color = GUIColorsInfo.Instance.DifficultyLevel2;
-						break;
-					case HeavyMetalMachines.Character.CharacterInfo.Difficulty.DifficultyLevel3:
-						color = GUIColorsInfo.Instance.DifficultyLevel3;
-						break;
-					case HeavyMetalMachines.Character.CharacterInfo.Difficulty.DifficultyLevel4:
-						color = GUIColorsInfo.Instance.DifficultyLevel4;
-						break;
-					case HeavyMetalMachines.Character.CharacterInfo.Difficulty.DifficultyLevel5:
-						color = GUIColorsInfo.Instance.DifficultyLevel5;
-						break;
-					}
-				}
-				this.CharacterDificultLevel.foregroundWidget.color = color;
-				this.CharacterDificultLevelLabel.color = color;
+			case CharacterDifficulty.DifficultyLevel1:
+				return Language.Get("DIFFICULTY_LEVEL_1", TranslationContext.CharactersBaseInfo);
+			case CharacterDifficulty.DifficultyLevel2:
+				return Language.Get("DIFFICULTY_LEVEL_2", TranslationContext.CharactersBaseInfo);
+			case CharacterDifficulty.DifficultyLevel3:
+				return Language.Get("DIFFICULTY_LEVEL_3", TranslationContext.CharactersBaseInfo);
+			case CharacterDifficulty.DifficultyLevel4:
+				return Language.Get("DIFFICULTY_LEVEL_4", TranslationContext.CharactersBaseInfo);
+			case CharacterDifficulty.DifficultyLevel5:
+				return Language.Get("DIFFICULTY_LEVEL_5", TranslationContext.CharactersBaseInfo);
+			default:
+				return Language.Get("DIFFICULTY_LEVEL_1", TranslationContext.CharactersBaseInfo);
 			}
+		}
+
+		private void Setdifficulty(CharacterItemTypeComponent charComponent)
+		{
+			this.CharacterDificultLevel.value = (float)((CharacterDifficulty)20 * charComponent.Difficulty) * 0.01f;
+			this.CharacterDificultLevelLabel.text = this.GetDifficultyLocalizedText(charComponent.Difficulty);
+			Color color = Color.red;
+			if (GameHubBehaviour.Hub && GameHubBehaviour.Hub.GuiScripts)
+			{
+				switch (charComponent.Difficulty)
+				{
+				case CharacterDifficulty.DifficultyLevel1:
+					color = GUIColorsInfo.Instance.DifficultyLevel1;
+					break;
+				case CharacterDifficulty.DifficultyLevel2:
+					color = GUIColorsInfo.Instance.DifficultyLevel2;
+					break;
+				case CharacterDifficulty.DifficultyLevel3:
+					color = GUIColorsInfo.Instance.DifficultyLevel3;
+					break;
+				case CharacterDifficulty.DifficultyLevel4:
+					color = GUIColorsInfo.Instance.DifficultyLevel4;
+					break;
+				case CharacterDifficulty.DifficultyLevel5:
+					color = GUIColorsInfo.Instance.DifficultyLevel5;
+					break;
+				}
+			}
+			this.CharacterDificultLevel.foregroundWidget.color = color;
+			this.CharacterDificultLevelLabel.color = color;
 		}
 
 		private IEnumerator WaitAndToggle(UIToggle Toggle, bool value)
@@ -892,50 +981,67 @@ namespace HeavyMetalMachines.Frontend
 			yield break;
 		}
 
-		public void ShowSkillTooltip(object o)
+		private TooltipInfo GetGadgetTooltipData(string charName, string gadgetDraftKey, GadgetSlot slot)
 		{
-			HeavyMetalMachines.Character.CharacterInfo characterInfo = null;
-			GameHubBehaviour.Hub.InventoryColletion.CharactersByTypeId.TryGetValue(this._currentCharacterHierarchy.Id, out characterInfo);
-			string upgradeDescription;
-			GadgetInfo gadgetInfo;
-			GadgetSlot gadgetSlot;
-			switch ((int)o)
+			string gadgetIconName = HudUtils.GetGadgetIconName(charName, slot);
+			string text = string.Format("{0}_GADGET_{1}_NAME", charName, gadgetDraftKey);
+			string text2 = string.Format("{0}_GADGET_{1}_DESC", charName, gadgetDraftKey);
+			string text3 = string.Format("{0}_GADGET_{1}_COOLDOWN", charName, gadgetDraftKey);
+			text = Language.Get(text, TranslationContext.CharactersMatchInfo);
+			text2 = Language.Get(text2, TranslationContext.CharactersMatchInfo);
+			if (Language.Has(text3, TranslationContext.CharactersMatchInfo))
 			{
-			case 0:
-				upgradeDescription = HudGarageShopGadgetObject.GetUpgradeDescription(characterInfo.PassiveGadget, characterInfo.PassiveGadget.LocalizedDescription, characterInfo.PassiveGadget.LocalizedName);
-				gadgetInfo = characterInfo.PassiveGadget;
-				gadgetSlot = GadgetSlot.PassiveGadget;
-				break;
+				text3 = Language.Get(text3, TranslationContext.CharactersMatchInfo);
+			}
+			else
+			{
+				text3 = string.Empty;
+			}
+			return new TooltipInfo(TooltipInfo.TooltipType.Normal, TooltipInfo.DescriptionSummaryType.None, this.TooltipGadgetAnchor, null, gadgetIconName, text, string.Empty, text2, text3, string.Empty, string.Empty, this.TooltipGadgetPivot.position, string.Empty);
+		}
+
+		[UnityUiComponentCall]
+		public void ShowSkillTooltip(object gadgetIndex)
+		{
+			if (!GameHubBehaviour.Hub.GuiScripts)
+			{
+				return;
+			}
+			CharacterItemTypeComponent component = this._currentCharItemType.GetComponent<CharacterItemTypeComponent>();
+			if (component == null)
+			{
+				return;
+			}
+			string gadgetDraftKey;
+			GadgetSlot slot;
+			switch ((int)gadgetIndex)
+			{
 			case 1:
-				upgradeDescription = HudGarageShopGadgetObject.GetUpgradeDescription(characterInfo.CustomGadget0, characterInfo.CustomGadget0.LocalizedDescription, characterInfo.CustomGadget0.LocalizedName);
-				gadgetInfo = characterInfo.CustomGadget0;
-				gadgetSlot = GadgetSlot.CustomGadget0;
+				gadgetDraftKey = "00";
+				slot = GadgetSlot.CustomGadget0;
 				break;
 			case 2:
-				upgradeDescription = HudGarageShopGadgetObject.GetUpgradeDescription(characterInfo.CustomGadget1, characterInfo.CustomGadget1.LocalizedDescription, characterInfo.CustomGadget1.LocalizedName);
-				gadgetInfo = characterInfo.CustomGadget1;
-				gadgetSlot = GadgetSlot.CustomGadget1;
+				gadgetDraftKey = "01";
+				slot = GadgetSlot.CustomGadget1;
 				break;
 			case 3:
-				upgradeDescription = HudGarageShopGadgetObject.GetUpgradeDescription(characterInfo.CustomGadget2, characterInfo.CustomGadget2.LocalizedDescription, characterInfo.CustomGadget2.LocalizedName);
-				gadgetInfo = characterInfo.CustomGadget2;
-				gadgetSlot = GadgetSlot.CustomGadget2;
+				gadgetDraftKey = "02";
+				slot = GadgetSlot.CustomGadget2;
 				break;
 			case 4:
-				upgradeDescription = HudGarageShopGadgetObject.GetUpgradeDescription(characterInfo.BoostGadget, characterInfo.BoostGadget.LocalizedDescription, characterInfo.BoostGadget.LocalizedName);
-				gadgetInfo = characterInfo.BoostGadget;
-				gadgetSlot = GadgetSlot.BoostGadget;
+				gadgetDraftKey = "03";
+				slot = GadgetSlot.BoostGadget;
 				break;
 			default:
-				upgradeDescription = HudGarageShopGadgetObject.GetUpgradeDescription(characterInfo.PassiveGadget, characterInfo.PassiveGadget.LocalizedDescription, characterInfo.PassiveGadget.LocalizedName);
-				gadgetInfo = characterInfo.PassiveGadget;
-				gadgetSlot = GadgetSlot.PassiveGadget;
+				gadgetDraftKey = "PASSIVE";
+				slot = GadgetSlot.PassiveGadget;
 				break;
 			}
-			TooltipInfo tooltipInfo = new TooltipInfo(TooltipInfo.TooltipType.Normal, TooltipInfo.DescriptionSummaryType.None, this.TooltipGadgetAnchor, null, HudUtils.GetGadgetIconName(characterInfo.Asset, gadgetSlot), gadgetInfo.LocalizedName, string.Empty, upgradeDescription, gadgetInfo.LocalizedCooldownDescription, string.Empty, string.Empty, this.TooltipGadgetPivot.position, string.Empty);
-			if (GameHubBehaviour.Hub.GuiScripts)
+			TooltipInfo gadgetTooltipData = this.GetGadgetTooltipData(component.AssetPrefix.ToUpper(), gadgetDraftKey, slot);
+			TooltipController tooltipController = GameHubBehaviour.Hub.GuiScripts.TooltipController;
+			if (!tooltipController.IsVisible())
 			{
-				GameHubBehaviour.Hub.GuiScripts.TooltipController.TryToOpenWindow(tooltipInfo);
+				tooltipController.ToggleOpenWindow(gadgetTooltipData);
 			}
 		}
 
@@ -947,43 +1053,35 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
+		private void OnDestroy()
+		{
+			this.HideTooltip();
+		}
+
 		public void ShowRoleTooltip(GameObject roleGameobject)
 		{
 			string simpleText = string.Empty;
 			if (roleGameobject.name == this.TacklerRole.name)
 			{
-				simpleText = Language.Get("TACKLER_ROLE_DESCRIPTION", TranslationSheets.CharactersBaseInfo);
+				simpleText = Language.Get("TACKLER_ROLE_DESCRIPTION", TranslationContext.CharactersBaseInfo);
 			}
 			else if (roleGameobject.name == this.CarrierRole.name)
 			{
-				simpleText = Language.Get("CARRIER_ROLE_DESCRIPTION", TranslationSheets.CharactersBaseInfo);
+				simpleText = Language.Get("CARRIER_ROLE_DESCRIPTION", TranslationContext.CharactersBaseInfo);
 			}
 			else
 			{
-				simpleText = Language.Get("SUPPORT_ROLE_DESCRIPTION", TranslationSheets.CharactersBaseInfo);
+				simpleText = Language.Get("SUPPORT_ROLE_DESCRIPTION", TranslationContext.CharactersBaseInfo);
 			}
 			TooltipInfo tooltipInfo = new TooltipInfo(TooltipInfo.TooltipType.SimpleText, TooltipInfo.DescriptionSummaryType.None, this.TooltipRoleAnchor, null, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, this.TooltipRolePivot.position, simpleText);
-			if (GameHubBehaviour.Hub.GuiScripts)
+			if (GameHubBehaviour.Hub.GuiScripts && !GameHubBehaviour.Hub.GuiScripts.TooltipController.IsVisible())
 			{
-				GameHubBehaviour.Hub.GuiScripts.TooltipController.TryToOpenWindow(tooltipInfo);
+				GameHubBehaviour.Hub.GuiScripts.TooltipController.ToggleOpenWindow(tooltipInfo);
 			}
 		}
 
-		public bool IsVisible()
-		{
-			return this.rootGameObject.activeInHierarchy;
-		}
-
-		public void OpenGuideUrl()
-		{
-			HeavyMetalMachines.Utils.Debug.Assert(!string.IsNullOrEmpty(this.characterInfo.URLName), "[GD] Character Main Attribute URLName is not set. Guide Url is Invalid.", HeavyMetalMachines.Utils.Debug.TargetTeam.All);
-			if (string.IsNullOrEmpty(this.characterInfo.URLName))
-			{
-				return;
-			}
-			string value = GameHubBehaviour.Hub.Config.GetValue(ConfigAccess.CharacterGuideURL);
-			OpenUrlUtils.OpenSteamUrl(GameHubBehaviour.Hub, string.Format(value, this.characterInfo.URLName, Language.CurrentLanguage()));
-		}
+		[Inject]
+		private readonly ILocalBalanceStorage _localBalanceStorage;
 
 		public static readonly BitLogger Log = new BitLogger(typeof(ShopGUI));
 
@@ -1069,8 +1167,6 @@ namespace HeavyMetalMachines.Frontend
 
 		public GameObject BoughtGroup;
 
-		public GameObject BuyButton;
-
 		public GameObject OpenGuideButton;
 
 		[Header("SKIN")]
@@ -1101,33 +1197,9 @@ namespace HeavyMetalMachines.Frontend
 
 		public Transform skinCardsPivot;
 
-		public GameObject NavigationIndicatorPrefab;
-
-		public GameObject[] NavigationIndicators;
-
-		public Transform skinCardsIndicationPivot;
-
-		public ItemTypeScriptableObject CurrentSkinItemType;
+		public IItemType CurrentSkinItemType;
 
 		public int currentSkinCardsCenteredIndex;
-
-		public GameObject Basic_RarityGO;
-
-		public GameObject Bronze_RarityGO;
-
-		public GameObject Silver_RarityGO;
-
-		public GameObject Gold_RarityGO;
-
-		public GameObject Diamond_RarityGO;
-
-		public GameObject None_RarityGO;
-
-		public Sprite normalCardBorder;
-
-		public Sprite boughtCardBorder;
-
-		public Sprite nofundsCardBorder;
 
 		public GameObject SkinBuyGroup;
 
@@ -1156,15 +1228,24 @@ namespace HeavyMetalMachines.Frontend
 		[SerializeField]
 		private ShopDetailsSkinInfo _shopDetailsSkinInfo;
 
-		private HeavyMetalMachines.Character.CharacterInfo characterInfo;
-
 		private AnimatedAssetPresenter _animatedAssetPresenter;
+
+		[InjectOnClient]
+		private IStoreBusinessFactory _storeBusinessFactory;
+
+		private IDisposable _storeItemObservation;
+
+		private List<StoreItem> _activeSkinCards = new List<StoreItem>();
 
 		public ShopDetails.State CurrentState;
 
 		public ShopDetails.NavigationContext currentNavigationContext;
 
-		private ItemTypeScriptableObject _currentCharacterHierarchy;
+		[Header("[Ui Navigation]")]
+		[SerializeField]
+		private UiNavigationGroupHolder _uiNavigationGroupHolder;
+
+		private IItemType _currentCharItemType;
 
 		private List<ItemTypeScriptableObject> _currentCharacterOrderedCustomizations;
 
@@ -1172,7 +1253,14 @@ namespace HeavyMetalMachines.Frontend
 
 		private Sprite _characterNameTextureCache;
 
+		private Texture _animatedTextureCache;
+
 		private int defaultSkinCardsCenteredIndex;
+
+		private bool _shouldCycleToCurrentSkin;
+
+		[Inject]
+		private ICharacterHelpPresenter _characterHelpPresenter;
 
 		private float Tunning = 0.25f;
 
@@ -1188,6 +1276,7 @@ namespace HeavyMetalMachines.Frontend
 
 		public enum State
 		{
+			None,
 			Driver,
 			Skin
 		}

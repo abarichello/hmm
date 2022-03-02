@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using HeavyMetalMachines.Character;
+using Assets.ClientApiObjects;
+using Assets.ClientApiObjects.Components;
 using HeavyMetalMachines.Match;
 using HeavyMetalMachines.Server.Pick.Rules.Apis;
 using UnityEngine;
@@ -9,7 +10,7 @@ namespace HeavyMetalMachines.Server.Pick.Rules
 {
 	public class RandomBotCharacterSelector : IBotCharacterSelector
 	{
-		public RandomBotCharacterSelector(HeavyMetalMachines.Character.CharacterInfo[] validCharactersForBots, List<PlayerData> players, List<PlayerData> bots)
+		public RandomBotCharacterSelector(IItemType[] validCharactersForBots, List<PlayerData> players, List<PlayerData> bots)
 		{
 			this._validCharactersForBots = validCharactersForBots;
 			this._players = players;
@@ -23,7 +24,7 @@ namespace HeavyMetalMachines.Server.Pick.Rules
 			{
 				return -1;
 			}
-			return availableCharactersForBotSelection[UnityEngine.Random.Range(0, availableCharactersForBotSelection.Length)];
+			return availableCharactersForBotSelection[Random.Range(0, availableCharactersForBotSelection.Length)];
 		}
 
 		protected int[] GetAvailableCharactersForBotSelection(PlayerData bot)
@@ -31,13 +32,19 @@ namespace HeavyMetalMachines.Server.Pick.Rules
 			List<int> list = new List<int>();
 			for (int i = 0; i < this._validCharactersForBots.Length; i++)
 			{
-				HeavyMetalMachines.Character.CharacterInfo characterInfo = this._validCharactersForBots[i];
-				if (this.IsCharacterAvailableForSelection(bot.PlayerAddress, bot.Team, characterInfo.CharacterId))
+				IItemType itemType = this._validCharactersForBots[i];
+				if (this.IsCharacterAvailableForSelection(bot, itemType))
 				{
-					list.Add(characterInfo.CharacterId);
+					list.Add(itemType.GetComponent<CharacterItemTypeComponent>().CharacterId);
 				}
 			}
 			return list.ToArray();
+		}
+
+		private bool IsCharacterAvailableForSelection(PlayerData bot, IItemType charItemType)
+		{
+			CharacterItemTypeComponent component = charItemType.GetComponent<CharacterItemTypeComponent>();
+			return !this.IsCharacterUnavailableForSelection(bot.PlayerAddress, bot.Team, component.CharacterId);
 		}
 
 		private bool IsCharacterAvailableForSelection(byte botAddress, TeamKind botTeam, int characterId)
@@ -87,7 +94,7 @@ namespace HeavyMetalMachines.Server.Pick.Rules
 			return teamA != teamB && teamB != TeamKind.Zero;
 		}
 
-		private readonly HeavyMetalMachines.Character.CharacterInfo[] _validCharactersForBots;
+		private readonly IItemType[] _validCharactersForBots;
 
 		private readonly List<PlayerData> _players;
 

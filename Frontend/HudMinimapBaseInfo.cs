@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.Arena;
 using HeavyMetalMachines.Match;
 using UnityEngine;
 
@@ -38,7 +39,7 @@ namespace HeavyMetalMachines.Frontend
 			}
 		}
 
-		public void Setup(TeamKind currentPlayerTeam, GameArenaInfo arenaInfo)
+		public void Setup(TeamKind currentPlayerTeam, IGameArenaInfo arenaInfo)
 		{
 			if (currentPlayerTeam == arenaInfo.BaseFlipTeam)
 			{

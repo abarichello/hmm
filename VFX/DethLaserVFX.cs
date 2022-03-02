@@ -38,7 +38,7 @@ namespace HeavyMetalMachines.VFX
 					Debug.LogWarning(string.Format("PlayerData for target ObjId:{0} not found", this._targetFXInfo.Target.ObjId), this);
 				}
 				this._damageVFX = (MasterVFX)GameHubBehaviour.Hub.Resources.PrefabCacheInstantiate(this.DamageVFX, this._target.position, this._target.rotation);
-				this._damageVFX.transform.parent = GameHubBehaviour.Hub.Drawer.Effects;
+				GameHubBehaviour.Hub.Drawer.AddEffect(this._damageVFX.transform);
 				this._damageVFX.baseMasterVFX = this.DamageVFX;
 				this._damageVFX.Activate(this._masterVfx.TargetFX);
 				if (this.HitPointParticle)

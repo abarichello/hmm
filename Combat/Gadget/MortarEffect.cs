@@ -21,7 +21,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			{
 				return this._mortarDummyAux.position;
 			}
-			this._mortarDummyAux = this.Combat.Dummy.GetDummy(this.MortarParentInto.MortarDummy, null);
+			this._mortarDummyAux = this.Combat.Dummy.GetDummy(this.MortarParentInto.MortarDummy, null, null);
 			return this._mortarDummyAux.position;
 		}
 
@@ -70,11 +70,11 @@ namespace HeavyMetalMachines.Combat.Gadget
 			float mortarMoveSpeed = mortarParentInto.MortarMoveSpeed;
 			float lifeTime = mortarParentInto.LifeTime;
 			bool mortarUseMoveSpeed = mortarParentInto.MortarUseMoveSpeed;
-			Vector3 a = base.Target;
-			a.y = vector.y;
-			a -= vector;
-			Vector3 normalized = a.normalized;
-			float num = a.magnitude;
+			Vector3 vector2 = base.Target;
+			vector2.y = vector.y;
+			vector2 -= vector;
+			Vector3 normalized = vector2.normalized;
+			float num = vector2.magnitude;
 			Vector3 target;
 			if (num > mortarRange)
 			{

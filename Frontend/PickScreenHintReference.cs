@@ -1,4 +1,5 @@
 ﻿using System;
+using HeavyMetalMachines.Localization;
 using Pocketverse;
 using UnityEngine;
 
@@ -11,7 +12,7 @@ namespace HeavyMetalMachines.Frontend
 			this.isVisible = true;
 			base.gameObject.SetActive(true);
 			this._animation.Play();
-			this._uiLabel.text = Language.Get(this.draft, TranslationSheets.PickMode);
+			this._uiLabel.text = Language.Get(this.draft, TranslationContext.PickMode);
 		}
 
 		public void Hide()

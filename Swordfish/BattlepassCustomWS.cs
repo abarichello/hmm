@@ -1,8 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
 using ClientAPI;
-using Commons.Swordfish.Battlepass;
-using Commons.Swordfish.Progression;
-using HeavyMetalMachines.Swordfish.Player;
+using HeavyMetalMachines.DataTransferObjects.Player;
+using HeavyMetalMachines.DataTransferObjects.Progression;
+using HeavyMetalMachines.Items.DataTransferObjects;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Swordfish
@@ -11,6 +12,10 @@ namespace HeavyMetalMachines.Swordfish
 	{
 		public static void SelectMissionsForPlayer(long playerID, SwordfishClientApi.ParameterizedCallback<string> onSuccess, SwordfishClientApi.ErrorCallback onError)
 		{
+			BattlepassCustomWS.Log.DebugFormat("SelectMissionsForPlayer {0}", new object[]
+			{
+				playerID
+			});
 			GameHubObject.Hub.ClientApi.customws.ExecuteCustomWSWithReturn(null, "SelectMissionsForPlayer", playerID.ToString(), onSuccess, onError);
 		}
 
@@ -38,6 +43,16 @@ namespace HeavyMetalMachines.Swordfish
 				IsPremium = premiumClaim
 			};
 			GameHubObject.Hub.ClientApi.customws.ExecuteCustomWSWithReturn(state, "ClaimReward", claimRewardRequest.ToString(), onSuccess, onError);
+		}
+
+		public static void ClaimAllRewards(object state, long playerId, List<ClaimRewardInfo> rewardsInfo, SwordfishClientApi.ParameterizedCallback<string> onSuccess, SwordfishClientApi.ErrorCallback onError)
+		{
+			ClaimAllRewardsRequest claimAllRewardsRequest = new ClaimAllRewardsRequest
+			{
+				PlayerId = playerId,
+				ClaimRewardsInfo = rewardsInfo
+			};
+			GameHubObject.Hub.ClientApi.customws.ExecuteCustomWSWithReturn(state, "ClaimAllRewards", claimAllRewardsRequest.ToString(), onSuccess, onError);
 		}
 
 		internal static void MarkMissionsAsSeen(object state, string playerId, SwordfishClientApi.ParameterizedCallback<string> onSuccess, SwordfishClientApi.ErrorCallback onError)

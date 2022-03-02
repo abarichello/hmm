@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Diagnostics;
+using HeavyMetalMachines.Battlepass.BuyLevels;
 using HeavyMetalMachines.Frontend;
-using HeavyMetalMachines.UnityUI;
+using UniRx;
 using UnityEngine;
-using UnityEngine.UI;
+using Zenject;
 
 namespace HeavyMetalMachines.Battlepass
 {
@@ -32,16 +33,22 @@ namespace HeavyMetalMachines.Battlepass
 			this.BuyAllLevelsButtonClickCallback -= buyAllLevelsButtonClickCallback;
 		}
 
-		public void SetPremiumButtonInteractable(bool isInteractable)
+		public void SetPremiumButtonVisibility(bool isVisible)
 		{
-			this._unlockPremiumButton.interactable = isInteractable;
+			this._premiumUnlockButtonCanvasGroup.interactable = isVisible;
+			this._premiumUnlockButtonCanvasGroup.blocksRaycasts = isVisible;
+			this._premiumUnlockButtonCanvasGroup.alpha = ((!isVisible) ? 0f : 1f);
 		}
 
-		public void SetupBuyLevels(string levelsText)
+		public void SetupBuyLevels(int price, int targetLevel)
 		{
-			this._levelsButtonHoverValue.Setup(levelsText);
-			this._premiumBuyLevelButtonCanvasGroup.alpha = 0f;
-			this._premiumBuyLevelButtonCanvasGroup.interactable = false;
+			this._selectedLevelsPrice = price;
+			this._targetLevel = targetLevel;
+		}
+
+		public void SetAllLevelsButtonHoverValue(int priceValue)
+		{
+			this._allLevelsPrice = priceValue;
 		}
 
 		public float PlayUnlockAnimation()
@@ -50,54 +57,18 @@ namespace HeavyMetalMachines.Battlepass
 			return this._unlockButtonsAnimation.clip.length;
 		}
 
-		public void SetAllLevelsButtonHoverValue(string priceValueText)
+		public void ShowLevelButtons()
 		{
-			this._allLevelsButtonHoverValue.Setup(priceValueText);
+			this._buyLevelsCanvasGroup.alpha = 1f;
+			this._buyLevelsCanvasGroup.interactable = true;
+			this._buyLevelsCanvasGroup.blocksRaycasts = true;
 		}
 
-		public void SetupByPremiumState(bool userHasPremium, int currentLevel, int maxSlots)
+		public void HideLevelButtons()
 		{
-			this._premiumUnlockButtonCanvasGroup.alpha = ((!userHasPremium) ? 1f : 0f);
-			this._premiumUnlockButtonCanvasGroup.interactable = !userHasPremium;
-			this._premiumUnlockButtonCanvasGroup.blocksRaycasts = !userHasPremium;
-			bool flag = currentLevel != maxSlots - 1 && userHasPremium;
-			this._premiumLevelButtonsCanvasGroup.alpha = ((!flag) ? 0f : 1f);
-			this._premiumLevelButtonsCanvasGroup.interactable = flag;
-			this._premiumLevelButtonsCanvasGroup.blocksRaycasts = flag;
-			this._buyAllLevelsButton.interactable = true;
-			this._buyLevelsButton.interactable = true;
-		}
-
-		public void UpdateBuyLevelButton(int selectedLevel, int currentLevel, int buyLevelPriceValue)
-		{
-			int num = (selectedLevel > currentLevel) ? (selectedLevel - currentLevel) : 1;
-			int num2 = buyLevelPriceValue * num;
-			this._levelsButtonHoverValue.Setup(num2.ToString("0"));
-			this._premiumBuyLevelButtonText.text = string.Format(Language.Get("BATTLEPASS_PURCHASE_LEVELS", TranslationSheets.Battlepass), num);
-			this._premiumBuyLevelButtonCanvasGroup.alpha = 1f;
-			this._premiumBuyLevelButtonCanvasGroup.interactable = true;
-			this._buyLevelsButton.interactable = true;
-		}
-
-		public void DisableButtonsCanvas()
-		{
-			this._premiumBuyAllLevelsButtonCanvasGroup.alpha = 0f;
-			this._premiumBuyLevelButtonCanvasGroup.alpha = 0f;
-		}
-
-		public void EnableLevelButtons()
-		{
-			this._premiumLevelButtonsCanvasGroup.alpha = 1f;
-			this._premiumLevelButtonsCanvasGroup.interactable = true;
-			this._buyAllLevelsButton.interactable = true;
-		}
-
-		public void DisableLevelButtons()
-		{
-			this._premiumLevelButtonsCanvasGroup.interactable = false;
-			this._premiumBuyLevelButtonCanvasGroup.alpha = 0f;
-			this._premiumBuyLevelButtonCanvasGroup.interactable = false;
-			this._buyAllLevelsButton.interactable = false;
+			this._buyLevelsCanvasGroup.alpha = 0f;
+			this._buyLevelsCanvasGroup.interactable = false;
+			this._buyLevelsCanvasGroup.blocksRaycasts = false;
 		}
 
 		[UnityUiComponentCall]
@@ -109,8 +80,7 @@ namespace HeavyMetalMachines.Battlepass
 			}
 		}
 
-		[UnityUiComponentCall]
-		public void OnBuyLevelsButtonClick()
+		private void OnBuyCurrentLevel()
 		{
 			if (this.BuyLevelsButtonClickCallback != null)
 			{
@@ -118,8 +88,7 @@ namespace HeavyMetalMachines.Battlepass
 			}
 		}
 
-		[UnityUiComponentCall]
-		public void OnBuyAllLevelsButtonClick()
+		private void OnBuyAllLevels()
 		{
 			if (this.BuyAllLevelsButtonClickCallback != null)
 			{
@@ -127,40 +96,49 @@ namespace HeavyMetalMachines.Battlepass
 			}
 		}
 
+		[UnityUiComponentCall]
+		public void OnBuyLevelsClick()
+		{
+			IDisposable buyLevelsPresenterDisposable = ObservableExtensions.Subscribe<Unit>(Observable.ContinueWith<Unit, Unit>(this._buyLevelsPresenter.Initialize(), delegate(Unit _)
+			{
+				this._buyLevelsPresenter.SetupLevelValues(this._selectedLevelsPrice, this._targetLevel, this._allLevelsPrice);
+				return this._buyLevelsPresenter.Show();
+			}));
+			IDisposable buyCurrentLevelDisposable = ObservableExtensions.Subscribe<Unit>(this._buyLevelsPresenter.ObserveBuyCurrentLevel(), delegate(Unit _)
+			{
+				this.OnBuyCurrentLevel();
+			});
+			IDisposable buyAllLevelsDisposable = ObservableExtensions.Subscribe<Unit>(this._buyLevelsPresenter.ObserveBuyAllLevels(), delegate(Unit _)
+			{
+				this.OnBuyAllLevels();
+			});
+			ObservableExtensions.Subscribe<Unit>(this._buyLevelsPresenter.ObserveHide(), delegate(Unit _)
+			{
+				buyLevelsPresenterDisposable.Dispose();
+				buyCurrentLevelDisposable.Dispose();
+				buyAllLevelsDisposable.Dispose();
+				this._buyLevelsPresenter.Dispose();
+			});
+		}
+
 		[Header("[Components]")]
 		[SerializeField]
 		private CanvasGroup _premiumUnlockButtonCanvasGroup;
 
 		[SerializeField]
-		private CanvasGroup _premiumLevelButtonsCanvasGroup;
-
-		[SerializeField]
-		private CanvasGroup _premiumBuyLevelButtonCanvasGroup;
-
-		[SerializeField]
-		private CanvasGroup _premiumBuyAllLevelsButtonCanvasGroup;
-
-		[SerializeField]
-		private Text _premiumBuyLevelButtonText;
+		private CanvasGroup _buyLevelsCanvasGroup;
 
 		[SerializeField]
 		private Animation _unlockButtonsAnimation;
 
-		[SerializeField]
-		private Button _unlockPremiumButton;
+		[Inject]
+		private IBattlepassBuyLevelsPresenter _buyLevelsPresenter;
 
-		[SerializeField]
-		private Button _buyLevelsButton;
+		private int _selectedLevelsPrice;
 
-		[SerializeField]
-		private Button _buyAllLevelsButton;
+		private int _targetLevel;
 
-		[Header("[Views]")]
-		[SerializeField]
-		private UnityUiButtonHoverValue _levelsButtonHoverValue;
-
-		[SerializeField]
-		private UnityUiButtonHoverValue _allLevelsButtonHoverValue;
+		private int _allLevelsPrice;
 
 		public delegate void SeasonBuyButtonClickDelegate();
 	}

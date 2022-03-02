@@ -5,7 +5,7 @@ using Pocketverse;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkCallbackOnAction : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkCallbackOnAction : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		private IPlayerController Controller
 		{
@@ -49,7 +49,7 @@ namespace HeavyMetalMachines.Combat
 			Mural.Post(new ActionCallback(this.Effect.EventId), this.Effect.Gadget);
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			this.Controller.ListenToCancelAction -= this.OnCancelAction;
 		}

@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkDestroyOnLinkedEffectDestroy : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkDestroyOnLinkedEffectDestroy : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		public override void PerkInitialized()
 		{
@@ -20,7 +20,7 @@ namespace HeavyMetalMachines.Combat
 			this.Effect.TriggerDestroy(-1, base.transform.position, false, null, Vector3.zero, BaseFX.EDestroyReason.Default, false);
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			GameHubBehaviour.Hub.Events.Effects.UnlistenToDestroy(this.Effect.Data.TargetEventId, new EffectsManager.EffectDestroyed(this.ServerDestroy));
 		}

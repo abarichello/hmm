@@ -1,12 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using HeavyMetalMachines.Announcer;
+using HeavyMetalMachines.Arena;
 using HeavyMetalMachines.BI;
+using HeavyMetalMachines.BI.Players;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Event;
-using HeavyMetalMachines.Swordfish.Logs;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
 using Pocketverse;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.SceneManagement;
 
 namespace HeavyMetalMachines.Match
@@ -21,20 +24,13 @@ namespace HeavyMetalMachines.Match
 			}
 		}
 
-		public bool MatchOver
-		{
-			get
-			{
-				return GameHubBehaviour.Hub.Match.State == MatchData.MatchState.MatchOverTie || GameHubBehaviour.Hub.Match.State == MatchData.MatchState.MatchOverBluWins || GameHubBehaviour.Hub.Match.State == MatchData.MatchState.MatchOverRedWins;
-			}
-		}
-
 		public static bool IsValidPoint(Vector3 point, float[] depthLayers)
 		{
-			Vector2 point2 = new Vector2(point.x, point.z);
+			Vector2 vector;
+			vector..ctor(point.x, point.z);
 			for (int i = 0; i < depthLayers.Length; i++)
 			{
-				if (Physics2D.OverlapPoint(point2, 1, depthLayers[i], depthLayers[i]) != null)
+				if (Physics2D.OverlapPoint(vector, 1, depthLayers[i], depthLayers[i]) != null)
 				{
 					return true;
 				}
@@ -50,23 +46,25 @@ namespace HeavyMetalMachines.Match
 			}
 			Vector3 zero = Vector3.zero;
 			float num = float.PositiveInfinity;
-			Vector2 start = new Vector2(position.x, position.z);
-			Vector2 end = new Vector2(lastValidPosition.x, lastValidPosition.z);
-			ContactFilter2D contactFilter = default(ContactFilter2D);
-			contactFilter.useDepth = true;
+			Vector2 vector;
+			vector..ctor(position.x, position.z);
+			Vector2 vector2;
+			vector2..ctor(lastValidPosition.x, lastValidPosition.z);
+			ContactFilter2D contactFilter2D = default(ContactFilter2D);
+			contactFilter2D.useDepth = true;
 			RaycastHit2D[] array = new RaycastHit2D[1];
 			for (int i = 0; i < depthLayers.Length; i++)
 			{
-				contactFilter.minDepth = depthLayers[i];
-				contactFilter.maxDepth = depthLayers[i];
-				int num2 = Physics2D.Linecast(start, end, contactFilter, array);
+				contactFilter2D.minDepth = depthLayers[i];
+				contactFilter2D.maxDepth = depthLayers[i];
+				int num2 = Physics2D.Linecast(vector, vector2, contactFilter2D, array);
 				if (num2 > 0 && array[i].distance < num)
 				{
 					num = array[i].distance;
-					Vector2 a = array[i].point;
-					Vector2 b = array[i].normal * -offset;
-					a += b;
-					zero = new Vector3(a.x, 0f, a.y);
+					Vector2 vector3 = array[i].point;
+					Vector2 vector4 = array[i].normal * -offset;
+					vector3 += vector4;
+					zero..ctor(vector3.x, 0f, vector3.y);
 				}
 			}
 			return zero;
@@ -79,27 +77,28 @@ namespace HeavyMetalMachines.Match
 				return point;
 			}
 			Vector3 zero = Vector3.zero;
-			Vector2 v = new Vector2(point.x, point.z);
+			Vector2 vector;
+			vector..ctor(point.x, point.z);
 			float positiveInfinity = float.PositiveInfinity;
 			GameObject gameObject = new GameObject();
-			Collider2D colliderB = gameObject.AddComponent<CircleCollider2D>();
-			gameObject.transform.position = v;
+			Collider2D collider2D = gameObject.AddComponent<CircleCollider2D>();
+			gameObject.transform.position = vector;
 			for (int i = 0; i < depthLayers.Length; i++)
 			{
 				for (int j = 0; j < this.ArenaColliders.Length; j++)
 				{
-					if (Mathf.Abs(this.ArenaColliders[j].transform.position.z - depthLayers[i]) < 1.401298E-45f)
+					if (Mathf.Abs(this.ArenaColliders[j].transform.position.z - depthLayers[i]) < 1E-45f)
 					{
-						ColliderDistance2D colliderDistance2D = Physics2D.Distance(this.ArenaColliders[j], colliderB);
+						ColliderDistance2D colliderDistance2D = Physics2D.Distance(this.ArenaColliders[j], collider2D);
 						if (colliderDistance2D.distance < positiveInfinity)
 						{
-							Vector2 vector = colliderDistance2D.pointA + colliderDistance2D.normal * offset;
-							zero = new Vector3(vector.x, 0f, vector.y);
+							Vector2 vector2 = colliderDistance2D.pointA + colliderDistance2D.normal * offset;
+							zero..ctor(vector2.x, 0f, vector2.y);
 						}
 					}
 				}
 			}
-			UnityEngine.Object.Destroy(gameObject);
+			Object.Destroy(gameObject);
 			return zero;
 		}
 
@@ -128,7 +127,7 @@ namespace HeavyMetalMachines.Match
 
 		private void Awake()
 		{
-			SceneManager.sceneLoaded += this.OnSceneLoaded;
+			SceneManager.sceneLoaded += new UnityAction<Scene, LoadSceneMode>(this.OnSceneLoaded);
 			if (!GameHubBehaviour.Hub)
 			{
 				return;
@@ -140,9 +139,8 @@ namespace HeavyMetalMachines.Match
 
 		private void ApplyArenaConfig()
 		{
-			int arenaIndex = GameHubBehaviour.Hub.Match.ArenaIndex;
-			GameArenaInfo gameArenaInfo = GameHubBehaviour.Hub.ArenaConfig.Arenas[arenaIndex];
-			this.SetWarmup(gameArenaInfo.WarmupTimeSeconds);
+			IGameArenaInfo currentArena = GameHubBehaviour.Hub.ArenaConfig.GetCurrentArena();
+			this.SetWarmup(currentArena.WarmupTimeSeconds);
 		}
 
 		private void PreLoadMatch()
@@ -159,7 +157,7 @@ namespace HeavyMetalMachines.Match
 					GameHubBehaviour.Hub.Swordfish.MatchBI.ClientOnMatchEnded();
 				}
 			}
-			SceneManager.sceneLoaded -= this.OnSceneLoaded;
+			SceneManager.sceneLoaded -= new UnityAction<Scene, LoadSceneMode>(this.OnSceneLoaded);
 		}
 
 		private void OnSceneLoaded(Scene scene, LoadSceneMode sceneMode)
@@ -168,9 +166,9 @@ namespace HeavyMetalMachines.Match
 			{
 				return;
 			}
+			GameHubBehaviour.Hub.Swordfish.MatchBI.OnMatchLoaded();
 			if (GameHubBehaviour.Hub.Net.IsClient())
 			{
-				GameHubBehaviour.Hub.Swordfish.MatchBI.ClientOnMatchLoaded();
 				return;
 			}
 			this._warmupStartDone = GameHubBehaviour.Hub.Match.LevelIsTutorial();
@@ -227,7 +225,7 @@ namespace HeavyMetalMachines.Match
 			{
 				this._warmup00Done = true;
 				GameHubBehaviour.Hub.Match.State = MatchData.MatchState.MatchStarted;
-				GameHubBehaviour.Hub.afkController.ResetValues();
+				this._afkManager.ResetValues();
 				GameHubBehaviour.Hub.Swordfish.MatchBI.ServerOnMatchStarted();
 				GameHubBehaviour.Hub.Server.SpreadInfo();
 				this.ThrowAnnounceEvent(AnnouncerLog.AnnouncerEventKinds.Beginning00);
@@ -242,7 +240,7 @@ namespace HeavyMetalMachines.Match
 			{
 				if (winner != TeamKind.Blue)
 				{
-					match.State = MatchData.MatchState.MatchOverTie;
+					match.State = MatchData.MatchState.Nothing;
 				}
 				else
 				{
@@ -284,6 +282,9 @@ namespace HeavyMetalMachines.Match
 		}
 
 		public static readonly BitLogger Log = new BitLogger(typeof(MatchController));
+
+		[InjectOnServer]
+		private IAFKManager _afkManager;
 
 		public PolygonCollider2D[] ArenaColliders;
 

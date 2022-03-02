@@ -1,20 +1,24 @@
 ﻿using System;
 using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.GameCamera;
 using HeavyMetalMachines.Match;
+using Hoplon.Unity.Loading;
 using Pocketverse;
-using SharedUtils.Loading;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Car
 {
 	public class CarIndicatorArrow : GameHubBehaviour
 	{
-		public void Initialize(Transform carTransform, TeamKind carTeam, Transform arrowsTransform, int playerObjId)
+		public void Initialize(Transform carTransform, TeamKind carTeam, Transform arrowsTransform, int playerObjId, IGameCameraEngine gameCameraEngine)
 		{
+			this._gameCameraEngine = gameCameraEngine;
+			this._isIndicatorArrowActive = (!GameHubBehaviour.Hub.Options.Game.ShowObjectiveIndicator && !GameHubBehaviour.Hub.Match.LevelIsTutorial());
+			GameHubBehaviour.Hub.Options.Game.ShowObjectiveIndicatorChanged += this.GameOnShowObjectiveIndicatorChanged;
 			this._carIndicatorArrowTextures = new Texture[CarIndicatorArrow.CarIndicatorArrowTextureNames.Length];
 			for (int i = 0; i < CarIndicatorArrow.CarIndicatorArrowTextureNames.Length; i++)
 			{
-				this._carIndicatorArrowTextures[i] = (Texture)LoadingManager.ResourceContent.GetAsset(CarIndicatorArrow.CarIndicatorArrowTextureNames[i]).Asset;
+				this._carIndicatorArrowTextures[i] = (Texture)Loading.Content.GetAsset(CarIndicatorArrow.CarIndicatorArrowTextureNames[i]).Asset;
 			}
 			this._carArrowsMeshRenderer = arrowsTransform.GetComponent<MeshRenderer>();
 			Vector3 localScale = arrowsTransform.localScale;
@@ -28,6 +32,20 @@ namespace HeavyMetalMachines.Car
 			this._otherPlayerTransform = null;
 			this._tintColorPropertyId = Shader.PropertyToID("_TintColor");
 			this._mainTexPropertyId = Shader.PropertyToID("_MainTex");
+			if (!this._isIndicatorArrowActive)
+			{
+				this.DisableRenderArrow();
+			}
+			this.UpdateBombObjective();
+		}
+
+		private void GameOnShowObjectiveIndicatorChanged(bool isObjectiveIndicatorEnabled)
+		{
+			this._isIndicatorArrowActive = (!isObjectiveIndicatorEnabled && !GameHubBehaviour.Hub.Match.LevelIsTutorial());
+			if (!this._isIndicatorArrowActive)
+			{
+				this.DisableRenderArrow();
+			}
 			this.UpdateBombObjective();
 		}
 
@@ -35,21 +53,23 @@ namespace HeavyMetalMachines.Car
 		{
 			this._isBombGame = isBombGame;
 			this._arrowTargetPosition = newTargetPosition;
-			this.TryEnableRenderArrow();
+			if (this._isIndicatorArrowActive)
+			{
+				this.EnableRenderArrow();
+			}
 		}
 
 		public void UpdateBombObjective()
 		{
 			if (GameHubBehaviour.Hub.BombManager.IsCarryingBomb(this._playerTransform))
 			{
-				this.TryDisableRenderArrow();
+				this.DisableRenderArrow();
 			}
 			else
 			{
 				Vector3 zero = Vector3.zero;
 				GameHubBehaviour.Hub.BombManager.GetBombPosition(ref zero);
 				this.UpdateObjective(zero, true);
-				this.TryEnableRenderArrow();
 			}
 		}
 
@@ -57,9 +77,10 @@ namespace HeavyMetalMachines.Car
 		{
 			this._arrowsTransform = null;
 			this._otherPlayerTransform = null;
+			GameHubBehaviour.Hub.Options.Game.ShowObjectiveIndicatorChanged -= this.GameOnShowObjectiveIndicatorChanged;
 		}
 
-		private void TryEnableRenderArrow()
+		private void EnableRenderArrow()
 		{
 			if (this._carArrowsMeshRenderer.enabled && this._renderArrow)
 			{
@@ -69,7 +90,7 @@ namespace HeavyMetalMachines.Car
 			this._carArrowsMeshRenderer.enabled = true;
 		}
 
-		private void TryDisableRenderArrow()
+		private void DisableRenderArrow()
 		{
 			if (!this._carArrowsMeshRenderer.enabled && !this._renderArrow)
 			{
@@ -92,7 +113,7 @@ namespace HeavyMetalMachines.Car
 			{
 				if (!GameHubBehaviour.Hub.BombManager.ActiveBomb.IsSpawned)
 				{
-					this.TryDisableRenderArrow();
+					this.DisableRenderArrow();
 					return;
 				}
 				this.UpdateBombObjective();
@@ -130,11 +151,11 @@ namespace HeavyMetalMachines.Car
 						this._arrowsTransform.position = Vector3.MoveTowards(this._lastArrowPosition, vector2, this._transitionDistanceCount);
 					}
 					this._arrowsTransform.LookAt(this._arrowTargetPosition);
-					Vector3 forward = CarCamera.Singleton.CameraTransform.position - this._arrowsTransform.position;
-					forward.y = 0f;
+					Vector3 vector3 = this._gameCameraEngine.CameraTransform.position - this._arrowsTransform.position;
+					vector3.y = 0f;
 					if (this._transitionDistanceCount >= 20f)
 					{
-						this._arrowsTransform.rotation = Quaternion.LookRotation(forward, Vector3.up);
+						this._arrowsTransform.rotation = Quaternion.LookRotation(vector3, Vector3.up);
 					}
 					this._arrowWasUp = true;
 				}
@@ -192,8 +213,8 @@ namespace HeavyMetalMachines.Car
 		private void UpdateMeshRenderer(Vector3 arrowTargetPosition)
 		{
 			int distanceIndex = this.GetDistanceIndex(this._carIndicatorArrowTextures.Length, 200, arrowTargetPosition);
-			Texture value = this._carIndicatorArrowTextures[distanceIndex];
-			this._carArrowsMeshRenderer.material.SetTexture(this._mainTexPropertyId, value);
+			Texture texture = this._carIndicatorArrowTextures[distanceIndex];
+			this._carArrowsMeshRenderer.material.SetTexture(this._mainTexPropertyId, texture);
 			BombInstance activeBomb = GameHubBehaviour.Hub.BombManager.ActiveBomb;
 			CarIndicatorArrowSettings carIndicatorArrowSettings = GameHubBehaviour.Hub.SharedConfigs.CarIndicatorArrowSettings;
 			Color color;
@@ -227,9 +248,11 @@ namespace HeavyMetalMachines.Car
 			{
 				return maxIndex - 1;
 			}
-			int b = Mathf.RoundToInt((float)maxIndex * num / (float)maxDistance) - 1;
-			return Mathf.Max(0, b);
+			int num2 = Mathf.RoundToInt((float)maxIndex * num / (float)maxDistance) - 1;
+			return Mathf.Max(0, num2);
 		}
+
+		private bool _isIndicatorArrowActive;
 
 		private const int UpdateFrequencyInMillis = 500;
 
@@ -293,6 +316,8 @@ namespace HeavyMetalMachines.Car
 		private int _tintColorPropertyId = -1;
 
 		private int _mainTexPropertyId = -1;
+
+		private IGameCameraEngine _gameCameraEngine;
 
 		private bool _isBombGame;
 

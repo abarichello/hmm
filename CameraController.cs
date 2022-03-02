@@ -4,6 +4,8 @@ using Assets.Standard_Assets.Scripts.HMM.PlotKids;
 using HeavyMetalMachines.Car;
 using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Event;
+using HeavyMetalMachines.GameCamera;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
 using Pocketverse;
 using UnityEngine;
 
@@ -21,7 +23,7 @@ namespace HeavyMetalMachines
 			this.priorizedBehaviourList.Sort(new Comparison<CameraController.CameraBehaviour>(this.SortBehaviours));
 			if (GameHubBehaviour.Hub.Net.IsServer() && !GameHubBehaviour.Hub.Net.IsTest())
 			{
-				UnityEngine.Object.Destroy(base.gameObject);
+				Object.Destroy(base.gameObject);
 				return;
 			}
 			if (GameHubBehaviour.Hub.Players.CurrentPlayerData != null && GameHubBehaviour.Hub.Players.CurrentPlayerData.CharacterInstance != null)
@@ -53,7 +55,7 @@ namespace HeavyMetalMachines
 		private void OnSlowMotion(bool enable)
 		{
 			this.slowMotion = enable;
-			Transform transform = (!SpectatorController.IsSpectating) ? GameHubBehaviour.Hub.Players.CurrentPlayerData.CharacterInstance.transform : CarCamera.Singleton.CameraTargetTransform;
+			Transform transform = (!SpectatorController.IsSpectating) ? GameHubBehaviour.Hub.Players.CurrentPlayerData.CharacterInstance.transform : this._gameCameraEngine.CurrentTargetTransform;
 			float sqrMagnitude = (GameHubBehaviour.Hub.BombManager.BombMovement.Combat.transform.position - transform.position).sqrMagnitude;
 			this._isInsideDistanceToZoom = (sqrMagnitude < (float)this._sqrMaxDistanceToActivateZoom);
 		}
@@ -77,7 +79,7 @@ namespace HeavyMetalMachines
 				this.cameraLockZoomUpdate -= Time.unscaledDeltaTime;
 				return;
 			}
-			if (this.carMovement == null || CarCamera.SingletonInstanceId == -1)
+			if (this.carMovement == null || this._gameCamera == null)
 			{
 				return;
 			}
@@ -90,22 +92,30 @@ namespace HeavyMetalMachines
 				case CameraController.CameraBehaviourTypes.BombDelivery:
 					if (this.slowMotion && this._isInsideDistanceToZoom)
 					{
-						CarCamera.Singleton.CameraDynamicZoom = cameraBehaviour.CameraZoom;
-						CarCamera.Singleton.SetTarget("SlowMotion", () => GameHubBehaviour.Hub.BombManager.SlowMotionEnabled, GameHubBehaviour.Hub.BombManager.BombMovement.Combat.transform, false, true, false);
+						this._gameCamera.SetCameraZoom(cameraBehaviour.CameraZoom);
+						BaseCameraTarget baseCameraTarget = default(BaseCameraTarget);
+						baseCameraTarget.TargetTransform = GameHubBehaviour.Hub.BombManager.BombMovement.Combat.transform;
+						baseCameraTarget.Condition = (() => GameHubBehaviour.Hub.BombManager.SlowMotionEnabled);
+						baseCameraTarget.Mode = CarCameraMode.SkyView;
+						baseCameraTarget.Snap = false;
+						baseCameraTarget.Follow = true;
+						baseCameraTarget.SmoothTeleport = false;
+						BaseCameraTarget baseCameraTarget2 = baseCameraTarget;
+						this._gameCamera.SetTarget("SlowMotion", baseCameraTarget2);
 						flag = true;
 					}
 					break;
 				case CameraController.CameraBehaviourTypes.DeadPlayer:
-					if (!this.carMovement.Combat.IsAlive() && CarCamera.Singleton.CameraTargetTransform == null)
+					if (!this.carMovement.Combat.IsAlive() && this._gameCameraEngine.CurrentTargetTransform == null)
 					{
-						CarCamera.Singleton.CameraDynamicZoom = cameraBehaviour.CameraZoom;
+						this._gameCamera.SetCameraZoom(cameraBehaviour.CameraZoom);
 						flag = true;
 					}
 					break;
 				case CameraController.CameraBehaviourTypes.Ultimate:
 					if (Time.time - this.lastTimeUltimateUsed < cameraBehaviour.minDuration)
 					{
-						CarCamera.Singleton.CameraDynamicZoom = cameraBehaviour.CameraZoom;
+						this._gameCamera.SetCameraZoom(cameraBehaviour.CameraZoom);
 						this.cameraLockZoomUpdate = cameraBehaviour.minDuration - (Time.time - this.lastTimeUltimateUsed);
 						flag = true;
 					}
@@ -113,7 +123,7 @@ namespace HeavyMetalMachines
 				case CameraController.CameraBehaviourTypes.PlayerSpawn:
 					if (this.isSpawning)
 					{
-						CarCamera.Singleton.CameraDynamicZoom = cameraBehaviour.CameraZoom;
+						this._gameCamera.SetCameraZoom(cameraBehaviour.CameraZoom);
 						flag = true;
 					}
 					break;
@@ -126,7 +136,8 @@ namespace HeavyMetalMachines
 			}
 			if (!flag)
 			{
-				CarCamera.Singleton.CameraDynamicZoom = Mathf.Lerp(this.MinSpeedCameraZoom, this.MaxSpeedCameraZoom, Mathf.Clamp01(this.carMovement.SpeedZ / this.carMovement.MaxLinearSpeed));
+				float cameraZoom = Mathf.Lerp(this.MinSpeedCameraZoom, this.MaxSpeedCameraZoom, Mathf.Clamp01(this.carMovement.SpeedZ / this.carMovement.MaxLinearSpeed));
+				this._gameCamera.SetCameraZoom(cameraZoom);
 			}
 			this._wasDone = flag;
 		}
@@ -141,6 +152,12 @@ namespace HeavyMetalMachines
 			GameHubBehaviour.Hub.Events.Players.ListenToObjectSpawn -= this.OnPlayerSpawn;
 			GameHubBehaviour.Hub.Events.Bots.ListenToObjectSpawn -= this.OnPlayerSpawn;
 		}
+
+		[InjectOnClient]
+		private IGameCamera _gameCamera;
+
+		[InjectOnClient]
+		private IGameCameraEngine _gameCameraEngine;
 
 		private CarMovement carMovement;
 

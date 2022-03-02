@@ -11,6 +11,11 @@ namespace HeavyMetalMachines.Combat
 			this._target = base.GetTargetCombat(this.Effect, this.Target);
 			if (!this._target || !this._target.IsAlive())
 			{
+				PerkDamageOnKillAssistEvent.Log.DebugFormat("Effect: {0}. will not install unspawn listener. target is null or dead:{1}", new object[]
+				{
+					base.name,
+					this._target
+				});
 				return;
 			}
 			GameHubBehaviour.Hub.Events.Players.ListenToObjectUnspawn += this.OnUnspawn;
@@ -26,7 +31,7 @@ namespace HeavyMetalMachines.Combat
 			base.ApplyDamage(this.AdditionalTargetCombat, this._target, false);
 		}
 
-		public override void OnDestroyEffect(DestroyEffect evt)
+		public override void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			base.OnDestroyEffect(evt);
 			this.RemoveListeners();

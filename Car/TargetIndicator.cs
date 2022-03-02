@@ -17,7 +17,7 @@ namespace HeavyMetalMachines.Car
 				base.enabled = false;
 				return;
 			}
-			HeavyMetalMachines.Utils.Debug.Assert(this.TargetObject != null, "Null Target Object on target indicator: you must set a target object if you use this component.", HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+			Debug.Assert(this.TargetObject != null, "Null Target Object on target indicator: you must set a target object if you use this component.", Debug.TargetTeam.All);
 			if (this.UsedGadgetSlot == GadgetSlot.None)
 			{
 				this.m_fSquaredRange = this.Range * this.Range;
@@ -94,7 +94,7 @@ namespace HeavyMetalMachines.Car
 					this.m_poGadgetState = bitComponent.GadgetStates.GBoostStateObject;
 					break;
 				default:
-					HeavyMetalMachines.Utils.Debug.Assert(false, string.Format("TargetIndicator for [{0}] -> UsedGadgetSlot is invalid: [{1}]", GameHubBehaviour.Hub.Players.CurrentPlayerData.Name, this.UsedGadgetSlot), HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+					Debug.Assert(false, string.Format("TargetIndicator for [{0}] -> UsedGadgetSlot is invalid: [{1}]", GameHubBehaviour.Hub.Players.CurrentPlayerData.Name, this.UsedGadgetSlot), Debug.TargetTeam.All);
 					this.m_fSquaredRange = this.Range * this.Range;
 					this.m_fOriginalSquaredRange = this.m_fSquaredRange;
 					return;
@@ -149,7 +149,7 @@ namespace HeavyMetalMachines.Car
 						{
 							if (targetType != TargetIndicator.ETarget.TargetClosestEnemy)
 							{
-								HeavyMetalMachines.Utils.Debug.Assert(false, "Unknown target type.", HeavyMetalMachines.Utils.Debug.TargetTeam.All);
+								Debug.Assert(false, "Unknown target type.", Debug.TargetTeam.All);
 								goto IL_10A;
 							}
 							if (this.m_apoPlayers[(int)((IntPtr)num2)].Team == this.m_poCurrentPlayer.Team)
@@ -186,16 +186,16 @@ namespace HeavyMetalMachines.Car
 			Quaternion quaternion = Quaternion.identity;
 			if (nClosestTarget == -1L)
 			{
-				Quaternion to = Quaternion.LookRotation(base.transform.forward, Vector3.up);
-				quaternion = Quaternion.RotateTowards(this.m_stCurrentQuaterion, to, this.MaxRotationSpeed);
+				Quaternion quaternion2 = Quaternion.LookRotation(base.transform.forward, Vector3.up);
+				quaternion = Quaternion.RotateTowards(this.m_stCurrentQuaterion, quaternion2, this.MaxRotationSpeed);
 				this.m_stCurrentQuaterion = quaternion;
 				this.TargetObject.transform.rotation = quaternion;
 				return;
 			}
 			quaternion = Quaternion.LookRotation(stPointingDirection.normalized, Vector3.up);
-			Quaternion quaternion2 = Quaternion.RotateTowards(this.m_stCurrentQuaterion, quaternion, this.MaxRotationSpeed);
-			this.m_stCurrentQuaterion = quaternion2;
-			this.TargetObject.transform.rotation = quaternion2;
+			Quaternion quaternion3 = Quaternion.RotateTowards(this.m_stCurrentQuaterion, quaternion, this.MaxRotationSpeed);
+			this.m_stCurrentQuaterion = quaternion3;
+			this.TargetObject.transform.rotation = quaternion3;
 		}
 
 		protected virtual void LateUpdateVirtual()

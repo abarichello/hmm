@@ -51,7 +51,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			else
 			{
 				int num = 0;
-				this.GetHittingCombatsInArea(this.Combat.transform.position, this.FireEffectRadius, 1077058560, this.MyInfo.AreaHitMask, ref this.m_cpoCombatObjects);
+				this.GetHittingCombatsInArea(this.Combat.transform.position, this.FireEffectRadius, 1077054464, this.MyInfo.AreaHitMask, ref this.m_cpoCombatObjects);
 				for (int i = 0; i < this.m_cpoCombatObjects.Count; i++)
 				{
 					CombatObject combatObject = this.m_cpoCombatObjects[i];
@@ -104,7 +104,7 @@ namespace HeavyMetalMachines.Combat.Gadget
 			return -1;
 		}
 
-		protected override int FireExtraGadgetOnDeath(DestroyEffect destroyEvt)
+		protected override int FireExtraGadgetOnDeath(DestroyEffectMessage destroyEvt)
 		{
 			if (base.Info.FireExtraOnEffectDeathOnlyIfTargetIdIsValid && destroyEvt.RemoveData.TargetId == -1)
 			{

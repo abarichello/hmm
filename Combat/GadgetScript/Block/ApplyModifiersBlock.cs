@@ -1,82 +1,45 @@
 ﻿using System;
 using HeavyMetalMachines.Infra.Context;
-using Hoplon.GadgetScript;
-using Pocketverse;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Combat.GadgetScript.Block
 {
 	[CreateAssetMenu(menuName = "GadgetScript/Block/Modifier/ApplyModifier")]
-	public class ApplyModifiersBlock : BaseBlock, IGadgetBlockWithAsset
+	public sealed class ApplyModifiersBlock : BaseApplyModifierBlock
 	{
-		public void PrecacheAssets()
+		protected override void ApplyModifier(ModifierData data, IHMMGadgetContext gadgetContext, ICombatController target)
 		{
-			for (int i = 0; i < this._modifiers.Length; i++)
+			if (this._direction != null)
 			{
-				if (this._modifiers[i].Feedback != null)
-				{
-					ResourceLoader.Instance.PreCachePrefab(this._modifiers[i].Feedback.Name, this._modifiers[i].Feedback.EffectPreCacheCount);
-				}
+				data.SetDirection(this._direction.GetValue<Vector3>(gadgetContext));
 			}
+			if (this._position != null)
+			{
+				data.SetPosition(this._position.GetValue<Vector3>(gadgetContext));
+			}
+			bool barrierHit = this._isBarrier != null && this._isBarrier.GetValue<bool>(gadgetContext);
+			target.AddModifier(data, gadgetContext.Owner as ICombatObject, -1, barrierHit);
 		}
 
-		protected override bool CheckSanity(IGadgetContext gadgetContext, IEventContext eventContext)
+		[Restrict(false, new Type[]
 		{
-			return true;
-		}
+			typeof(bool)
+		})]
+		[SerializeField]
+		private BaseParameter _isBarrier;
 
-		protected override IBlock InnerExecute(IGadgetContext context, IEventContext eventContext)
+		[Restrict(false, new Type[]
 		{
-			IHMMGadgetContext ihmmgadgetContext = (IHMMGadgetContext)context;
-			if (ihmmgadgetContext.IsClient)
-			{
-				return this._nextBlock;
-			}
-			if (this._target == null || this._target.GetValue(context) == null)
-			{
-				return this._nextBlock;
-			}
-			INumericParameter numericParameter = this._amount as INumericParameter;
-			ModifierData[] datas;
-			if (numericParameter != null)
-			{
-				datas = ModifierData.CreateData(this._modifiers, numericParameter.GetFloatValue(context));
-			}
-			else
-			{
-				datas = ModifierData.CreateData(this._modifiers);
-			}
-			ICombatController modifierController = this._target.GetValue(context).ModifierController;
-			if (this._direction == null || this._position == null)
-			{
-				modifierController.AddModifiers(datas, ihmmgadgetContext.GetCombatObject(ihmmgadgetContext.OwnerId), -1, false);
-			}
-			else
-			{
-				modifierController.AddModifiers(datas, ihmmgadgetContext.GetCombatObject(ihmmgadgetContext.OwnerId), -1, this._direction.GetValue(context), this._position.GetValue(context), false);
-			}
-			return this._nextBlock;
-		}
+			typeof(Vector3)
+		})]
+		[SerializeField]
+		private BaseParameter _direction;
 
-		public override bool UsesParameterWithId(int parameterId)
+		[Restrict(false, new Type[]
 		{
-			return base.CheckIsParameterWithId(this._amount, parameterId) || base.CheckIsParameterWithId(this._position, parameterId) || base.CheckIsParameterWithId(this._direction, parameterId) || base.CheckIsParameterWithId(this._target, parameterId);
-		}
-
-		[Header("Read")]
+			typeof(Vector3)
+		})]
 		[SerializeField]
-		private CombatObjectParameter _target;
-
-		[SerializeField]
-		private Vector3Parameter _direction;
-
-		[SerializeField]
-		private Vector3Parameter _position;
-
-		[SerializeField]
-		private BaseParameter _amount;
-
-		[SerializeField]
-		private ModifierInfo[] _modifiers;
+		private BaseParameter _position;
 	}
 }

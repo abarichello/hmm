@@ -3,7 +3,7 @@ using Pocketverse;
 
 namespace HeavyMetalMachines
 {
-	public class StateDataParser : KeyFrameParser
+	public class StateDataParser : KeyFrameParser, ICombatStatesDispatcher
 	{
 		public override KeyFrameType Type
 		{

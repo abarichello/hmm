@@ -1,4 +1,6 @@
 ﻿using System;
+using HeavyMetalMachines.GameCamera;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
 using HeavyMetalMachines.Utils;
 using Pocketverse;
 using UnityEngine;
@@ -52,10 +54,10 @@ namespace HeavyMetalMachines.Render
 			this.lastPosition = base.transform.position;
 			this.lastTime = Time.time;
 			float num3 = this.width * 0.5f;
-			Vector3 a = this._trans.position + base.transform.right * (num3 * Mathf.Sign(base.transform.localPosition.x));
+			Vector3 vector = this._trans.position + base.transform.right * (num3 * Mathf.Sign(base.transform.localPosition.x));
 			this.lastPoint = (this.firstPoint + this.numOfPoints) % this.maxPoints;
-			Vector3 vector = a - Vector3.up * this.wheelRadius;
-			if ((this.doEmission || this.wasEmiting != this.doEmission) && (this.wasEmiting != this.doEmission || (Vector3.SqrMagnitude(this.lastSpawnedPoint - vector) > this.width * 2f && this.doEmission)))
+			Vector3 vector2 = vector - Vector3.up * this.wheelRadius;
+			if ((this.doEmission || this.wasEmiting != this.doEmission) && (this.wasEmiting != this.doEmission || (Vector3.SqrMagnitude(this.lastSpawnedPoint - vector2) > this.width * 2f && this.doEmission)))
 			{
 				if (this.numOfPoints >= this.maxPoints)
 				{
@@ -70,7 +72,7 @@ namespace HeavyMetalMachines.Render
 				this.lastPoint = (this.firstPoint + this.numOfPoints) % this.maxPoints;
 				this.phaser++;
 				SkidMarkEmitter.SkidMarkPoint skidMarkPoint = default(SkidMarkEmitter.SkidMarkPoint);
-				skidMarkPoint.position = vector;
+				skidMarkPoint.position = vector2;
 				if (this.doEmission && !this.wasEmiting)
 				{
 					skidMarkPoint.cross = this._trans.right;
@@ -84,10 +86,10 @@ namespace HeavyMetalMachines.Render
 				}
 				else
 				{
-					Vector3 rhs = this._trans.position - this.points[num4].position;
-					float magnitude = rhs.magnitude;
+					Vector3 vector3 = this._trans.position - this.points[num4].position;
+					float magnitude = vector3.magnitude;
 					skidMarkPoint.textureU = this.points[num4].textureU + magnitude;
-					skidMarkPoint.cross = Vector3.Cross(Vector3.up, rhs);
+					skidMarkPoint.cross = Vector3.Cross(Vector3.up, vector3);
 					num2 *= (float)(this.doEmission ? 1 : 0);
 				}
 				ReallyFastMath.FastNormalize(ref skidMarkPoint.cross);
@@ -138,8 +140,8 @@ namespace HeavyMetalMachines.Render
 						this.Bounds.max = position2;
 						this.Bounds.min = position;
 					}
-					Plane[] planes = GeometryUtility.CalculateFrustumPlanes(CarCamera.Singleton.GetComponent<Camera>());
-					this.isVisible = GeometryUtility.TestPlanesAABB(planes, this.Bounds);
+					Plane[] array2 = GeometryUtility.CalculateFrustumPlanes(this._gameCameraEngine.UnityCamera);
+					this.isVisible = GeometryUtility.TestPlanesAABB(array2, this.Bounds);
 				}
 			}
 			this.wasEmiting = (this.doEmission && flag);
@@ -149,6 +151,9 @@ namespace HeavyMetalMachines.Render
 		{
 			Gizmos.DrawWireCube(this.Bounds.center, this.Bounds.size);
 		}
+
+		[InjectOnClient]
+		private IGameCameraEngine _gameCameraEngine;
 
 		private bool emitSmoke;
 

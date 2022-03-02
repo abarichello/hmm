@@ -1,16 +1,41 @@
 ﻿using System;
 using System.Collections;
 using Assets.ClientApiObjects;
+using HeavyMetalMachines.Battlepass.Business;
 using HeavyMetalMachines.Frontend;
+using HeavyMetalMachines.Infra.DependencyInjection.Attributes;
+using HeavyMetalMachines.Localization;
 using HeavyMetalMachines.UnityUI;
 using HeavyMetalMachines.Utils;
+using Hoplon.Input.UiNavigation;
 using Pocketverse;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Battlepass
 {
 	public class UnityUiBattlepassPremiumShopView : MonoBehaviour, IBattlepassPremiumShopView
 	{
+		public string BattlepassSeasonTitleDraft
+		{
+			get
+			{
+				return this._battlepassSeasonTitleDraft;
+			}
+			set
+			{
+				this._battlepassSeasonTitleDraft = value;
+			}
+		}
+
+		public IUiNavigationGroupHolder UiNavigationGroupHolder
+		{
+			get
+			{
+				return this._uiNavigationGroupHolder;
+			}
+		}
+
 		protected void Awake()
 		{
 			this._battlepassPremiumShopComponent = this._battlepassPremiumShopComponentAsset;
@@ -18,7 +43,20 @@ namespace HeavyMetalMachines.Battlepass
 
 		protected void Start()
 		{
-			this._battlepassPremiumShopComponent.RegisterPremiumShopWindow(this);
+			IGetBattlepassSeason getBattlepassSeason = this._diContainer.Resolve<IGetBattlepassSeason>();
+			BattlepassSeason battlepassSeason = getBattlepassSeason.Get();
+			this._battlepassPremiumShopComponent.RegisterPremiumShopWindow(this, battlepassSeason);
+		}
+
+		protected void OnDisable()
+		{
+			this.SetVisibility(false);
+			base.StopAllCoroutines();
+			this._isAnimating = false;
+			if (!this._isVisible && this._battlepassPremiumShopComponent.IsPremiumShopSceneLoad())
+			{
+				this._battlepassPremiumShopComponent.OnHidePremiumShopWindowAnimationEnded();
+			}
 		}
 
 		public void Setup(ItemTypeScriptableObject[] packages, TimeSpan remainingTime)
@@ -35,8 +73,13 @@ namespace HeavyMetalMachines.Battlepass
 			}
 			for (int i = 0; i < num; i++)
 			{
-				this._shopItems[i].Setup(packages[i]);
-				this._shopItems[i].gameObject.SetActive(true);
+				UnityUiBattlepassPremiumShopItem shopItem = this._shopItems[i];
+				shopItem.Setup(packages[i]);
+				shopItem.IsPurchasableChanged += delegate(bool isActiveInStore)
+				{
+					shopItem.gameObject.SetActive(isActiveInStore);
+				};
+				shopItem.gameObject.SetActive(shopItem.IsPurchasable);
 			}
 			for (int j = num; j < this._shopItems.Length; j++)
 			{
@@ -45,8 +88,8 @@ namespace HeavyMetalMachines.Battlepass
 			string formatedText = string.Format("{0}{1} - {2}{3}", new object[]
 			{
 				"<color=#{0}>",
-				Language.Get(this._battlepassSeasonTitleDraft, TranslationSheets.Battlepass),
-				Language.Get("BATTLEPASS_ENDS_IN", TranslationSheets.Battlepass),
+				Language.Get(this._battlepassSeasonTitleDraft, TranslationContext.Battlepass),
+				Language.Get("BATTLEPASS_ENDS_IN", TranslationContext.Battlepass),
 				"</color> {1}"
 			});
 			this._timerInfo.Setup(remainingTime, new TimeSpan(1, 0, 0, 0), formatedText);
@@ -58,9 +101,32 @@ namespace HeavyMetalMachines.Battlepass
 			{
 				return;
 			}
+			this.SetUiNavigationFocus(isVisible);
 			this._isVisible = isVisible;
 			this._mainCanvasGroup.interactable = this._isVisible;
-			base.StartCoroutine(this.SetVisibilityCoroutine());
+			if (base.gameObject.activeInHierarchy)
+			{
+				base.StartCoroutine(this.SetVisibilityCoroutine());
+			}
+			else
+			{
+				UnityUiBattlepassPremiumShopView.Log.WarnFormat("SetVisibility({0}) called when gameObject.activeInHierarchy false", new object[]
+				{
+					isVisible
+				});
+			}
+		}
+
+		private void SetUiNavigationFocus(bool focused)
+		{
+			if (focused)
+			{
+				this.UiNavigationGroupHolder.AddGroup();
+			}
+			else
+			{
+				this.UiNavigationGroupHolder.RemoveGroup();
+			}
 		}
 
 		private IEnumerator SetVisibilityCoroutine()
@@ -126,5 +192,11 @@ namespace HeavyMetalMachines.Battlepass
 
 		[SerializeField]
 		private string _battlepassSeasonTitleDraft;
+
+		[SerializeField]
+		private UiNavigationGroupHolder _uiNavigationGroupHolder;
+
+		[InjectOnClient]
+		private DiContainer _diContainer;
 	}
 }

@@ -18,38 +18,45 @@ namespace HeavyMetalMachines.VFX
 				HoplonParticleSystem hoplonParticleSystem = this.particleSystems[i];
 				if (hoplonParticleSystem == null)
 				{
-					HeavyMetalMachines.Utils.Debug.Assert(false, string.Format("Effect:{0} is with null particleSystem on ist's config! Please, fix that now!", base.transform.name), HeavyMetalMachines.Utils.Debug.TargetTeam.TechnicalArtist);
+					Debug.Assert(false, string.Format("Effect:{0} is with null particleSystem on ist's config! Please, fix that now!", base.transform.name), Debug.TargetTeam.TechnicalArtist);
 				}
 				else
 				{
 					if (hoplonParticleSystem is HMMTeamParticleSystem)
 					{
 						VFXTeam team = VFXTeam.Ally;
-						if (this._targetFXInfo.Owner != null)
+						if (!this.PrevizMode)
 						{
-							PlayerData playerOrBotsByObjectId = GameHubBehaviour.Hub.Players.GetPlayerOrBotsByObjectId(this._targetFXInfo.Owner.ObjId);
-							if (playerOrBotsByObjectId != null)
+							if (this._targetFXInfo.Owner != null && GameHubBehaviour.Hub)
 							{
-								TeamKind team2 = playerOrBotsByObjectId.Team;
-								if (team2 != GameHubBehaviour.Hub.Players.CurrentPlayerTeam)
+								PlayerData playerOrBotsByObjectId = GameHubBehaviour.Hub.Players.GetPlayerOrBotsByObjectId(this._targetFXInfo.Owner.ObjId);
+								if (playerOrBotsByObjectId != null)
 								{
-									team = VFXTeam.Enemy;
+									TeamKind team2 = playerOrBotsByObjectId.Team;
+									if (team2 != GameHubBehaviour.Hub.Players.CurrentPlayerTeam)
+									{
+										team = VFXTeam.Enemy;
+									}
+								}
+								else
+								{
+									ParticlesVFX.Log.WarnFormat("Hub.Players.GetPlayerOrBotsByObjectId did not find owner to check HMMTeamParticleSystem. May be related to QAHMM-22224. Effect{0}", new object[]
+									{
+										base.transform.name
+									});
 								}
 							}
 							else
 							{
-								ParticlesVFX.Log.WarnFormat("Hub.Players.GetPlayerOrBotsByObjectId did not find owner to check HMMTeamParticleSystem. May be related to QAHMM-22224. Effect{0}", new object[]
+								ParticlesVFX.Log.WarnFormat("_targetFXInfo.Owner is null to check HMMTeamParticleSystem. May be related to QAHMM-22224. Effect{0}", new object[]
 								{
 									base.transform.name
 								});
 							}
 						}
-						else
+						if (this.PrevizMode)
 						{
-							ParticlesVFX.Log.WarnFormat("_targetFXInfo.Owner is null to check HMMTeamParticleSystem. May be related to QAHMM-22224. Effect{0}", new object[]
-							{
-								base.transform.name
-							});
+							team = this.CurrentTeam;
 						}
 						((HMMTeamParticleSystem)hoplonParticleSystem).Play(team);
 					}
@@ -128,6 +135,10 @@ namespace HeavyMetalMachines.VFX
 					{
 						hoplonParticleSystem.Stop();
 					}
+					if (hoplonParticleSystem != null && this.forceStop)
+					{
+						hoplonParticleSystem.ForceStop();
+					}
 				}
 			}
 			if (!this.waitForParticlesDeath)
@@ -146,6 +157,10 @@ namespace HeavyMetalMachines.VFX
 		private ParticlesVFX.State currentState;
 
 		public bool waitForParticlesDeath = true;
+
+		[Header("Force stop for 'non loopable' particles.")]
+		[Tooltip("Use it only in special cases (non loopable particles).")]
+		public bool forceStop;
 
 		private float expirationTime;
 

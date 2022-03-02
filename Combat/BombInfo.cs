@@ -1,4 +1,5 @@
 ﻿using System;
+using Assets.ClientApiObjects;
 using HeavyMetalMachines.Match;
 using Pocketverse;
 
@@ -27,6 +28,8 @@ namespace HeavyMetalMachines.Combat
 
 		public string AssetDetonator;
 
+		public ItemTypeScriptableObject Skin;
+
 		public ModifierInfo[] Modifiers;
 
 		public int ExplosionRadius = 100;
@@ -34,6 +37,10 @@ namespace HeavyMetalMachines.Combat
 		public int ExplodeInSeconds = 3;
 
 		public int TimeoutInSeconds = 60;
+
+		public float MaxVisualRotationSpeed;
+
+		public float VisualRadius;
 
 		public ModifierInfo[] CarrierModifiers;
 

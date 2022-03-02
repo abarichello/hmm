@@ -21,7 +21,7 @@ namespace HeavyMetalMachines.Combat
 				return;
 			}
 			this._rigidbody.position += PerkInstantDamageCollider.Translation;
-			<PerkInitialized>c__AnonStorey.hits = this._rigidbody.SweepTestAll(Vector3.down, 100f, QueryTriggerInteraction.Collide);
+			<PerkInitialized>c__AnonStorey.hits = this._rigidbody.SweepTestAll(Vector3.down, 100f, 2);
 			PerkInstantDamageCollider.CombatHits.Clear();
 			int hitIndex;
 			for (hitIndex = 0; hitIndex < <PerkInitialized>c__AnonStorey.hits.Length; hitIndex++)

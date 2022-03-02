@@ -11,7 +11,7 @@ namespace HeavyMetalMachines.Tutorial.InGame
 
 		public void SetInterfaceScraps(string scrapText)
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1012, 4, base.IsReliable, new object[]
+			base.Dispatch(base.DispatchDestination(), base.OID, 1013, 4, base.IsReliable, new object[]
 			{
 				scrapText
 			});

@@ -1,14 +1,21 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text;
 using HeavyMetalMachines.Infra.Context;
 using Pocketverse;
+using UniRx;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
 	[Serializable]
-	public class BombScoreBoard : IBitStreamSerializable, IScoreBoard
+	public class BombScoreBoard : IScoreBoard, IBitStreamSerializable
 	{
+		public BombScoreBoard()
+		{
+			this._gameStateObservation = new Subject<ScoreBoardState>();
+		}
+
 		public float LastScoreUpdateTime
 		{
 			get
@@ -45,36 +52,43 @@ namespace HeavyMetalMachines.Combat
 		{
 			get
 			{
-				return (int)this._currentState;
+				return (int)this._state.CurrentState;
 			}
 		}
 
-		public BombScoreBoard.State CurrentState
+		public BombScoreboardState CurrentState
 		{
 			get
 			{
-				return this._currentState;
+				return this._state.CurrentState;
 			}
 			set
 			{
-				if (this._currentState == value)
+				if (this._state.CurrentState == value)
 				{
 					return;
 				}
-				this._previousState = this._currentState;
-				BombScoreBoard.Log.InfoFormat("Current bomb game state changed to {0}", new object[]
-				{
-					value
-				});
-				this._currentState = value;
+				this._state.PreviousState = this._state.CurrentState;
+				this._state.CurrentState = value;
+				this._gameStateObservation.OnNext(this._state);
 			}
 		}
 
-		public BombScoreBoard.State PreviouState
+		public IObservable<ScoreBoardState> StateChangedObservation
 		{
 			get
 			{
-				return this._previousState;
+				return this._gameStateObservation;
+			}
+		}
+
+		public bool IsInOvertime { get; set; }
+
+		public BombScoreboardState PreviouState
+		{
+			get
+			{
+				return this._state.PreviousState;
 			}
 		}
 
@@ -152,7 +166,7 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
-		public void WriteToBitStream(Pocketverse.BitStream bs)
+		public void WriteToBitStream(BitStream bs)
 		{
 			bs.WriteCompressedInt(this.BombScoreBlue);
 			bs.WriteCompressedInt(this.BombScoreRed);
@@ -169,7 +183,7 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
-		public void ReadFromBitStream(Pocketverse.BitStream bs)
+		public void ReadFromBitStream(BitStream bs)
 		{
 			int bombScoreBlue = this.BombScoreBlue;
 			int bombScoreRed = this.BombScoreRed;
@@ -177,7 +191,7 @@ namespace HeavyMetalMachines.Combat
 			this.BombScoreRed = bs.ReadCompressedInt();
 			this.Timeout = bs.ReadCompressedLong();
 			this._round = bs.ReadCompressedInt();
-			this.CurrentState = (BombScoreBoard.State)bs.ReadBits(3);
+			this.CurrentState = (BombScoreboardState)bs.ReadBits(3);
 			this.RoundStartTimeMillis = bs.ReadCompressedInt();
 			this.IsInOvertime = bs.ReadBool();
 			this.MatchOver = bs.ReadBool();
@@ -197,6 +211,19 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
+		public override string ToString()
+		{
+			StringBuilder stringBuilder = new StringBuilder();
+			stringBuilder.AppendFormat("[RED={0} BLUE={1} ROUND={2} STATE={3}]", new object[]
+			{
+				this.BombScoreRed,
+				this.BombScoreBlue,
+				this._round,
+				this.CurrentState
+			});
+			return stringBuilder.ToString();
+		}
+
 		public static BitLogger Log = new BitLogger(typeof(BombScoreBoard));
 
 		public int BombScoreRed;
@@ -207,15 +234,13 @@ namespace HeavyMetalMachines.Combat
 
 		public long Timeout;
 
+		private Subject<ScoreBoardState> _gameStateObservation;
+
 		private int _round;
 
-		private BombScoreBoard.State _currentState;
-
-		private BombScoreBoard.State _previousState;
+		private ScoreBoardState _state;
 
 		public int RoundStartTimeMillis;
-
-		public bool IsInOvertime;
 
 		public int OvertimeStartTimeMillis;
 
@@ -226,16 +251,5 @@ namespace HeavyMetalMachines.Combat
 		private RoundStats _current;
 
 		public bool Dirty;
-
-		public enum State
-		{
-			Warmup,
-			PreBomb,
-			BombDelivery,
-			PreReplay,
-			Replay,
-			Shop,
-			EndGame
-		}
 	}
 }

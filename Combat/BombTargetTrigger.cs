@@ -1,5 +1,6 @@
 ﻿using System;
 using FMod;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.Match;
 using Pocketverse;
 using UnityEngine;
@@ -63,6 +64,10 @@ namespace HeavyMetalMachines.Combat
 			{
 				return;
 			}
+			if (GameHubBehaviour.Hub.BombManager.IsSomeoneCarryingBomb() && GameHubBehaviour.Hub.BombManager.TeamCarryingBomb() == this.TeamOwner)
+			{
+				return;
+			}
 			GameHubBehaviour.Hub.BombManager.CancelDispute();
 			int playbackTime = GameHubBehaviour.Hub.GameTime.GetPlaybackTime();
 			if (playbackTime - this._lastTimeMyTeamPickedTheBombUp > this._saveTimeDurationMsec)
@@ -100,7 +105,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				this.EnableOvertimeEffects();
 			}
-			else if (this._isInOvertime && (GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreBoard.State.Shop || GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreBoard.State.PreBomb))
+			else if (this._isInOvertime && (GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreboardState.Shop || GameHubBehaviour.Hub.BombManager.CurrentBombGameState == BombScoreboardState.PreBomb))
 			{
 				this.DisableOvertimeEffects();
 			}
@@ -108,7 +113,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				return;
 			}
-			if (GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreBoard.State.BombDelivery)
+			if (GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreboardState.BombDelivery)
 			{
 				this.DisableOvertimeAudio();
 			}
@@ -129,7 +134,7 @@ namespace HeavyMetalMachines.Combat
 			{
 				return;
 			}
-			if (GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreBoard.State.BombDelivery || !GameHubBehaviour.Hub.BombManager.ActiveBomb.IsSpawned)
+			if (GameHubBehaviour.Hub.BombManager.CurrentBombGameState != BombScoreboardState.BombDelivery || !GameHubBehaviour.Hub.BombManager.ActiveBomb.IsSpawned)
 			{
 				return;
 			}
@@ -161,7 +166,8 @@ namespace HeavyMetalMachines.Combat
 		{
 			this.EvaluateCurrentProgress(out this._evaluatedPosition, out this._evaluatedDirection);
 			this._root.SetPositionAndRotation(this._evaluatedPosition, Quaternion.LookRotation(this._evaluatedDirection));
-			Vector3 vector = new Vector3(-this._evaluatedDirection.z, 0f, this._evaluatedDirection.x);
+			Vector3 vector;
+			vector..ctor(-this._evaluatedDirection.z, 0f, this._evaluatedDirection.x);
 			this.CheckOvertimeColliderHit(0, this._evaluatedPosition, vector);
 			vector *= -1f;
 			this.CheckOvertimeColliderHit(1, this._evaluatedPosition, vector);
@@ -267,7 +273,7 @@ namespace HeavyMetalMachines.Combat
 		private float _endProgress;
 
 		[SerializeField]
-		private FMODAsset _overtimeLoopingAudioAsset;
+		private AudioEventAsset _overtimeLoopingAudioAsset;
 
 		private FMODAudioManager.FMODAudio _overtimeLoopingAudioToken;
 

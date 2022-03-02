@@ -1,9 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using FMod;
-using HeavyMetalMachines.Character;
-using HeavyMetalMachines.Combat;
 using HeavyMetalMachines.Frontend;
+using HeavyMetalMachines.Infra.Context;
 using Pocketverse;
 
 namespace HeavyMetalMachines.Audio.Music
@@ -18,14 +17,12 @@ namespace HeavyMetalMachines.Audio.Music
 		private void OnEnable()
 		{
 			GameHubBehaviour.Hub.BombManager.ListenToPhaseChange += this.ListenToPhaseChange;
-			GameHubBehaviour.Hub.BombManager.ListenToOvertimeStarted += this.ListenToOvertimeStarted;
 			GameHubBehaviour.Hub.State.ListenToStateChanged += this.StateOnListenToStateChanged;
 		}
 
 		private void OnDisable()
 		{
 			GameHubBehaviour.Hub.BombManager.ListenToPhaseChange -= this.ListenToPhaseChange;
-			GameHubBehaviour.Hub.BombManager.ListenToOvertimeStarted -= this.ListenToOvertimeStarted;
 			GameHubBehaviour.Hub.State.ListenToStateChanged -= this.StateOnListenToStateChanged;
 		}
 
@@ -53,18 +50,29 @@ namespace HeavyMetalMachines.Audio.Music
 			this.StopCurrentMusic();
 		}
 
-		private void ListenToOvertimeStarted()
+		private void ListenToPhaseChange(BombScoreboardState state)
 		{
-			MusicManager.PlayMusic(MusicManager.State.Overtime);
-		}
-
-		private void ListenToPhaseChange(BombScoreBoard.State state)
-		{
-			if (state != BombScoreBoard.State.BombDelivery && state != BombScoreBoard.State.Replay)
+			if (state == BombScoreboardState.BombDelivery)
+			{
+				MusicManager.PlayMusic(MusicManager.State.InGame);
+				return;
+			}
+			if (state == BombScoreboardState.Replay)
+			{
+				if (!GameHubBehaviour.Hub.BombManager.ScoreBoard.MatchOver)
+				{
+					MusicManager.PlayMusic(MusicManager.State.InGame);
+				}
+				return;
+			}
+			if (state != BombScoreboardState.PreReplay)
 			{
 				return;
 			}
-			MusicManager.PlayMusic(MusicManager.State.InGame);
+			if (GameHubBehaviour.Hub.BombManager.ScoreBoard.MatchOver)
+			{
+				MusicManager.StopMusic();
+			}
 		}
 
 		public static void PlayMusic(MusicManager.State state)
@@ -107,11 +115,20 @@ namespace HeavyMetalMachines.Audio.Music
 			{
 				if (GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.FMODDebug))
 				{
+					MusicManager.Log.DebugFormat("StopCurrentMusic: Music not found. id {0} state {1}", new object[]
+					{
+						musicId,
+						this._currentState
+					});
 				}
 				return;
 			}
 			if (GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.FMODDebug))
 			{
+				MusicManager.Log.DebugFormat("stopping music id {0}", new object[]
+				{
+					musicId
+				});
 			}
 			if (fmodaudio != null)
 			{
@@ -128,6 +145,10 @@ namespace HeavyMetalMachines.Audio.Music
 			{
 				if (GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.FMODDebug))
 				{
+					MusicManager.Log.DebugFormat("stopping ambience id {0}", new object[]
+					{
+						musicId
+					});
 				}
 				if (fmodaudio != null)
 				{
@@ -137,23 +158,27 @@ namespace HeavyMetalMachines.Audio.Music
 			}
 			else if (GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.FMODDebug))
 			{
+				MusicManager.Log.DebugFormat("StopCurrentAmbience: Music not found. id {0} state {1}", new object[]
+				{
+					musicId,
+					this._currentState
+				});
 			}
 		}
 
-		public static void PlayCharacterMusic(CharacterInfo character)
+		public static void PlayCharacterMusic(int characterMusicId)
 		{
 			if (MusicManager._instance == null)
 			{
 				MusicManager.Log.Error("No music manager found!");
 			}
 			MusicManager._instance.Play(MusicManager.State.CharacterPick, true, true);
-			int num = (!(character == null)) ? character.characterMusicID : 0;
 			FMODAudioManager.FMODAudio fmodaudio;
 			if (!MusicManager._instance._musicDictionary.TryGetValue(MusicManager._instance.GetMusicId(MusicManager.State.CharacterPick), out fmodaudio))
 			{
 				return;
 			}
-			fmodaudio.ChangeParameter(MusicManager._instance.CHARACTERPARAMETER, (float)num);
+			fmodaudio.ChangeParameter(MusicManager._characterParameter, (float)characterMusicId);
 		}
 
 		public void Play(MusicManager.State state, bool playMusic = true, bool playAmbience = true)
@@ -170,11 +195,19 @@ namespace HeavyMetalMachines.Audio.Music
 			}
 			if (playMusic && this.currentMusic != musicAndAmbience.MusicAsset)
 			{
+				MusicManager.Log.DebugFormat("Will play {0} music", new object[]
+				{
+					state
+				});
 				this.ChangePlayingAudio(this._musicDictionary, this.currentMusic, musicAndAmbience.MusicAsset);
 				this.currentMusic = musicAndAmbience.MusicAsset;
 			}
 			if (playAmbience && this.currentAmbience != musicAndAmbience.AmbienceAsset)
 			{
+				MusicManager.Log.DebugFormat("Will play {0} ambience", new object[]
+				{
+					state
+				});
 				this.ChangePlayingAudio(this._ambienceDictionary, this.currentAmbience, musicAndAmbience.AmbienceAsset);
 				this.currentAmbience = musicAndAmbience.AmbienceAsset;
 			}
@@ -192,10 +225,14 @@ namespace HeavyMetalMachines.Audio.Music
 				return GameHubBehaviour.Hub.AudioSettings.InGame;
 			case MusicManager.State.EndMatch:
 				return GameHubBehaviour.Hub.AudioSettings.EndMatch;
-			case MusicManager.State.PreOvertime:
-				return GameHubBehaviour.Hub.AudioSettings.PreOvertime;
-			case MusicManager.State.Overtime:
-				return GameHubBehaviour.Hub.AudioSettings.Overtime;
+			case MusicManager.State.CreateProfile:
+				return GameHubBehaviour.Hub.AudioSettings.CreateProfile;
+			case MusicManager.State.Welcome:
+				return GameHubBehaviour.Hub.AudioSettings.Welcome;
+			case MusicManager.State.RankedDrafter:
+				return GameHubBehaviour.Hub.AudioSettings.RankedDrafter;
+			case MusicManager.State.TournamentDrafter:
+				return GameHubBehaviour.Hub.AudioSettings.TournamentDrafter;
 			}
 			MusicManager.Log.ErrorFormat("GetMusicAndAmbience in invalid state. State={0}", new object[]
 			{
@@ -211,7 +248,7 @@ namespace HeavyMetalMachines.Audio.Music
 				return Guid.Empty;
 			}
 			MusicAndAmbience musicAndAmbience = this.GetMusicAndAmbience(state);
-			return musicAndAmbience.MusicAsset.idGUID;
+			return musicAndAmbience.MusicAsset.Id;
 		}
 
 		private Guid GetAmbienceId(MusicManager.State state)
@@ -221,25 +258,39 @@ namespace HeavyMetalMachines.Audio.Music
 				return Guid.Empty;
 			}
 			MusicAndAmbience musicAndAmbience = this.GetMusicAndAmbience(state);
-			return musicAndAmbience.AmbienceAsset.idGUID;
+			return musicAndAmbience.AmbienceAsset.Id;
 		}
 
-		private void ChangePlayingAudio(Dictionary<Guid, FMODAudioManager.FMODAudio> dictionary, FMODAsset currentAudioAsset, FMODAsset newAudioAsset)
+		private void ChangePlayingAudio(Dictionary<Guid, FMODAudioManager.FMODAudio> dictionary, AudioEventAsset currentAudioAsset, AudioEventAsset newAudioAsset)
 		{
+			if (!FMODAudioManager.StudioSystem.isValid())
+			{
+				return;
+			}
 			if (currentAudioAsset != null)
 			{
 				if (GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.FMODDebug))
 				{
+					MusicManager.Log.DebugFormat("stopping {0} with id {1}", new object[]
+					{
+						currentAudioAsset.name,
+						currentAudioAsset.Id
+					});
 				}
-				dictionary[currentAudioAsset.idGUID].Stop();
+				dictionary[currentAudioAsset.Id].Stop();
 			}
 			FMODAudioManager.FMODAudio fmodaudio;
-			if (dictionary.TryGetValue(newAudioAsset.idGUID, out fmodaudio))
+			if (dictionary.TryGetValue(newAudioAsset.Id, out fmodaudio))
 			{
 				if (fmodaudio.IsInvalidated() || fmodaudio.IsStopped())
 				{
 					if (GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.FMODDebug))
 					{
+						MusicManager.Log.DebugFormat("Id {0} name {1} playing with reset timeline", new object[]
+						{
+							newAudioAsset.Id,
+							newAudioAsset.name
+						});
 					}
 					fmodaudio.ResetTimeline();
 				}
@@ -248,8 +299,13 @@ namespace HeavyMetalMachines.Audio.Music
 			{
 				if (GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.FMODDebug))
 				{
+					MusicManager.Log.DebugFormat("Id {0} name {1} added", new object[]
+					{
+						newAudioAsset.Id,
+						newAudioAsset.name
+					});
 				}
-				dictionary.Add(newAudioAsset.idGUID, FMODAudioManager.PlayAtVolume(newAudioAsset, base.transform, 1f, true));
+				dictionary.Add(newAudioAsset.Id, FMODAudioManager.PlayAtVolume(newAudioAsset, base.transform, 1f, true));
 			}
 		}
 
@@ -262,11 +318,11 @@ namespace HeavyMetalMachines.Audio.Music
 
 		private static readonly BitLogger Log = new BitLogger(typeof(MusicManager));
 
-		private readonly byte[] CHARACTERPARAMETER = FMODAudioManager.GetBytes("Character");
+		private static readonly byte[] _characterParameter = FmodUtilities.GetBytes("Character");
 
-		private FMODAsset currentMusic;
+		private AudioEventAsset currentMusic;
 
-		private FMODAsset currentAmbience;
+		private AudioEventAsset currentAmbience;
 
 		private MusicManager.State _currentState;
 
@@ -285,8 +341,10 @@ namespace HeavyMetalMachines.Audio.Music
 			MatchFound,
 			CharacterTheme,
 			EndMatch,
-			PreOvertime,
-			Overtime
+			CreateProfile = 9,
+			Welcome,
+			RankedDrafter,
+			TournamentDrafter
 		}
 	}
 }

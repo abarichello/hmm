@@ -12,15 +12,23 @@ namespace HeavyMetalMachines
 
 		public void SetInfo(MatchData data)
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1016, 1, base.IsReliable, new object[]
+			base.Dispatch(base.DispatchDestination(), base.OID, 1017, 1, base.IsReliable, new object[]
 			{
 				data
 			});
 		}
 
+		public void SetPlayerCompetitiveState(string state)
+		{
+			base.Dispatch(base.DispatchDestination(), base.OID, 1017, 3, base.IsReliable, new object[]
+			{
+				state
+			});
+		}
+
 		public void SetPlayerRewards(string rewardString)
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1016, 3, base.IsReliable, new object[]
+			base.Dispatch(base.DispatchDestination(), base.OID, 1017, 4, base.IsReliable, new object[]
 			{
 				rewardString
 			});
@@ -28,7 +36,7 @@ namespace HeavyMetalMachines
 
 		public void PlaybackReady(long playbackStartTime, int lastSynchTimeScaleChange, int accumulatedSynchDelay, float timeScale)
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1016, 7, base.IsReliable, new object[]
+			base.Dispatch(base.DispatchDestination(), base.OID, 1017, 6, base.IsReliable, new object[]
 			{
 				playbackStartTime,
 				lastSynchTimeScaleChange,
@@ -39,17 +47,17 @@ namespace HeavyMetalMachines
 
 		public void FullDataSent()
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1016, 8, base.IsReliable, new object[0]);
+			base.Dispatch(base.DispatchDestination(), base.OID, 1017, 7, base.IsReliable, new object[0]);
 		}
 
 		public void ServerSet()
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1016, 9, base.IsReliable, new object[0]);
+			base.Dispatch(base.DispatchDestination(), base.OID, 1017, 8, base.IsReliable, new object[0]);
 		}
 
 		public void ServerPlayerLoadingInfo(long playerId, float progress)
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1016, 10, base.IsReliable, new object[]
+			base.Dispatch(base.DispatchDestination(), base.OID, 1017, 11, base.IsReliable, new object[]
 			{
 				playerId,
 				progress
@@ -58,12 +66,12 @@ namespace HeavyMetalMachines
 
 		public void ServerPlayerDisconnectInfo()
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1016, 12, base.IsReliable, new object[0]);
+			base.Dispatch(base.DispatchDestination(), base.OID, 1017, 13, base.IsReliable, new object[0]);
 		}
 
 		public void ClientPlayerAFKTimeUpdate(float afkRemainingTime)
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1016, 16, base.IsReliable, new object[]
+			base.Dispatch(base.DispatchDestination(), base.OID, 1017, 17, base.IsReliable, new object[]
 			{
 				afkRemainingTime
 			});
@@ -71,17 +79,17 @@ namespace HeavyMetalMachines
 
 		public void ServerEventRequest()
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1016, 19, base.IsReliable, new object[0]);
+			base.Dispatch(base.DispatchDestination(), base.OID, 1017, 20, base.IsReliable, new object[0]);
 		}
 
 		public void OnServerPlayerReady()
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1016, 21, base.IsReliable, new object[0]);
+			base.Dispatch(base.DispatchDestination(), base.OID, 1017, 22, base.IsReliable, new object[0]);
 		}
 
 		public void ServerPlayerLoadingUpdate(float progress)
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1016, 25, base.IsReliable, new object[]
+			base.Dispatch(base.DispatchDestination(), base.OID, 1017, 26, base.IsReliable, new object[]
 			{
 				progress
 			});
@@ -89,17 +97,17 @@ namespace HeavyMetalMachines
 
 		public void ServerReloadAFKTime()
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1016, 27, base.IsReliable, new object[0]);
+			base.Dispatch(base.DispatchDestination(), base.OID, 1017, 28, base.IsReliable, new object[0]);
 		}
 
 		public void ServerPlayerInputPressed()
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1016, 28, base.IsReliable, new object[0]);
+			base.Dispatch(base.DispatchDestination(), base.OID, 1017, 29, base.IsReliable, new object[0]);
 		}
 
 		public void ServerLeaverWarningCallback(bool timedOut)
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1016, 29, base.IsReliable, new object[]
+			base.Dispatch(base.DispatchDestination(), base.OID, 1017, 30, base.IsReliable, new object[]
 			{
 				timedOut
 			});

@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using HeavyMetalMachines.Options;
+using HeavyMetalMachines.Input.ControllerInput;
 using UnityEngine;
 
 namespace HeavyMetalMachines.Tutorial.InGame
@@ -12,6 +12,6 @@ namespace HeavyMetalMachines.Tutorial.InGame
 
 		public bool unlockAllInputs;
 
-		public List<ControlAction> UnlockedPlayerControls;
+		public List<ControllerInputActions> UnlockedPlayerInputActions;
 	}
 }

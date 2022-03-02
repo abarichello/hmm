@@ -16,6 +16,7 @@ namespace HeavyMetalMachines.Frontend
 			this.IconSprite.SpriteName = matchSlotInfo.SpriteName;
 			this.IconSprite.alpha = ((!matchSlotInfo.IsLocked) ? 1f : this.IconLockedAlpha);
 			this.NameLabel.text = matchSlotInfo.RewardName;
+			this.NameLabel.gameObject.SetActive(!matchSlotInfo.IsLocked);
 			this.LockGameObject.SetActive(matchSlotInfo.IsLocked);
 			this.LevelLabel.text = matchSlotInfo.LevelText;
 		}

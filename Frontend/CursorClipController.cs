@@ -1,7 +1,7 @@
 ﻿using System;
 using HeavyMetalMachines.Frontend.Apis;
-using HeavyMetalMachines.Platform;
 using Pocketverse;
+using UnityEngine;
 
 namespace HeavyMetalMachines.Frontend
 {
@@ -24,7 +24,7 @@ namespace HeavyMetalMachines.Frontend
 
 		private void Initialize()
 		{
-			this._windowHandle = WindowsPlatform.GetCurrentWindowHandle("Heavy Metal Machines");
+			this._windowHandle = Platform.Current.GetCurrentWindowHandle("Heavy Metal Machines");
 			if (this._windowHandle == IntPtr.Zero)
 			{
 				CursorClipController.Log.Warn("Could not find window handler for cursor clipping.");
@@ -58,7 +58,7 @@ namespace HeavyMetalMachines.Frontend
 
 		private void SaveCurrentCursorRectToCache()
 		{
-			if (!WindowsPlatform.GetClipCursor(out this._cachedCursorRect))
+			if (!Platform.Current.GetClipCursor(out this._cachedCursorRect))
 			{
 				CursorClipController.Log.Warn("Failed to get current clip cursor to cache it.");
 			}
@@ -73,12 +73,12 @@ namespace HeavyMetalMachines.Frontend
 				return;
 			}
 			this.ClipCursor(ref this._cachedCursorRect);
-			this._cachedCursorRect = default(WindowsPlatform.RECT);
+			this._cachedCursorRect = default(RectInt);
 			this._isCursorPosCached = false;
 			CursorClipController.Log.Info("Cached cursor clip area was loaded.");
 		}
 
-		public void SetCustomCursorClipArea(WindowsPlatform.RECT clipArea)
+		public void SetCustomCursorClipArea(RectInt clipArea)
 		{
 			this._customCursorClipArea = clipArea;
 			this.IsCustomCursorClipSet = true;
@@ -96,7 +96,7 @@ namespace HeavyMetalMachines.Frontend
 			{
 				return;
 			}
-			this._customCursorClipArea = default(WindowsPlatform.RECT);
+			this._customCursorClipArea = default(RectInt);
 			this.IsCustomCursorClipSet = false;
 			if (!this._isClientWindowClipEnabled)
 			{
@@ -144,7 +144,7 @@ namespace HeavyMetalMachines.Frontend
 
 		protected virtual bool IsClientWindowSelected()
 		{
-			IntPtr foregroundWindow = WindowsPlatform.GetForegroundWindow();
+			IntPtr foregroundWindow = Platform.Current.GetForegroundWindow();
 			return foregroundWindow == this._windowHandle;
 		}
 
@@ -160,24 +160,18 @@ namespace HeavyMetalMachines.Frontend
 
 		private void ClipCursorToClientWindow()
 		{
-			WindowsPlatform.RECT rect;
-			if (!WindowsPlatform.GetClientRect(this._windowHandle, out rect))
+			RectInt rectInt;
+			if (!Platform.Current.GetClientRectForClipping(this._windowHandle, out rectInt))
 			{
 				CursorClipController.Log.Warn("Could not get window reference. Won't clip cursor.");
 				return;
 			}
-			WindowsPlatform.POINT point;
-			WindowsPlatform.ClientToScreen(this._windowHandle, out point);
-			rect.Left = point.X;
-			rect.Top = point.Y;
-			rect.Right += point.X;
-			rect.Bottom += point.Y;
-			this.ClipCursor(ref rect);
+			this.ClipCursor(ref rectInt);
 		}
 
-		protected virtual void ClipCursor(ref WindowsPlatform.RECT rect)
+		protected virtual void ClipCursor(ref RectInt rect)
 		{
-			WindowsPlatform.ClipCursor(ref rect);
+			Platform.Current.ClipCursor(ref rect);
 		}
 
 		private static readonly BitLogger Log = new BitLogger(typeof(CursorClipController));
@@ -197,8 +191,8 @@ namespace HeavyMetalMachines.Frontend
 
 		protected bool _isCursorPosCached;
 
-		protected WindowsPlatform.RECT _cachedCursorRect;
+		protected RectInt _cachedCursorRect;
 
-		private WindowsPlatform.RECT _customCursorClipArea;
+		private RectInt _customCursorClipArea;
 	}
 }

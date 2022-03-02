@@ -9,40 +9,24 @@ namespace HeavyMetalMachines.Combat.GadgetScript.Block
 	[CreateAssetMenu(menuName = "GadgetScript/Block/List/RemoveBodyFromListBlock")]
 	public class RemoveBodyFromListBlock : BaseBlock
 	{
-		protected override bool CheckSanity(IGadgetContext gadgetContext, IEventContext eventContext)
-		{
-			if (this._body == null)
-			{
-				base.LogSanitycheckError("'Body' parameter cannot be null.");
-				return false;
-			}
-			if (this._list == null)
-			{
-				base.LogSanitycheckError("'List' parameter cannot be null.");
-				return false;
-			}
-			return true;
-		}
-
-		protected override IBlock InnerExecute(IGadgetContext gadgetContext, IEventContext eventContext)
+		public override IBlock Execute(IGadgetContext gadgetContext, IEventContext eventContext)
 		{
 			if (((IHMMGadgetContext)gadgetContext).IsClient)
 			{
 				return this._nextBlock;
 			}
 			List<GadgetBody> value = this._list.GetValue(gadgetContext);
-			value.Remove(this._body.GetValue(gadgetContext));
+			value.Remove(this._body.GetValue<GadgetBody>(gadgetContext));
 			return this._nextBlock;
 		}
 
-		public override bool UsesParameterWithId(int parameterId)
-		{
-			return base.CheckIsParameterWithId(this._body, parameterId) || base.CheckIsParameterWithId(this._list, parameterId);
-		}
-
 		[Header("Read")]
+		[Restrict(true, new Type[]
+		{
+			typeof(GadgetBody)
+		})]
 		[SerializeField]
-		private GadgetBodyParameter _body;
+		private BaseParameter _body;
 
 		[Header("Write")]
 		[SerializeField]

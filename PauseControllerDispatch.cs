@@ -11,24 +11,27 @@ namespace HeavyMetalMachines
 
 		public void TogglePauseServer()
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1027, 4, base.IsReliable, new object[0]);
+			base.Dispatch(base.DispatchDestination(), base.OID, 1028, 7, base.IsReliable, new object[0]);
 		}
 
 		public void TriggerPauseNotification(int kind, float delay)
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1027, 10, base.IsReliable, new object[]
+			base.Dispatch(base.DispatchDestination(), base.OID, 1028, 16, base.IsReliable, new object[]
 			{
 				kind,
 				delay
 			});
 		}
 
-		public void ChangePauseStateOnClient(int newState, long playerId)
+		public void ChangePauseStateOnClient(int newState, long playerId, int timeRemaining, int timeoutMillis, int activations)
 		{
-			base.Dispatch(base.DispatchDestination(), base.OID, 1027, 14, base.IsReliable, new object[]
+			base.Dispatch(base.DispatchDestination(), base.OID, 1028, 20, base.IsReliable, new object[]
 			{
 				newState,
-				playerId
+				playerId,
+				timeRemaining,
+				timeoutMillis,
+				activations
 			});
 		}
 

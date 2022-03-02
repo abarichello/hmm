@@ -7,15 +7,27 @@ using Assets.Standard_Assets.Scripts.HMM.PlotKids.Infra;
 using Assets.Standard_Assets.Scripts.HMM.PlotKids.Social;
 using ClientAPI;
 using ClientAPI.Objects;
-using Commons.Swordfish.Battlepass;
+using HeavyMetalMachines.CharacterSelection.Client;
+using HeavyMetalMachines.DataTransferObjects.Battlepass;
+using HeavyMetalMachines.DataTransferObjects.Player;
+using HeavyMetalMachines.DataTransferObjects.Progression;
 using HeavyMetalMachines.Frontend;
 using HeavyMetalMachines.Infra.ScriptableObjects;
+using HeavyMetalMachines.Localization;
 using HeavyMetalMachines.Match;
+using HeavyMetalMachines.Matches;
+using HeavyMetalMachines.Options;
 using HeavyMetalMachines.Swordfish;
 using HeavyMetalMachines.Swordfish.Player;
+using HeavyMetalMachines.ToggleableFeatures;
+using Hoplon.Localization.TranslationTable;
+using Hoplon.Serialization;
+using Hoplon.ToggleableFeatures;
 using Pocketverse;
 using Pocketverse.MuralContext;
+using UniRx;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines
 {
@@ -39,6 +51,8 @@ namespace HeavyMetalMachines
 				}
 			}
 		}
+
+		public bool IsClusterAuth { get; private set; }
 
 		public string UniversalId { get; set; }
 
@@ -69,35 +83,16 @@ namespace HeavyMetalMachines
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event UserInfo.MatchDataReceived OnMatchDataReceived;
 
-		public void GetLoginData(System.Action onPlayerOk, System.Action onGetError, System.Action onTimeOut)
+		public void SetLoginData(LoginData loginData)
 		{
-			UserInfo.CallbackHolder state = new UserInfo.CallbackHolder
-			{
-				SucessCallBack = onPlayerOk,
-				FailureCallBack = onGetError,
-				TimeOutCallBack = onTimeOut
-			};
-			LoginCustomWS.GetLoginData(state, new SwordfishClientApi.ParameterizedCallback<string>(this.OnGetLoginDataSucessful), new SwordfishClientApi.ErrorCallback(this.OnGetLoginDataFailure));
-		}
-
-		private void OnGetLoginDataSucessful(object context, string data)
-		{
-			UserInfo.CallbackHolder callbackHolder = (UserInfo.CallbackHolder)context;
-			NetResult netResult = (NetResult)((JsonSerializeable<T>)data);
-			if (!netResult.Success)
-			{
-				UserInfo.Log.Error("Error onGetLoginData", new Exception(netResult.Msg));
-				callbackHolder.FailureCallBack();
-				return;
-			}
-			LoginData loginData = (LoginData)((JsonSerializeable<T>)netResult.Msg);
+			this.StoreAndInitializeRemotelyEnabledFeatures(loginData);
 			this.UserSF = loginData.MyUser;
 			this.UniversalId = loginData.MyUser.UniversalID;
 			this.SetPlayer(loginData.MyPlayer);
 			this.Characters = loginData.MyCharacters;
 			this._wallet = loginData.MyWallet;
 			this.Name = loginData.MyUser.Login;
-			UserInfo.Log.InfoFormat("{0}-Player={1} UserId={2} UniversalId={3} Bag={4}", new object[]
+			UserInfo.Log.InfoFormat("UserInfo: {0}-Player={1} UserId={2} UniversalId={3} Bag={4}", new object[]
 			{
 				this.PlayerSF.Id,
 				this.PlayerSF.Name,
@@ -105,6 +100,12 @@ namespace HeavyMetalMachines
 				this.UniversalId,
 				this.PlayerSF.Bag
 			});
+			if (this.CheckAndUpdateIsFirstLogin())
+			{
+				GameHubBehaviour.Hub.Swordfish.Log.BILogClient(23, true);
+			}
+			ControlOptions.LogBICurrentLanguage();
+			this.IsClusterAuth = loginData.MyUser.IsClusterAuth;
 			if (this.OnUserUniversalIdTaken != null)
 			{
 				this.OnUserUniversalIdTaken();
@@ -115,18 +116,24 @@ namespace HeavyMetalMachines
 			}
 			this.Inventory.SetAllReloadedItems(loginData.InventoriesSf, null);
 			GameHubBehaviour.Hub.InventoryColletion.SetAllItemTypes(loginData.ItemTypesSf);
-			GameHubBehaviour.Hub.PlayerPrefs.Load();
-			callbackHolder.SucessCallBack();
 		}
 
-		private void OnGetLoginDataFailure(object context, Exception ex)
+		private void StoreAndInitializeRemotelyEnabledFeatures(LoginData loginData)
 		{
-			UserInfo.CallbackHolder callbackHolder = (UserInfo.CallbackHolder)context;
-			if (callbackHolder.FailureCallBack != null)
+			this._remotelyEnabledFeaturesNamesStorage.FeaturesNames = loginData.RemotelyEnabledFeaturesNames;
+			this._initializeRemotelyToggleableFeatures.Initialize();
+		}
+
+		private bool CheckAndUpdateIsFirstLogin()
+		{
+			if (GameHubBehaviour.Hub.Swordfish.Connection.IsFirstLogin)
 			{
-				UserInfo.Log.Error("Error onGetLoginData", ex);
-				callbackHolder.FailureCallBack();
+				return true;
 			}
+			PlayerBag playerBag = (PlayerBag)this.PlayerSF.Bag;
+			bool flag = playerBag.Level == 0 && playerBag.Xp == 0 && !playerBag.HasDoneTutorial;
+			GameHubBehaviour.Hub.Swordfish.Connection.SetIsFirstLogin(flag);
+			return flag;
 		}
 
 		public void OnCleanup(CleanupMessage msg)
@@ -147,7 +154,7 @@ namespace HeavyMetalMachines
 
 		public void SetBattlepassProgress(string battlepassProgressBag)
 		{
-			this._battlepassProgress.UpdateBattlepassProgress((BattlepassProgress)((JsonSerializeable<T>)battlepassProgressBag));
+			this._battlepassProgress.UpdateBattlepassProgress((BattlepassProgress)battlepassProgressBag);
 		}
 
 		public void SetTestBattlepassProgressScriptableObject(BattlepassProgressScriptableObject progress)
@@ -155,16 +162,16 @@ namespace HeavyMetalMachines
 			this._battlepassProgress = progress;
 		}
 
-		public void ReloadPlayer(System.Action afterLoad, System.Action failAction)
+		public void ReloadPlayer(Action afterLoad, Action failAction)
 		{
 			if (!GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish, false))
 			{
-				UserInfo.CallbackHolder state = new UserInfo.CallbackHolder
+				CallbackHolder callbackHolder = new CallbackHolder
 				{
 					SucessCallBack = afterLoad,
 					FailureCallBack = failAction
 				};
-				GameHubBehaviour.Hub.ClientApi.user.GetMyPlayer(state, new SwordfishClientApi.ParameterizedCallback<Player>(this.OnGetPlayerSuccessful), new SwordfishClientApi.ErrorCallback(this.OnGetPlayerFailure));
+				GameHubBehaviour.Hub.ClientApi.user.GetMyPlayer(callbackHolder, new SwordfishClientApi.ParameterizedCallback<Player>(this.OnGetPlayerSuccessful), new SwordfishClientApi.ErrorCallback(this.OnGetPlayerFailure));
 			}
 		}
 
@@ -177,7 +184,7 @@ namespace HeavyMetalMachines
 
 		private void OnGetPlayerSuccessful(object context, Player player)
 		{
-			UserInfo.CallbackHolder callbackHolder = (UserInfo.CallbackHolder)context;
+			CallbackHolder callbackHolder = (CallbackHolder)context;
 			if (player != null)
 			{
 				this.SetPlayer(player);
@@ -190,7 +197,7 @@ namespace HeavyMetalMachines
 
 		private void OnGetPlayerFailure(object context, Exception ex)
 		{
-			UserInfo.CallbackHolder callbackHolder = (UserInfo.CallbackHolder)context;
+			CallbackHolder callbackHolder = (CallbackHolder)context;
 			UserInfo.Log.Fatal("Failed to get my player.", ex);
 			if (callbackHolder.FailureCallBack != null)
 			{
@@ -198,49 +205,56 @@ namespace HeavyMetalMachines
 			}
 		}
 
-		public void ReloadCharacters(object state, System.Action afterLoad)
+		private IObservable<Character[]> RetrieveCharactersData()
 		{
-			if (!GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish, false))
+			return SwordfishObservable.FromSwordfishCall<Character[]>(delegate(SwordfishClientApi.ParameterizedCallback<Character[]> success, SwordfishClientApi.ErrorCallback error)
 			{
-				GameHubBehaviour.Hub.ClientApi.character.GetAllCharacters(state, this.PlayerSF.Id, delegate(object x, Character[] y)
-				{
-					this.Characters = y;
-					if (afterLoad != null)
-					{
-						afterLoad();
-					}
-				}, delegate(object x, Exception y)
-				{
-					UserInfo.Log.Fatal("Failed to get my characters.", y);
-					if (afterLoad != null)
-					{
-						afterLoad();
-					}
-				});
-			}
+				GameHubBehaviour.Hub.ClientApi.character.GetAllCharacters(this, this.PlayerSF.Id, success, error);
+			});
 		}
 
-		public CharacterBag GetCurrentCharacterBag()
+		public IObservable<Unit> UpdateCharactersDataStorage()
 		{
-			if (GameHubBehaviour.Hub.Players.CurrentPlayerData == null || GameHubBehaviour.Hub.Players.CurrentPlayerData.Character == null)
+			return Observable.AsUnitObservable<Character[]>(Observable.Do<Character[]>(this.RetrieveCharactersData(), delegate(Character[] charactersData)
 			{
-				return null;
-			}
-			for (int i = 0; i < this.Characters.Length; i++)
-			{
-				Character character = this.Characters[i];
-				CharacterBag characterBag = (CharacterBag)((JsonSerializeable<T>)character.Bag);
-				if (characterBag.CharacterId == GameHubBehaviour.Hub.Players.CurrentPlayerData.Character.CharacterItemTypeGuid)
-				{
-					return characterBag;
-				}
-			}
-			return null;
+				this.Characters = charactersData;
+			}));
 		}
 
-		public CharacterBag GetCharacterBag(CharacterHierarchy characterHierarchy)
+		public void ReloadCharactersData(object state, Action callback)
 		{
-			return this.GetCharacterBag(characterHierarchy.CharacterItemType.Id);
+			if (GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish, false))
+			{
+				return;
+			}
+			GameHubBehaviour.Hub.ClientApi.character.GetAllCharacters(state, this.PlayerSF.Id, delegate(object x, Character[] characters)
+			{
+				this.OnCharactersDataRetrieveSuccess(x, characters, callback);
+			}, delegate(object x, Exception exception)
+			{
+				this.OnCharactersDataRetrieveError(x, exception, callback);
+			});
+		}
+
+		private void OnCharactersDataRetrieveSuccess(object state, Character[] characters, Action afterLoad)
+		{
+			this.Characters = characters;
+			UserInfo.InvokeIfNotNull(afterLoad);
+		}
+
+		private void OnCharactersDataRetrieveError(object state, Exception exception, Action afterLoad)
+		{
+			UserInfo.Log.Fatal("Failed to get my characters.", exception);
+			UserInfo.InvokeIfNotNull(afterLoad);
+		}
+
+		private static void InvokeIfNotNull(Action method)
+		{
+			if (method == null)
+			{
+				return;
+			}
+			method();
 		}
 
 		public CharacterBag GetCharacterBag(Guid itemTypeId)
@@ -248,7 +262,7 @@ namespace HeavyMetalMachines
 			for (int i = 0; i < this.Characters.Length; i++)
 			{
 				Character character = this.Characters[i];
-				CharacterBag characterBag = (CharacterBag)((JsonSerializeable<T>)character.Bag);
+				CharacterBag characterBag = (CharacterBag)((JsonSerializeable<!0>)character.Bag);
 				if (characterBag.CharacterId == itemTypeId)
 				{
 					return characterBag;
@@ -257,28 +271,12 @@ namespace HeavyMetalMachines
 			return null;
 		}
 
-		public CharacterBag SetCharacterBagItemUnlockSeen(Guid itemTypeId, int unlockLevel)
-		{
-			for (int i = 0; i < this.Characters.Length; i++)
-			{
-				Character character = this.Characters[i];
-				CharacterBag characterBag = (CharacterBag)((JsonSerializeable<T>)character.Bag);
-				if (characterBag.CharacterId == itemTypeId)
-				{
-					characterBag.SetUnlockSeen(unlockLevel);
-					character.Bag = (string)characterBag;
-					return characterBag;
-				}
-			}
-			return null;
-		}
-
-		public void ConnectToServer(bool reconnect, System.Action onFailCallback, System.Action onSuccessCallback = null)
+		public void ConnectToServer(bool reconnect, Action onFailCallback, Action onSuccessCallback = null)
 		{
 			this.InternalConnectToServer(false, reconnect, onFailCallback, onSuccessCallback);
 		}
 
-		public void ConnectNarratorToServer(bool reconnect, System.Action onFailCallback, System.Action onSuccessCallback = null)
+		public void ConnectNarratorToServer(bool reconnect, Action onFailCallback, Action onSuccessCallback = null)
 		{
 			this.InternalConnectToServer(true, reconnect, onFailCallback, onSuccessCallback);
 		}
@@ -297,7 +295,15 @@ namespace HeavyMetalMachines
 			}
 		}
 
-		private void InternalConnectToServer(bool narrator, bool reconnect, System.Action onFailCallback, System.Action onSuccessCallback = null)
+		private void Awake()
+		{
+			if (GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish))
+			{
+				this.IsClusterAuth = GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.DebugClusterAuth);
+			}
+		}
+
+		private void InternalConnectToServer(bool narrator, bool reconnect, Action onFailCallback, Action onSuccessCallback = null)
 		{
 			if (this.HackIsWaitingForMatchServerConnection)
 			{
@@ -308,21 +314,33 @@ namespace HeavyMetalMachines
 			GameHubBehaviour.Hub.Match.State = MatchData.MatchState.Nothing;
 			NetworkClient networkClient = (NetworkClient)GameHubBehaviour.Hub.Net;
 			NetworkReturn ret = networkClient.OpenConnection(GameHubBehaviour.Hub.Server.ServerIp, GameHubBehaviour.Hub.Server.ServerPort);
+			UserInfo.Log.DebugFormat("{0}Connecting{1} to server={2}:{3}", new object[]
+			{
+				(!reconnect) ? string.Empty : "Re",
+				(!narrator) ? string.Empty : " narrator",
+				GameHubBehaviour.Hub.Server.ServerIp,
+				GameHubBehaviour.Hub.Server.ServerPort
+			});
 			base.StartCoroutine(this.WaitForConnection(ret, onFailCallback, onSuccessCallback));
 		}
 
-		private IEnumerator WaitForConnection(NetworkReturn ret, System.Action onFailCallback, System.Action onSuccessCallback)
+		private IEnumerator WaitForConnection(NetworkReturn ret, Action onFailCallback, Action onSuccessCallback)
 		{
 			GameHubBehaviour.Hub.Server.ConnectStarted = true;
 			this.HackIsWaitingForMatchServerConnection = true;
 			if (ret != NetworkReturn.Ok)
 			{
-				GameHubBehaviour.Hub.GuiScripts.SharedPreGameWindow.ForceCloseWaitingWindown();
+				UserInfo.Log.ErrorFormat("Connect Error={0}", new object[]
+				{
+					ret
+				});
+				GameHubBehaviour.Hub.GuiScripts.SharedPreGameWindow.ForceCloseWaitingWindow();
 				this.HackIsWaitingForMatchServerConnection = false;
 				this.ConnectionFailed(onFailCallback);
 				yield break;
 			}
 			NetworkClient netClient = (NetworkClient)GameHubBehaviour.Hub.Net;
+			UserInfo.Log.Info("Awaiting to establish connection.");
 			while (netClient.State != SessionState.Established && netClient.State != SessionState.Closed)
 			{
 				yield return null;
@@ -331,6 +349,7 @@ namespace HeavyMetalMachines
 			{
 				Stopwatch watch = new Stopwatch();
 				int timeout = 1000 * GameHubBehaviour.Hub.Config.GetIntValue(ConfigAccess.SfNetClockSyncTimeout);
+				UserInfo.Log.Debug("Connected, awaiting for clock sync.");
 				watch.Start();
 				while (!GameHubBehaviour.Hub.Clock.IsSynchronized && watch.ElapsedMilliseconds < (long)timeout)
 				{
@@ -342,24 +361,28 @@ namespace HeavyMetalMachines
 			{
 				netClient.CloseConnection();
 				string msg = string.Format("SteamID={0}", GameHubBehaviour.Hub.ClientApi.hubClient.Id);
-				GameHubBehaviour.Hub.Swordfish.Log.BILogClientMsg(ClientBITags.ClockSyncDisconnect, msg, false);
+				GameHubBehaviour.Hub.Swordfish.Log.BILogClientMsg(46, msg, false);
 			}
 			if (netClient.State == SessionState.Closed)
 			{
+				UserInfo.Log.Info("Failed to connect.");
 				this.HackIsWaitingForMatchServerConnection = false;
 				if (!GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.SkipSwordfish))
 				{
 					GameHubBehaviour.Hub.Swordfish.Msg.Matchmaking.Fail();
 				}
 				GameHubBehaviour.Hub.GuiScripts.Loading.HideLoading();
-				GameHubBehaviour.Hub.GuiScripts.SharedPreGameWindow.ForceCloseWaitingWindown();
+				GameHubBehaviour.Hub.GuiScripts.SharedPreGameWindow.ForceCloseWaitingWindow();
 				this.ConnectionFailed(onFailCallback);
 				yield break;
 			}
+			UserInfo.Log.Info("Clock synchronized, awaiting match data.");
 			while (GameHubBehaviour.Hub.Match.State == MatchData.MatchState.Nothing)
 			{
 				yield return null;
 			}
+			yield return UserInfo.WaitForMatchPlayersData();
+			UserInfo.Log.Info("Still waiting others' connections.");
 			while (GameHubBehaviour.Hub.Match.State == MatchData.MatchState.AwaitingConnections)
 			{
 				yield return null;
@@ -379,10 +402,14 @@ namespace HeavyMetalMachines
 					SingletonMonoBehaviour<SpectatorController>.Instance.CurrentSpectatorRole = SpectatorRole.None;
 				}
 			}
-			GameHubBehaviour.Hub.GuiScripts.SharedPreGameWindow.ForceCloseWaitingWindown();
+			GameHubBehaviour.Hub.GuiScripts.SharedPreGameWindow.ForceCloseWaitingWindow();
 			Assembly SWF = GameHubBehaviour.Hub.ClientApi.GetType().Assembly;
 			string swfVer = FileVersionInfo.GetVersionInfo(SWF.Location).FileVersion;
-			GameHubBehaviour.Hub.VersionChecker.SendVersion(swfVer, "2.07.972");
+			GameHubBehaviour.Hub.VersionChecker.SendVersion(swfVer, "Release.15.00.250");
+			UserInfo.Log.InfoFormat("All passed. Match State:{0}", new object[]
+			{
+				GameHubBehaviour.Hub.Match.State
+			});
 			switch (GameHubBehaviour.Hub.Match.State)
 			{
 			case MatchData.MatchState.Tutorial:
@@ -391,7 +418,7 @@ namespace HeavyMetalMachines
 			case MatchData.MatchState.CharacterPick:
 				if (false || this.IsReconnecting)
 				{
-					GameHubBehaviour.Hub.State.GotoState(this.HackPickMode, false);
+					this.ReconnectGoToPick();
 				}
 				break;
 			case MatchData.MatchState.PreMatch:
@@ -400,9 +427,13 @@ namespace HeavyMetalMachines
 			case MatchData.MatchState.MatchOverBluWins:
 			case MatchData.MatchState.MatchOverTie:
 				GameHubBehaviour.Hub.GuiScripts.Loading.ShowDefaultLoading(false);
-				GameHubBehaviour.Hub.State.GotoState(this.HackLoadingMode, false);
+				this.ReconnectGoToLoading();
 				break;
 			}
+			UserInfo.Log.InfoFormat("Done, match data received={0}", new object[]
+			{
+				GameHubBehaviour.Hub.Match.State
+			});
 			this.HackIsWaitingForMatchServerConnection = false;
 			if (this.OnMatchDataReceived != null)
 			{
@@ -411,23 +442,67 @@ namespace HeavyMetalMachines
 			yield break;
 		}
 
-		private void ConnectionFailed(System.Action onFailCallback)
+		private static IEnumerator WaitForMatchPlayersData()
+		{
+			UserInfo.Log.Info("Awaiting players data.");
+			while (GameHubBehaviour.Hub.Players.CurrentPlayerData == null)
+			{
+				yield return null;
+			}
+			yield break;
+		}
+
+		private void ReconnectGoToPick()
+		{
+			DisposableExtensions.AddTo<IDisposable>(ObservableExtensions.Subscribe<Unit>(Observable.DoOnCompleted<Unit>(this.PrepareMatch(), delegate()
+			{
+				if (GameHubBehaviour.Hub.Config.GetBoolValue(ConfigAccess.EnableDrafter))
+				{
+					GameHubBehaviour.Hub.State.GotoState(this.CharacterSelectionState, false);
+				}
+				else
+				{
+					GameHubBehaviour.Hub.State.GotoState(this.HackPickMode, false);
+				}
+			})), this);
+		}
+
+		private void ReconnectGoToLoading()
+		{
+			DisposableExtensions.AddTo<IDisposable>(ObservableExtensions.Subscribe<Unit>(Observable.DoOnCompleted<Unit>(this.PrepareMatch(), delegate()
+			{
+				UserInfo.Log.Info("TOMATE GoingToLoading After PrepareMatch");
+				GameHubBehaviour.Hub.State.GotoState(this.HackLoadingMode, false);
+			})), this);
+		}
+
+		private IObservable<Unit> PrepareMatch()
+		{
+			return Observable.ContinueWith<Unit, Unit>(this.WaitUntilMatchPlayersAreReceived(), (Unit _) => this._diContainer.Resolve<IPrepareMatch>().Prepare());
+		}
+
+		private IObservable<Unit> WaitUntilMatchPlayersAreReceived()
+		{
+			return Observable.AsUnitObservable<long>(Observable.First<long>(Observable.EveryUpdate(), (long _) => GameHubBehaviour.Hub.Players.Clients.Count > 0));
+		}
+
+		private void ConnectionFailed(Action onFailCallback)
 		{
 			if (SingletonMonoBehaviour<SpectatorController>.DoesInstanceExist())
 			{
 				SingletonMonoBehaviour<SpectatorController>.Instance.CurrentSpectatorRole = SpectatorRole.None;
 			}
-			UserInfo.OkWindowFeedback(this.OnConnectionErrorDraft, TranslationSheets.GUI, onFailCallback, new object[0]);
+			UserInfo.OkWindowFeedback(this.OnConnectionErrorDraft, TranslationContext.GUI, onFailCallback, new object[0]);
 		}
 
-		public static void OkWindowFeedback(string key, TranslationSheets tab, System.Action onOk, params object[] param)
+		private static void OkWindowFeedback(string key, ContextTag tab, Action onOk, params object[] param)
 		{
 			Guid confirmWindowGuid = Guid.NewGuid();
 			ConfirmWindowProperties properties = new ConfirmWindowProperties
 			{
 				Guid = confirmWindowGuid,
-				QuestionText = string.Format(Language.Get(key, tab), param),
-				OkButtonText = Language.Get("Ok", TranslationSheets.GUI),
+				QuestionText = Language.GetFormatted(key, tab, param),
+				OkButtonText = Language.Get("Ok", TranslationContext.GUI),
 				OnOk = delegate()
 				{
 					if (onOk != null)
@@ -440,7 +515,16 @@ namespace HeavyMetalMachines
 			GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.OpenConfirmWindow(properties);
 		}
 
+		[Inject]
+		private IRemotelyEnabledFeaturesNamesStorage _remotelyEnabledFeaturesNamesStorage;
+
+		[Inject]
+		private IInitializeRemotelyToggleableFeatures _initializeRemotelyToggleableFeatures;
+
 		private static readonly BitLogger Log = new BitLogger(typeof(UserInfo));
+
+		[Inject]
+		private DiContainer _diContainer;
 
 		public PlayerInventory Inventory;
 
@@ -461,7 +545,7 @@ namespace HeavyMetalMachines
 		[SerializeField]
 		private BattlepassProgressScriptableObject _battlepassProgress;
 
-		private Wallet _wallet;
+		private Wallet _wallet = new Wallet();
 
 		public Character[] Characters;
 
@@ -473,50 +557,12 @@ namespace HeavyMetalMachines
 
 		public GameState HackLoadingMode;
 
+		public CharacterSelectionClientState CharacterSelectionState;
+
 		public bool HackIsWaitingForMatchServerConnection;
 
 		public delegate void UserUniversalIdTaken();
 
 		public delegate void MatchDataReceived(MatchData.MatchState matchState);
-
-		private class CallbackHolder : ISwordfishWebServiceTimeOut
-		{
-			public bool CloseGame()
-			{
-				return false;
-			}
-
-			public string TimeOutMessage()
-			{
-				return "Failed to Get MyPlayer Will Close the Game";
-			}
-
-			public void TimeOut()
-			{
-				Guid confirmWindowGuid = Guid.NewGuid();
-				ConfirmWindowProperties properties = new ConfirmWindowProperties
-				{
-					Guid = confirmWindowGuid,
-					QuestionText = string.Format(Language.Get("LostMessageHubConnection", TranslationSheets.GUI), new object[0]),
-					OkButtonText = Language.Get("Ok", "GUI"),
-					OnOk = delegate()
-					{
-						GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.HideConfirmWindow(confirmWindowGuid);
-						GameHubBehaviour.Hub.Quit();
-					}
-				};
-				GameHubBehaviour.Hub.GuiScripts.ConfirmWindow.OpenConfirmWindow(properties);
-				if (this.TimeOutCallBack != null)
-				{
-					this.TimeOutCallBack();
-				}
-			}
-
-			public System.Action SucessCallBack;
-
-			public System.Action FailureCallBack;
-
-			public System.Action TimeOutCallBack;
-		}
 	}
 }

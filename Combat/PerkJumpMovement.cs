@@ -17,11 +17,31 @@ namespace HeavyMetalMachines.Combat
 
 		public override void PerkInitialized()
 		{
-			this.Effect.Data.MoveSpeed = base._trans.GetComponent<Rigidbody>().velocity.magnitude;
-			this.Effect.Data.Range = this.Effect.Data.MoveSpeed * this.Effect.Data.LifeTime;
-			this.Effect.Data.Target = this.Effect.Data.Origin + this.Effect.Data.Range * this.Effect.Data.Direction;
-			this.validTarget = this.Effect.Gadget.GetValidPosition(this.Effect.Data.Origin, this.Effect.Data.Target);
-			this._deltaTimeRatioToWallCollision = 1f;
+			if (GameHubBehaviour.Hub.Net.IsServer())
+			{
+				Rigidbody component = base._trans.GetComponent<Rigidbody>();
+				if (!component)
+				{
+					PerkJumpMovement.Log.ErrorFormat("This perk requires a RigidBody to work. Effect name: {0}", new object[]
+					{
+						base.gameObject.name
+					});
+					return;
+				}
+				this.Effect.Data.MoveSpeed = component.velocity.magnitude;
+				this.Effect.Data.Range = this.Effect.Data.MoveSpeed * this.Effect.Data.LifeTime;
+				this.Effect.Data.Target = this.Effect.Data.Origin + this.Effect.Data.Range * this.Effect.Data.Direction;
+				this.validTarget = this.Effect.Gadget.GetValidPosition(this.Effect.Data.Origin, this.Effect.Data.Target);
+				this._deltaTimeRatioToWallCollision = 1f;
+				PerkJumpMovement.Log.DebugFormat("Effect currentVelocity:{0} speed:{1} range:{2} target:{3} validTarget:{4}", new object[]
+				{
+					component.velocity.magnitude,
+					this.Effect.Data.MoveSpeed,
+					this.Effect.Data.Range,
+					this.Effect.Data.Target,
+					this.validTarget
+				});
+			}
 			base.PerkInitialized();
 			this.CalcParabola();
 			if (this.Effect.Data.CustomVar > 0)
@@ -46,8 +66,9 @@ namespace HeavyMetalMachines.Combat
 
 		public override Vector3 UpdatePosition()
 		{
+			Vector3 position = base._trans.position;
 			float num;
-			Vector3 vector = (!this.UseTargetXZVelocity) ? ((base._deltaTimeRatio > this._deltaTimeRatioToWallCollision) ? this.validTarget : this.CalcNewPosition(out num)) : base._trans.position;
+			Vector3 vector = (!this.UseTargetXZVelocity) ? ((base._deltaTimeRatio > this._deltaTimeRatioToWallCollision) ? this.validTarget : this.CalcNewPosition(out num)) : position;
 			float num2 = Mathf.Clamp(base._deltaTimeRatio, 0f, 1f);
 			if (this.useCurve)
 			{
@@ -72,9 +93,9 @@ namespace HeavyMetalMachines.Combat
 					this._c,
 					this._startTime,
 					this._endTime,
-					base._trans.position
+					position
 				});
-				return base._trans.position;
+				return position;
 			}
 			return vector;
 		}
@@ -88,9 +109,9 @@ namespace HeavyMetalMachines.Combat
 			this._c = num;
 			float num3 = 1f / (4f * (num - data.EffectInfo.Height));
 			float num4 = num - num2;
-			float a = (-1f + Mathf.Sqrt(1f - 4f * num3 * num4)) / (2f * num3);
-			float b = (-1f - Mathf.Sqrt(1f - 4f * num3 * num4)) / (2f * num3);
-			this._b = Mathf.Max(a, b);
+			float num5 = (-1f + Mathf.Sqrt(1f - 4f * num3 * num4)) / (2f * num3);
+			float num6 = (-1f - Mathf.Sqrt(1f - 4f * num3 * num4)) / (2f * num3);
+			this._b = Mathf.Max(num5, num6);
 			this._a = num2 - num - this._b;
 		}
 
@@ -104,12 +125,20 @@ namespace HeavyMetalMachines.Combat
 			Gizmos.DrawLine(data.Origin, data.Target);
 		}
 
-		public override void PerkDestroyed(DestroyEffect destroyEffect)
+		public override void PerkDestroyed(DestroyEffectMessage destroyEffectMessage)
 		{
 			if (this.Effect.Attached != null)
 			{
-				Rigidbody component = this.Effect.Attached.GetComponent<Rigidbody>();
-				this.Effect.Attached.Transform.position = new Vector3(component.position.x, 0f, component.position.z);
+				if (GameHubBehaviour.Hub.Net.IsServer())
+				{
+					Rigidbody component = this.Effect.Attached.GetComponent<Rigidbody>();
+					this.Effect.Attached.Transform.position = new Vector3(component.position.x, 0f, component.position.z);
+				}
+				else if (GameHubBehaviour.Hub.Net.IsClient())
+				{
+					Transform transform = this.Effect.Attached.Transform;
+					this.Effect.Attached.Transform.position = new Vector3(transform.position.x, 0f, transform.position.z);
+				}
 			}
 		}
 

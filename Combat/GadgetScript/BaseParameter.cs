@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Reflection;
-using Hoplon.GadgetScript;
 using Pocketverse;
 using UnityEngine;
 
@@ -10,55 +8,70 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 {
 	public abstract class BaseParameter : GameHubScriptableObject, IContent
 	{
-		public abstract void SetTo(IParameterContext context, BaseParameter other);
+		public abstract void SetTo(object context, BaseParameter other);
 
-		public abstract int CompareTo(IParameterContext context, BaseParameter other);
+		public abstract int CompareTo(object context, BaseParameter other);
 
-		public abstract void RouteContext(IParameterContext context, IParameterContext otherContext);
+		public abstract void RouteContext(object context, object otherContext);
 
-		public abstract void CreateRouteToObject(IParameterContext context, MethodInfo getter, MethodInfo setter, object boundToObject);
+		protected virtual void Initialize()
+		{
+			this.ResetParameters();
+		}
 
 		protected abstract void Reset();
 
-		public abstract bool IsRoutedToObject { get; }
+		public abstract IBaseParameterTomate ParameterTomate { get; }
 
-		public void WriteToBitStreamWithContentId(IParameterContext context, Pocketverse.BitStream bs)
+		public void WriteToBitStreamWithContentId(object context, BitStream bs)
 		{
 			bs.WriteInt(this.ContentId);
-			if (!this.IsRoutedToObject)
-			{
-				this.WriteToBitStream(context, bs);
-			}
+			this.WriteToBitStream(context, bs);
 		}
 
-		public void ReadFromBitStreamWithContentId(IParameterContext context, Pocketverse.BitStream bs)
+		public void ReadFromBitStreamWithContentId(object context, BitStream bs)
 		{
 			bs.ReadInt();
-			if (!this.IsRoutedToObject)
-			{
-				this.ReadFromBitStream(context, bs);
-			}
+			this.ReadFromBitStream(context, bs);
 		}
 
-		public static BaseParameter ReadParameterFromBitStreamWithContentId(IParameterContext context, Pocketverse.BitStream bs)
+		public static BaseParameter ReadParameterFromBitStreamWithContentId(object context, BitStream bs)
 		{
 			int id = bs.ReadInt();
 			BaseParameter parameter = BaseParameter.GetParameter(id);
-			if (!parameter.IsRoutedToObject)
-			{
-				parameter.ReadFromBitStream(context, bs);
-			}
+			parameter.ReadFromBitStream(context, bs);
 			return parameter;
 		}
 
-		protected abstract void WriteToBitStream(IParameterContext context, Pocketverse.BitStream bs);
+		protected abstract void WriteToBitStream(object context, BitStream bs);
 
-		protected abstract void ReadFromBitStream(IParameterContext context, Pocketverse.BitStream bs);
+		protected abstract void ReadFromBitStream(object context, BitStream bs);
 
-		public abstract IParameterContext[] GetAllSetContexts();
+		protected internal Dictionary<int, object> TouchedContexts
+		{
+			get
+			{
+				return this._touchedContexts;
+			}
+			set
+			{
+				this._touchedContexts = value;
+			}
+		}
+
+		protected void TouchContext(object context)
+		{
+			if (!this._touchedContexts.ContainsKey(context.GetHashCode()))
+			{
+				this._touchedContexts.Add(context.GetHashCode(), context);
+			}
+		}
 
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
 		public event BaseParameter.OnParameterValueUpdatedListener OnParameterValueUpdated;
+
+		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
+		public event Action OnParameterInitialized;
 
 		public static BaseParameter GetParameter(int id)
 		{
@@ -77,35 +90,66 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 			}
 		}
 
-		public static List<BaseParameter> GetAllRegisteredParameters()
-		{
-			return new List<BaseParameter>(BaseParameter._parameters.Values);
-		}
-
-		protected void CallOnParameterValueUpdated(IParameterContext context)
+		protected void CallOnParameterValueUpdated(object context)
 		{
 			if (this.OnParameterValueUpdated != null)
 			{
-				this.OnParameterValueUpdated(this, context);
+				this.OnParameterValueUpdated(context);
 			}
 		}
 
-		protected virtual void OnEnable()
+		protected void CallOnParameterInitialized()
 		{
-			this.ResetParameters();
+			if (this.OnParameterInitialized != null)
+			{
+				this.OnParameterInitialized();
+			}
+		}
+
+		private void OnEnable()
+		{
+			this.Initialize();
+			if (this.OnParameterInitialized != null && this.ParameterTomate != null)
+			{
+				this.OnParameterInitialized();
+			}
 		}
 
 		private void ResetParameters()
 		{
 			if (BaseParameter._parameters.ContainsKey(this.ContentId))
 			{
-				BaseParameter._parameters[this.ContentId].Reset();
+				if (BaseParameter._parameters[this.ContentId].GetInstanceID() == base.GetInstanceID())
+				{
+					BaseParameter._parameters[this.ContentId].Reset();
+					BaseParameter._parameters[this.ContentId].TouchedContexts.Clear();
+				}
 			}
 			else
 			{
 				BaseParameter._parameters[this.ContentId] = this;
 			}
 		}
+
+		public static void ClearRegisteredParameters()
+		{
+			BaseParameter._parameters.Clear();
+		}
+
+		public TValue GetValue<TValue>(object context)
+		{
+			this.TouchContext(context);
+			return ((IParameterTomate<TValue>)this.ParameterTomate).GetValue(context);
+		}
+
+		public void SetValue<TValue>(object context, TValue value)
+		{
+			this.TouchContext(context);
+			((IParameterTomate<TValue>)this.ParameterTomate).SetValue(context, value);
+			this.CallOnParameterValueUpdated(context);
+		}
+
+		private Dictionary<int, object> _touchedContexts = new Dictionary<int, object>(8);
 
 		[ReadOnly]
 		[SerializeField]
@@ -115,6 +159,6 @@ namespace HeavyMetalMachines.Combat.GadgetScript
 
 		protected static readonly BitLogger Log = new BitLogger(typeof(BaseParameter));
 
-		public delegate void OnParameterValueUpdatedListener(BaseParameter parameter, IParameterContext context);
+		public delegate void OnParameterValueUpdatedListener(object context);
 	}
 }

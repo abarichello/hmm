@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace HeavyMetalMachines.Combat
 {
-	public class PerkLinkDamageOnCross : BasePerk, DestroyEffect.IDestroyEffectListener
+	public class PerkLinkDamageOnCross : BasePerk, DestroyEffectMessage.IDestroyEffectListener
 	{
 		public override void PerkInitialized()
 		{
@@ -46,7 +46,7 @@ namespace HeavyMetalMachines.Combat
 				return;
 			}
 			this.CalcLinkSphere();
-			Collider[] collection = Physics.OverlapSphere(this._center, this._range, 1077058560);
+			Collider[] collection = Physics.OverlapSphere(this._center, this._range, 1077054464);
 			this._newInside.Clear();
 			this._newInside.AddRange(collection);
 			for (int i = 0; i < this._newInside.Count; i++)
@@ -66,7 +66,8 @@ namespace HeavyMetalMachines.Combat
 			List<Collider> inside = this._inside;
 			this._inside = this._newInside;
 			this._newInside = inside;
-			Plane plane = new Plane(this._owner.position, this._target.position, this._center + Vector3.up * 10f);
+			Plane plane;
+			plane..ctor(this._owner.position, this._target.position, this._center + Vector3.up * 10f);
 			this.CheckSides(plane);
 		}
 
@@ -108,7 +109,7 @@ namespace HeavyMetalMachines.Combat
 			}
 		}
 
-		public void OnDestroyEffect(DestroyEffect evt)
+		public void OnDestroyEffect(DestroyEffectMessage evt)
 		{
 			for (int i = 0; i < this._listening.Count; i++)
 			{

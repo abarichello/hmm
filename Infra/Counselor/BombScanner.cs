@@ -1,5 +1,6 @@
 ﻿using System;
 using HeavyMetalMachines.Combat;
+using HeavyMetalMachines.Infra.Context;
 using HeavyMetalMachines.Match;
 using HeavyMetalMachines.Utils.Bezier;
 using Hoplon.SensorSystem;
@@ -31,6 +32,12 @@ namespace HeavyMetalMachines.Infra.Counselor
 			}
 			BombMovement bombMovement = GameHubObject.Hub.BombManager.BombMovement;
 			bombMovement.OnCollisionWithBombBlocker = (Action)Delegate.Combine(bombMovement.OnCollisionWithBombBlocker, new Action(this.OnCollisionWithBombBlocker));
+			BombScanner.Log.DebugFormat("Constructor _approximatedPathDistance {0} blueGoal {1} redGoal {2}", new object[]
+			{
+				this._approximatedPathDistance != null,
+				this.blueGoal != null,
+				this.redGoal != null
+			});
 		}
 
 		~BombScanner()
@@ -41,12 +48,12 @@ namespace HeavyMetalMachines.Infra.Counselor
 		public void UpdateContext(SensorController context)
 		{
 			float num;
-			context.GetParameter(context.MainClockId, out num);
+			context.GetParameter(context.MainClockId, ref num);
 			float num2;
-			context.GetParameter(context.DeltaTimeId, out num2);
+			context.GetParameter(context.DeltaTimeId, ref num2);
 			context.SetParameter(this._collidedBlockerStayId, this._collidedBlockerStay);
 			this._collidedBlockerStay -= num2;
-			bool flag = GameHubObject.Hub.BombManager.ScoreBoard.CurrentState == BombScoreBoard.State.BombDelivery && GameHubObject.Hub.BombManager.ScoreBoard.IsInOvertime;
+			bool flag = GameHubObject.Hub.BombManager.ScoreBoard.CurrentState == BombScoreboardState.BombDelivery && GameHubObject.Hub.BombManager.ScoreBoard.IsInOvertime;
 			context.SetParameter(this._isOvertimeId, (float)((!flag) ? 0 : 1));
 			BombMovement bombMovement = GameHubObject.Hub.BombManager.BombMovement;
 			if (bombMovement != null)

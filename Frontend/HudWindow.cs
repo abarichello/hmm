@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Diagnostics;
+using HeavyMetalMachines.BI;
 using Pocketverse;
 using UnityEngine;
+using Zenject;
 
 namespace HeavyMetalMachines.Frontend
 {
@@ -30,8 +32,15 @@ namespace HeavyMetalMachines.Frontend
 
 		public void SetWindowVisibility(bool visible)
 		{
+			HudWindow.Log.DebugFormat("Set Window visibility to {0}. GameObjectName:{1}, name:{2}", new object[]
+			{
+				visible,
+				base.gameObject.name,
+				base.name
+			});
 			if (HudWindowManager.Instance == null)
 			{
+				HudWindow.Log.DebugFormat(string.Format("HudWindowManager instance is null while trying to Set \"{0}\" Window visibility", base.gameObject.name), new object[0]);
 				return;
 			}
 			if (visible)
@@ -109,6 +118,7 @@ namespace HeavyMetalMachines.Frontend
 
 		public void HideFromUI()
 		{
+			this._buttonBILogger.LogButtonClick(ButtonName.EscMenuBack);
 			this.SetWindowVisibility(false);
 		}
 
@@ -119,8 +129,19 @@ namespace HeavyMetalMachines.Frontend
 
 		public virtual void OnDestroy()
 		{
-			this.SetWindowVisibility(false);
+			if (!this._isQuitting)
+			{
+				this.SetWindowVisibility(false);
+			}
 		}
+
+		public void OnApplicationQuit()
+		{
+			this._isQuitting = true;
+		}
+
+		[Inject]
+		private IClientButtonBILogger _buttonBILogger;
 
 		public bool IsModalWindow;
 
@@ -150,6 +171,8 @@ namespace HeavyMetalMachines.Frontend
 		[Header("[Can be deactivated by pressing escape]")]
 		[SerializeField]
 		private bool CanHideByEsc;
+
+		private bool _isQuitting;
 
 		public delegate void OnVisibilityChangeListener(bool visible);
 	}
